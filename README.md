@@ -8,12 +8,12 @@ This project provides a robust indexing layer that scans local filesystems, extr
 
 ## 🛠 Technology Stack
 
-- **Core:** Spring Boot 4.0, JDK 25
-- **Concurrency:** Java Virtual Threads (Project Loom)
-- **Indexing:** Apache Lucene (High-performance full-text search)
-- **Database:** H2 (Local persistence via Liquibase)
-- **Build System:** Maven (Standard repository dependencies)
-- **File Watching:** JNotify / WatchService (Real-time event tracking)
+- **Core (planned):** Spring Boot 4.0, JDK 25
+- **Concurrency (planned):** Java Virtual Threads (Project Loom)
+- **Indexing (planned):** Apache Lucene (High-performance full-text search)
+- **Database (planned):** H2 (Local persistence via Liquibase)
+- **Build System:** Maven
+- **File Watching (planned):** JNotify / WatchService (Real-time event tracking)
 
 ## ✨ Key Features
 
@@ -39,16 +39,16 @@ This project provides a robust indexing layer that scans local filesystems, extr
 
 2. **Build the project:**
    ```bash
-   mvn clean install
+   javac --release 25 -d out/classes $(find src/main/java -name '*.java' -print)
    ```
 
 3. **Run the application:**
    ```bash
-   mvn spring-boot:run
+   java -cp out/classes com.mcp.indexing.Application
    ```
 
-4. **Access the API Documentation:**
-   Open `http://localhost:8080/swagger-ui.html` in your browser.
+4. **Sprint 0 runners:**
+   See [docs/SPRINT0.md](docs/SPRINT0.md).
 
 ## 📅 Roadmap & Development
 
