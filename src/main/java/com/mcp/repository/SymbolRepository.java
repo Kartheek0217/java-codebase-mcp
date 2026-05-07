@@ -19,5 +19,7 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long> {
     void deleteByProjectId(Long projectId);
     List<Symbol> findByProjectIdAndFilePath(Long projectId, String filePath);
     List<Symbol> findByProjectId(Long projectId);
+    List<Symbol> findByProjectIdAndNameContainingIgnoreCase(Long projectId, String name);
+    List<Symbol> findByProjectIdAndNameContainingIgnoreCaseAndType(Long projectId, String name, String type);
     long countByProjectId(Long projectId);
 }

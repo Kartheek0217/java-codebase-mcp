@@ -1,5 +1,6 @@
 package com.mcp.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
@@ -32,13 +33,16 @@ public class FileIndexerService {
     private final SymbolRepository symbolRepository;
     private final FileMetadataRepository fileMetadataRepository;
     private final LuceneIndexService luceneIndexService;
+    private final Cache<String, List<Symbol>> symbolCache;
 
     public FileIndexerService(SymbolRepository symbolRepository, 
                               FileMetadataRepository fileMetadataRepository,
-                              LuceneIndexService luceneIndexService) {
+                              LuceneIndexService luceneIndexService,
+                              Cache<String, List<Symbol>> symbolCache) {
         this.symbolRepository = symbolRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.luceneIndexService = luceneIndexService;
+        this.symbolCache = symbolCache;
         
         ParserConfiguration config = new ParserConfiguration();
         config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17); 
@@ -51,6 +55,7 @@ public class FileIndexerService {
         try {
             String filePath = path.toAbsolutePath().toString();
             String checksum = computeChecksum(path);
+            long fileSize = Files.size(path);
             LocalDateTime now = LocalDateTime.now();
 
             FileMetadataId id = new FileMetadataId(projectId, filePath);
@@ -66,8 +71,9 @@ public class FileIndexerService {
             
             // Clear existing data
             symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
+            symbolCache.invalidate(projectId + ":" + filePath);
 
-            // Parse symbols ONLY for Java files
+            // Parse symbols ONLY for Java files (for now)
             if (filePath.toLowerCase().endsWith(".java")) {
                 List<Symbol> symbols = extractSymbols(content, path);
                 for (Symbol s : symbols) {
@@ -76,9 +82,10 @@ public class FileIndexerService {
                     s.setLastModified(now);
                 }
                 symbolRepository.saveAll(symbols);
+                symbolCache.put(projectId + ":" + filePath, symbols);
             }
 
-            // Index content in Lucene (for ALL supported files)
+            // Index content in Lucene
             luceneIndexService.indexFileContent(projectId, filePath, content);
 
             // Update metadata
@@ -88,12 +95,19 @@ public class FileIndexerService {
                 metadata.setFilePath(filePath);
             }
             metadata.setChecksum(checksum);
+            metadata.setFileSize(fileSize);
             metadata.setLastScanned(now);
             fileMetadataRepository.save(metadata);
 
         } catch (Throwable t) {
             logger.error("Critical error indexing file: {}", path, t);
         }
+    }
+
+    public List<Symbol> getSymbols(Long projectId, String filePath) {
+        return symbolCache.get(projectId + ":" + filePath, k -> {
+            return symbolRepository.findByProjectIdAndFilePath(projectId, filePath);
+        });
     }
 
     @Transactional
@@ -103,6 +117,7 @@ public class FileIndexerService {
         symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
         fileMetadataRepository.deleteById(new FileMetadataId(projectId, filePath));
         luceneIndexService.deleteFileContent(projectId, filePath);
+        symbolCache.invalidate(projectId + ":" + filePath);
     }
 
     private List<Symbol> extractSymbols(String content, Path path) {

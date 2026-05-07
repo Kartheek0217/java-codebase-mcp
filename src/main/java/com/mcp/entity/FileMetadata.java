@@ -17,6 +17,7 @@ public class FileMetadata {
     private String filePath;
 
     private String checksum;
+    private Long fileSize;
     private LocalDateTime lastScanned;
 
     // Getters and Setters
@@ -31,4 +32,7 @@ public class FileMetadata {
 
     public LocalDateTime getLastScanned() { return lastScanned; }
     public void setLastScanned(LocalDateTime lastScanned) { this.lastScanned = lastScanned; }
+
+    public Long getFileSize() { return fileSize; }
+    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
 }

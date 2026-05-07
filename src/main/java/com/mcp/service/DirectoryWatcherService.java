@@ -11,19 +11,26 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 @Service
 public class DirectoryWatcherService {
 
     private static final Logger logger = LoggerFactory.getLogger(DirectoryWatcherService.class);
+    private static final long DEBOUNCE_DELAY_MS = 500;
 
     private final Map<Long, DirectoryWatcher> watchers = new ConcurrentHashMap<>();
+    private final Map<Path, ScheduledFuture<?>> debounceMap = new ConcurrentHashMap<>();
     private final ExecutorService watcherExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    
     private final FileIndexerService fileIndexerService;
+
+    private static final List<String> INDEXABLE_EXTENSIONS = List.of(
+            ".java", ".ts", ".tsx", ".vue", ".js", ".jsx", ".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql"
+    );
 
     public DirectoryWatcherService(FileIndexerService fileIndexerService) {
         this.fileIndexerService = fileIndexerService;
@@ -47,8 +54,8 @@ public class DirectoryWatcherService {
                         default -> null;
                     };
                     
-                    if (type != null && event.path() != null && event.path().toString().endsWith(".java")) {
-                        handleEvent(project.getId(), type, event.path());
+                    if (type != null && event.path() != null && isIndexable(event.path())) {
+                        debounce(project.getId(), type, event.path());
                     }
                 })
                 .build();
@@ -61,6 +68,28 @@ public class DirectoryWatcherService {
                 logger.error("Error in DirectoryWatcher for project {}", project.getId(), e);
             }
         });
+    }
+
+    private void debounce(Long projectId, FileEvent.Type type, Path path) {
+        ScheduledFuture<?> existing = debounceMap.get(path);
+        if (existing != null) {
+            existing.cancel(false);
+        }
+
+        ScheduledFuture<?> future = scheduler.schedule(() -> {
+            try {
+                handleEvent(projectId, type, path);
+            } finally {
+                debounceMap.remove(path);
+            }
+        }, DEBOUNCE_DELAY_MS, TimeUnit.MILLISECONDS);
+
+        debounceMap.put(path, future);
+    }
+
+    private boolean isIndexable(Path path) {
+        String filename = path.toString().toLowerCase();
+        return INDEXABLE_EXTENSIONS.stream().anyMatch(ext -> filename.endsWith(ext));
     }
 
     private void handleEvent(Long projectId, FileEvent.Type type, Path path) {
@@ -87,5 +116,13 @@ public class DirectoryWatcherService {
     public void stopAll() {
         watchers.keySet().forEach(this::stopWatching);
         watcherExecutor.shutdown();
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+        }
     }
 }

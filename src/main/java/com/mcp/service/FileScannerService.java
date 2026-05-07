@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
@@ -57,7 +58,21 @@ public class FileScannerService {
                     .map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path), scanExecutor))
                     .toList();
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .handle((v, ex) -> {
+                        for (int i = 0; i < futures.size(); i++) {
+                            try {
+                                futures.get(i).get();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                logger.error("Scan interrupted", e);
+                                break;
+                            } catch (ExecutionException e) {
+                                logger.error("Scan failed for file: {}", filesToIndex.get(i), e.getCause());
+                            }
+                        }
+                        return null;
+                    }).join();
         } catch (Exception e) {
             logger.error("Error walking directory tree for project {}", projectId, e);
         }
