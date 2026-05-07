@@ -4,42 +4,43 @@ A high-performance Java-based middleware designed to index local code repositori
 
 ## 🛠 Technology Stack
 
-- **Core:** Spring Boot 4.0.6, JDK 25
-- **Indexing:** Apache Lucene 10.1.0 (Full-text search)
-- **Parsing:** JavaParser 3.26.2 (AST-based symbol extraction)
-- **Persistence:** H2 Database (Local storage)
-- **Git Integration:** JGit 6.8.0
-- **Concurrency:** Java Virtual Threads (Project Loom) for high-throughput I/O
-- **Caching:** Caffeine Cache
+- **Core:** Spring Boot 4.0.6, JDK 25 (Loom Virtual Threads)
+- **Indexing:** Apache Lucene 10.1.0 (High-performance full-text search)
+- **Parsing:** JavaParser 3.26.2 (Deep AST symbol extraction)
+- **Persistence:** H2 Database (Efficient local metadata storage)
+- **Git Integration:** JGit 6.8.0 (Repository status and operations)
+- **Live Sync:** Directory Watcher 0.18.0 (Real-time filesystem event tracking)
+- **API Spec:** SpringDoc OpenAPI 2.8.5 (Swagger UI & Documentation)
+- **Caching:** Caffeine Cache (Optimized retrieval for frequent queries)
 
 ## 📂 Project Structure
 
 ```text
 src/main/java/com/mcp/
 ├── Application.java        # Main Entry Point
-├── config/                 # Spring Boot Configurations (Lucene, JPA, etc.)
-├── controller/             # REST Controllers (Agent, Indexing, Projects, Git)
-├── dto/                    # Data Transfer Objects
-├── entity/                 # JPA Entities (Project, FileMetadata, Symbol)
-├── health/                 # Custom Health Indicators
-├── model/                  # Domain Models
-├── repository/             # Spring Data Repositories
-├── scheduler/              # Background Tasks (Index reconciliation)
-└── service/                # Core Business Logic (LuceneIndexService, SymbolService, etc.)
+├── config/                 # Configurations (Lucene, JPA, Virtual Threads, OpenAPI)
+├── controller/             # REST API Surface (Agent, Indexing, Projects, Git)
+├── dto/                    # Data Transfer Objects for API contracts
+├── entity/                 # Persistence layer (Project, FileMetadata, Symbol)
+├── health/                 # Placeholder for future health indicators
+├── model/                  # Domain business models
+├── repository/             # Spring Data JPA repositories
+├── scheduler/              # Placeholder for future scheduled tasks
+└── service/                # Core logic (Indexing, Scanning, Git, Watcher)
 ```
 
 ## ✨ Key Features
 
-- **Blazing Fast Scanning:** Parallel initial scan using Java Virtual Threads.
-- **Intelligent Indexing:** Symbol-aware indexing with AST parsing for deep code understanding.
-- **Semantic Search:** Lucene-powered full-text and symbol search across the codebase.
-- **AI Agent Optimized:** Specialized endpoints for AI agents to gather context and navigate files.
-- **Git Integration:** Built-in support for staging, committing, and checking repository status.
-- **Real-time Synchronization:** Reconciles the database with the filesystem to ensure index freshness.
+- **⚡ Blazing Fast Scanning:** Parallel initial scan utilizing Java Virtual Threads for maximum I/O throughput.
+- **🧠 Deep AST Analysis:** Symbol-aware indexing with JavaParser for precise code understanding (Classes, Methods, Fields).
+- **🔍 Semantic Search:** Lucene-powered full-text and symbol search with contextual awareness.
+- **🔄 Real-time Synchronization:** Active directory watching to keep the index in sync with filesystem changes instantly.
+- **🤖 AI Agent Optimized:** Dedicated endpoints designed for LLMs to explore architecture and gather relevant code context.
+- **🐙 Native Git Integration:** Full support for staging, committing, and inspecting repository state directly via API.
 
 ## 📡 API Documentation
 
-The server exposes a comprehensive REST API. Below are the primary endpoint categories:
+The server exposes a comprehensive REST API. Explore the interactive documentation via Swagger UI at `/swagger-ui.html`.
 
 ### 📁 Projects Management
 | Method | Endpoint | Description |
@@ -52,37 +53,41 @@ The server exposes a comprehensive REST API. Below are the primary endpoint cate
 ### 🔍 Indexing & Search
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/index/{projectId}/trigger-scan` | Manually trigger a directory scan |
-| POST | `/api/index/{projectId}/reconcile` | Deep sync database with filesystem |
-| GET | `/api/index/{projectId}/status` | Get indexing statistics (files, symbols) |
-| GET | `/api/index/{projectId}/search-content` | Full-text search via Lucene |
+| GET | `/api/index/{projectId}/status` | Get indexing statistics (file & symbol counts) |
+| POST | `/api/index/{projectId}/trigger-scan` | Manually force a directory re-scan |
+| POST | `/api/index/{projectId}/reconcile` | Perform deep sync between DB and filesystem |
+| GET | `/api/index/{projectId}/search-content` | Full-text content search via Lucene |
 | GET | `/api/index/{projectId}/files/search` | Substring search for file paths |
 
 ### 🤖 AI Agent Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/ai/session/start` | Initialize a new AI session |
-| GET | `/api/ai/symbols` | Search for symbols (CLASS, METHOD, FIELD) |
-| GET | `/api/ai/suggest` | Suggest code snippets based on query |
-| GET | `/api/ai/context` | Get full file content with AST symbols |
-| GET | `/api/ai/history` | Retrieve recent file/query access history |
+| POST | `/api/ai/session/start` | Initialize a new stateful AI session |
+| GET | `/api/ai/session/{id}` | Retrieve history and state of a specific session |
+| GET | `/api/ai/context` | Get full file content with attached AST symbols |
+| GET | `/api/ai/symbols` | Global symbol search (CLASS, METHOD, FIELD) |
+| GET | `/api/ai/suggest` | Semantic snippet suggestions based on query |
+| GET | `/api/ai/history` | View recent file/query access history |
 
 ### 🐙 Git Operations
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/git-info/projects/{projectId}/status` | Get detailed Git status |
-| POST | `/api/git-info/projects/{projectId}/stage` | Stage files (git add) |
-| POST | `/api/git-info/projects/{projectId}/commit` | Commit staged changes |
-| POST | `/api/git-info/projects/{projectId}/discard` | Revert local changes |
+| GET | `/api/git-info` | Get global Git metadata for the server itself |
+| GET | `/api/git-info/projects/{id}/status` | Get detailed Git status for a project |
+| POST | `/api/git-info/projects/{id}/stage` | Stage files or patterns (git add) |
+| POST | `/api/git-info/projects/{id}/commit` | Create a new commit with staged changes |
+| POST | `/api/git-info/projects/{id}/discard` | Revert changes in specific files |
 
 ### ⚙️ System Status
-- **Health Check:** `GET /health`
-- **System Metadata:** `GET /status`
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Check server, database, and index health |
+| GET | `/status` | Get application version, uptime, and project counts |
 
 ## 💻 Getting Started
 
 ### Prerequisites
-- **JDK 25** (Required for Virtual Threads)
+- **JDK 25** (Required for Virtual Threads support)
 - **Maven 3.9+**
 
 ### Quick Start
@@ -94,9 +99,9 @@ The server exposes a comprehensive REST API. Below are the primary endpoint cate
    ```bash
    mvn spring-boot:run
    ```
-3. **Access OpenAPI UI:**
-   Open `http://localhost:8080/swagger-ui.html` to explore and test the API interactively.
+3. **Explore the API:**
+   Navigate to `http://localhost:8080/swagger-ui.html` to view the OpenAPI documentation.
 
 ---
-*Note: This middleware is optimized for local development environments and focuses on providing high-fidelity code context to LLMs.*
+*Note: This middleware is optimized for local development environments, focusing on high-fidelity context for LLM-driven coding tasks.*
 
