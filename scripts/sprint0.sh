@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${ROOT}/out/classes"
-SRC_MAIN="${ROOT}/src/main/java"
+OUT="${ROOT}/out/sprint0-classes"
+SRC_MAIN="${ROOT}/src/main/java/com/mcp/indexing/sprint0"
 
 mkdir -p "${OUT}"
 
@@ -36,4 +36,3 @@ case "${cmd}" in
     exit 2
     ;;
 esac
-

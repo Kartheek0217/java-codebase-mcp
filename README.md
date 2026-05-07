@@ -39,15 +39,20 @@ This project provides a robust indexing layer that scans local filesystems, extr
 
 2. **Build the project:**
    ```bash
-   javac --release 25 -d out/classes $(find src/main/java -name '*.java' -print)
+   mvn clean package
    ```
 
 3. **Run the application:**
    ```bash
-   java -cp out/classes com.mcp.indexing.Application
+   mvn spring-boot:run
    ```
 
-4. **Sprint 0 runners:**
+4. **Health and metrics:**
+   - `http://localhost:8080/status`
+   - `http://localhost:8080/actuator/health`
+   - `http://localhost:8080/actuator/prometheus`
+
+5. **Sprint 0 runners:**
    See [docs/SPRINT0.md](docs/SPRINT0.md).
 
 ## 📅 Roadmap & Development

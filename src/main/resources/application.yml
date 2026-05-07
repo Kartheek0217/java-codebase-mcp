@@ -1,0 +1,38 @@
+server:
+  port: 8080
+
+mcp:
+  db:
+    max-concurrency: 8
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:h2:file:./data/metadata;AUTO_SERVER=TRUE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 2
+      pool-name: mcp-hikari
+  liquibase:
+    enabled: true
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  structured:
+    format:
+      console: json
