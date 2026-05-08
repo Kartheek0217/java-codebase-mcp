@@ -2,21 +2,15 @@
     "configurations": [
         {
             "type": "java",
-            "name": "JavaParserSpike",
-            "request": "launch",
-            "mainClass": "JavaParserSpike",
-            "projectName": "java-codebase-mcp"
-        },
-        {
-            "type": "java",
-            "name": "Spring Boot-Application<java-codebase-mcp>",
+            "name": "Application (java-codebase-mcp)",
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "mainClass": "com.mcp.Application",
             "projectName": "java-codebase-mcp",
             "args": "",
+            "vmArgs": "-Xms512m -Xmx2g -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200 -Dspring.application.admin.enabled=true -Dspring.boot.project.name=java-codebase-mcp",
             "envFile": "${workspaceFolder}/.env",
-            "vmArgs": " -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=46711 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dspring.jmx.enabled=true -Djava.rmi.server.hostname=localhost -Dspring.application.admin.enabled=true -Dspring.boot.project.name=java-codebase-mcp"
+            "console": "internalConsole"
         }
     ]
 }
