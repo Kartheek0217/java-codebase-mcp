@@ -1,22 +1,5 @@
 package com.mcp.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.mcp.entity.FileMetadata;
-import com.mcp.entity.FileMetadataId;
-import com.mcp.entity.Symbol;
-import com.mcp.repository.FileMetadataRepository;
-import com.mcp.repository.SymbolRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -28,6 +11,27 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.mcp.entity.FileMetadata;
+import com.mcp.entity.FileMetadataId;
+import com.mcp.entity.Symbol;
+import com.mcp.repository.FileMetadataRepository;
+import com.mcp.repository.SymbolRepository;
+
 @Service
 public class FileIndexerService {
 
@@ -36,15 +40,18 @@ public class FileIndexerService {
     private final FileMetadataRepository fileMetadataRepository;
     private final LuceneIndexService luceneIndexService;
     private final Cache<String, List<Symbol>> symbolCache;
+    private final SkillService skillService;
 
     public FileIndexerService(SymbolRepository symbolRepository,
             FileMetadataRepository fileMetadataRepository,
             LuceneIndexService luceneIndexService,
-            Cache<String, List<Symbol>> symbolCache) {
+            Cache<String, List<Symbol>> symbolCache,
+            SkillService skillService) {
         this.symbolRepository = symbolRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.luceneIndexService = luceneIndexService;
         this.symbolCache = symbolCache;
+        this.skillService = skillService;
 
         ParserConfiguration config = new ParserConfiguration();
         config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
@@ -68,11 +75,19 @@ public class FileIndexerService {
             }
 
             logger.info("Indexing file: {}", filePath);
-            String content = Files.readString(path);
+
+            String content;
+            if (filePath.toLowerCase().endsWith(".pdf")) {
+                content = extractPdfText(path);
+            } else {
+                content = Files.readString(path);
+            }
 
             List<Symbol> symbols = null;
             if (filePath.toLowerCase().endsWith(".java")) {
                 symbols = extractSymbols(content, path);
+            } else if (filePath.toLowerCase().endsWith(".md")) {
+                skillService.learnSkillFromMarkdown(projectId, content, filePath);
             }
 
             // Update metadata and symbols in a single transaction
@@ -163,6 +178,16 @@ public class FileIndexerService {
         }
 
         return symbols;
+    }
+
+    private String extractPdfText(Path path) {
+        try (PDDocument document = Loader.loadPDF(path.toFile())) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            return stripper.getText(document);
+        } catch (IOException e) {
+            logger.error("Failed to extract text from PDF: {}", path, e);
+            return "";
+        }
     }
 
     private String computeChecksum(Path path) throws IOException, NoSuchAlgorithmException {

@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
 </head>
 
@@ -19,7 +19,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">
-                <span class="logo-icon">⚡</span>
+                <span class="logo-icon">📂</span>
                 <h1>Codebase MCP</h1>
             </div>
 
@@ -36,34 +36,44 @@
                 <button class="nav-item" data-tab="agent">
                     <span class="icon">🤖</span> AI Agent View
                 </button>
+                <button class="nav-item" data-tab="skills">
+                    <span class="icon">📜</span> Skills
+                </button>
+                <button class="nav-item" data-tab="git">
+                    <span class="icon">🌿</span> Git
+                </button>
+                <button class="nav-item" data-tab="projects">
+                    <span class="icon">📁</span> Projects
+                </button>
                 <button class="nav-item" data-tab="settings">
                     <span class="icon">⚙️</span> Settings
                 </button>
             </nav>
-
-            <div class="project-selector-container">
-                <label for="project-select">Active Project</label>
-                <select id="project-select" class="project-select">
-                    <option value="">Loading projects...</option>
-                </select>
-                <button id="btn-add-project" class="btn-secondary">+ New Project</button>
-            </div>
-
-            <div class="system-status">
-                <div class="status-indicator">
-                    <span class="status-dot green"></span>
-                    <span id="server-status">Server: Online</span>
-                </div>
-            </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
                 <h2 id="current-tab-title">Dashboard</h2>
+
+                <div class="header-center">
+                    <div class="project-selector-container">
+                        <label for="project-select">Active Project</label>
+                        <select id="project-select" class="project-select">
+                            <option value="">Loading projects...</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="header-actions">
-                    <button id="btn-refresh" class="btn-icon">🔄</button>
-                    <div class="user-badge">Admin</div>
+                    <div class="system-status">
+                        <div class="status-indicator">
+                            <span class="status-dot green"></span>
+                            <span id="server-status">Server: Online</span>
+                        </div>
+                    </div>
+                    <a href="/swagger-ui/index.html" target="_blank" class="btn-secondary btn-small">Swagger UI</a>
+                    <a href="/v3/api-docs" target="_blank" class="btn-secondary btn-small">API Docs</a>
                 </div>
             </header>
 
@@ -108,19 +118,39 @@
 
             <!-- Search Tab -->
             <section id="tab-search" class="tab-pane">
-                <div class="search-container">
-                    <div class="search-bar">
-                        <input type="text" id="search-input" placeholder="Search content, files, or symbols...">
-                        <button id="btn-search" class="btn-primary">Search</button>
+                <div id="search-layout" class="split-layout has-viewer">
+                    <div class="pane-results">
+                        <div class="search-container">
+                            <div class="search-bar">
+                                <input type="text" id="search-input" placeholder="Search content, files, or symbols...">
+                                <button id="btn-search" class="btn-primary">Search</button>
+                            </div>
+                            <div class="search-filters">
+                                <label><input type="radio" name="search-type" value="content" checked> Content</label>
+                                <label><input type="radio" name="search-type" value="files"> Files</label>
+                                <label><input type="radio" name="search-type" value="symbols"> Symbols</label>
+                            </div>
+                        </div>
+                        <div id="search-results" class="results-container">
+                            <div class="empty-msg">Enter a query to begin searching</div>
+                        </div>
                     </div>
-                    <div class="search-filters">
-                        <label><input type="radio" name="search-type" value="content" checked> Content</label>
-                        <label><input type="radio" name="search-type" value="files"> Files</label>
-                        <label><input type="radio" name="search-type" value="symbols"> Symbols</label>
+
+                    <div id="search-viewer-pane" class="file-viewer-container">
+                        <div class="viewer-header">
+                            <span id="search-viewer-filename">File View</span>
+                            <button class="btn-icon close-inline-viewer" data-viewer="search">✖</button>
+                        </div>
+                        <div class="viewer-content">
+                            <div id="search-viewer-code" class="code-editor-area">
+                                <pre><code class="language-java"></code></pre>
+                            </div>
+                            <div class="viewer-sidebar">
+                                <h5>Symbols</h5>
+                                <ul id="search-viewer-symbols" class="symbol-list"></ul>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div id="search-results" class="results-container">
-                    <div class="empty-msg">Enter a query to begin searching</div>
                 </div>
             </section>
 
@@ -134,10 +164,12 @@
                     <div class="file-viewer-container">
                         <div id="file-viewer-header" class="viewer-header">Select a file to view</div>
                         <div class="viewer-content">
-                            <pre id="code-viewer"><code class="language-java">// Code will appear here</code></pre>
-                            <div id="symbol-sidebar" class="symbol-sidebar">
-                                <h4>Symbols</h4>
-                                <ul id="file-symbols"></ul>
+                            <div class="code-editor-area">
+                                <pre id="code-viewer"><code class="language-java"></code></pre>
+                            </div>
+                            <div class="viewer-sidebar">
+                                <h5>Symbols</h5>
+                                <ul id="file-symbols" class="symbol-list"></ul>
                             </div>
                         </div>
                     </div>
@@ -164,6 +196,93 @@
                     </div>
                     <div id="agent-context-output" class="context-output">
                         <div class="empty-msg">Request context for a file to see what the agent receives.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Skills Tab -->
+            <section id="tab-skills" class="tab-pane">
+                <div class="skills-container">
+                    <div class="skills-header">
+                        <div class="skill-learn-form">
+                            <input type="text" id="skill-url-input" placeholder="Enter .md URL (e.g. GitHub raw link)">
+                            <button id="btn-learn-skill" class="btn-primary">Learn Skill</button>
+                            <button id="btn-clear-skills" class="btn-secondary btn-danger">Clear All</button>
+                        </div>
+                        <p class="hint">Skills are also automatically learned from <code>SKILL.md</code> files in your
+                            project.</p>
+                    </div>
+                    <div id="skills-list" class="skills-grid">
+                        <div class="empty-msg">No skills learned yet for this project.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Git Tab -->
+            <section id="tab-git" class="tab-pane">
+                <div id="git-layout" class="split-layout has-viewer">
+                    <div class="pane-results">
+                        <div class="git-container">
+                            <div class="git-header">
+                                <div class="git-branch-info">
+                                    <span class="icon">🌿</span> Current Branch: <span
+                                        id="git-current-branch">loading...</span>
+                                </div>
+                                <button id="btn-refresh-git" class="btn-secondary">Refresh Status</button>
+                            </div>
+
+                            <div class="git-grid">
+                                <div class="git-section">
+                                    <h3>Changes <span id="git-changes-count" class="badge">0</span></h3>
+                                    <div id="git-changes-list" class="git-file-list">
+                                        <div class="empty-msg">No changes detected</div>
+                                    </div>
+                                </div>
+
+                                <div class="git-section">
+                                    <h3>Staged <span id="git-staged-count" class="badge">0</span></h3>
+                                    <div id="git-staged-list" class="git-file-list">
+                                        <div class="empty-msg">Nothing staged</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="git-commit-footer">
+                                <div class="commit-form">
+                                    <input type="text" id="commit-message-input" placeholder="Commit message...">
+                                    <button id="btn-git-commit" class="btn-primary">Commit</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="git-viewer-pane" class="file-viewer-container">
+                        <div class="viewer-header">
+                            <span id="git-viewer-filename">File View</span>
+                            <button class="btn-icon close-inline-viewer" data-viewer="git">✖</button>
+                        </div>
+                        <div class="viewer-content">
+                            <div id="git-viewer-code" class="code-editor-area">
+                                <pre><code class="language-java"></code></pre>
+                            </div>
+                            <div class="viewer-sidebar">
+                                <h5>Symbols</h5>
+                                <ul id="git-viewer-symbols" class="symbol-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Projects Management Tab -->
+            <section id="tab-projects" class="tab-pane">
+                <div class="projects-manage-container">
+                    <div class="projects-header-bar">
+                        <h3>All Projects</h3>
+                        <button id="btn-add-project-tab" class="btn-primary">+ Add New Project</button>
+                    </div>
+                    <div id="projects-manage-list" class="projects-list-grid">
+                        <div class="empty-msg">Loading projects...</div>
                     </div>
                 </div>
             </section>

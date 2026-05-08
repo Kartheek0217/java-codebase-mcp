@@ -128,7 +128,16 @@ public class LuceneIndexService {
             try {
                 StandardAnalyzer analyzer = new StandardAnalyzer();
                 QueryParser parser = new QueryParser("content", analyzer);
-                Query query = parser.parse(queryStr);
+                parser.setAllowLeadingWildcard(true);
+                parser.setDefaultOperator(QueryParser.Operator.AND);
+
+                Query query;
+                try {
+                    query = parser.parse(queryStr);
+                } catch (org.apache.lucene.queryparser.classic.ParseException e) {
+                    // Fallback: search as a literal phrase if syntax is invalid
+                    query = parser.parse(QueryParser.escape(queryStr));
+                }
 
                 // Add timeout
                 searcher.setTimeout(new IndexSearcherTimeout(SEARCH_TIMEOUT_MS));
@@ -139,8 +148,12 @@ public class LuceneIndexService {
                 for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
                     Document doc = storedFields.document(scoreDoc.doc);
                     String filePath = doc.get("path");
+                    String content = doc.get("content");
 
-                    List<ContentSearchResult.ContentMatch> matches = extractMatches(Paths.get(filePath), queryStr);
+                    if (content == null)
+                        continue;
+
+                    List<ContentSearchResult.ContentMatch> matches = extractMatchesFromContent(content, queryStr);
                     if (!matches.isEmpty()) {
                         results.add(new ContentSearchResult(filePath, scoreDoc.score, matches));
                     }
@@ -171,27 +184,28 @@ public class LuceneIndexService {
         }
     }
 
-    private List<ContentSearchResult.ContentMatch> extractMatches(Path path, String query) {
+    private List<ContentSearchResult.ContentMatch> extractMatchesFromContent(String content, String query) {
         List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
         long startTime = System.currentTimeMillis();
 
         try {
-            if (!Files.exists(path))
+            String[] allLines = content.split("\\r?\\n");
+            int lineNum = 0;
+            String lowerQuery = query.toLowerCase().replace("*", "").replace("?", "").replace("\"", "").trim();
+
+            if (lowerQuery.isEmpty())
                 return matches;
 
-            List<String> allLines = Files.readAllLines(path);
-            int lineNum = 0;
-            String lowerQuery = query.toLowerCase().replace("*", "").replace("?", "");
-
+            List<String> lineList = List.of(allLines);
             for (String line : allLines) {
                 if (System.currentTimeMillis() - startTime > 500)
                     break;
 
                 lineNum++;
                 if (line.toLowerCase().contains(lowerQuery)) {
-                    String functionName = findContainingFunction(allLines, lineNum);
+                    String functionName = findContainingFunction(lineList, lineNum);
                     int startLine = Math.max(1, lineNum - 3);
-                    int endLine = Math.min(allLines.size(), lineNum + 3);
+                    int endLine = Math.min(allLines.length, lineNum + 3);
 
                     matches.add(new ContentSearchResult.ContentMatch(lineNum, line.trim(), functionName, startLine,
                             endLine));
@@ -200,7 +214,7 @@ public class LuceneIndexService {
                 }
             }
         } catch (Exception e) {
-            logger.warn("Could not extract matches from file: {}", path);
+            logger.warn("Could not extract matches from content: {}", e.getMessage());
         }
         return matches;
     }

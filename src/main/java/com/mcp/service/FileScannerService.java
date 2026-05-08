@@ -24,8 +24,8 @@ public class FileScannerService {
     private final ExecutorService scanExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final List<String> INDEXABLE_EXTENSIONS = List.of(
-            ".java", ".ts", ".tsx", ".vue", ".js", ".jsx", ".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql"
-    );
+            ".java", ".ts", ".tsx", ".vue", ".js", ".jsx", ".html", ".css", ".json", ".md", ".yaml", ".yml",
+            ".properties", ".sql", ".pdf");
 
     public FileScannerService(ProjectRepository projectRepository, FileIndexerService fileIndexerService) {
         this.projectRepository = projectRepository;
@@ -51,11 +51,12 @@ public class FileScannerService {
                     .filter(path -> !path.toString().contains("dist/"))
                     .filter(path -> isIndexable(path))
                     .toList();
-            
+
             logger.info("Found {} indexable files in project {}", filesToIndex.size(), project.getName());
 
             List<CompletableFuture<Void>> futures = filesToIndex.stream()
-                    .map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path), scanExecutor))
+                    .map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path),
+                            scanExecutor))
                     .toList();
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))

@@ -66,17 +66,31 @@ public class ProjectController {
     }
 
     @GetMapping("/{id}/git-status")
-    @Operation(
-        summary = "Get project Git status", 
-        description = "Returns the Git repository status for the specified project.",
-        responses = {
+    @Operation(summary = "Get project Git status", description = "Returns the Git repository status for the specified project.", responses = {
             @ApiResponse(responseCode = "200", description = "Git status retrieved successfully"),
             @ApiResponse(responseCode = "404", description = "Project not found or Git repository missing")
-        }
-    )
+    })
     public java.util.Map<String, Object> getProjectGitStatus(
             @Parameter(description = "Unique ID of the project") @PathVariable Long id) {
         return gitInfoService.getProjectStatus(id);
+    }
+
+    @PostMapping("/{id}/git/stage")
+    @Operation(summary = "Stage files", description = "Adds files to the Git index.")
+    public void stageFiles(@PathVariable Long id, @RequestBody List<String> patterns) {
+        gitInfoService.stageFiles(id, patterns);
+    }
+
+    @PostMapping("/{id}/git/discard")
+    @Operation(summary = "Discard changes", description = "Reverts local modifications in the specified files.")
+    public void discardChanges(@PathVariable Long id, @RequestBody List<String> patterns) {
+        gitInfoService.discardChanges(id, patterns);
+    }
+
+    @PostMapping("/{id}/git/commit")
+    @Operation(summary = "Commit changes", description = "Creates a new Git commit for the specified project.")
+    public String commit(@PathVariable Long id, @RequestParam String message) {
+        return gitInfoService.commit(id, message);
     }
 
     @DeleteMapping("/{id}")

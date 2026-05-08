@@ -1,22 +1,5 @@
 package com.mcp.controller;
 
-import com.mcp.dto.ContentSearchResult;
-import com.mcp.entity.FileMetadata;
-import com.mcp.entity.Project;
-import com.mcp.repository.FileMetadataRepository;
-import com.mcp.repository.ProjectRepository;
-import com.mcp.repository.SymbolRepository;
-import com.mcp.service.ReconciliationService;
-import com.mcp.service.FileScannerService;
-import com.mcp.service.LuceneIndexService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +7,33 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.mcp.dto.ContentSearchResult;
+import com.mcp.entity.FileMetadata;
+import com.mcp.entity.Project;
+import com.mcp.repository.FileMetadataRepository;
+import com.mcp.repository.ProjectRepository;
+import com.mcp.repository.SymbolRepository;
+import com.mcp.service.FileScannerService;
+import com.mcp.service.LuceneIndexService;
+import com.mcp.service.ReconciliationService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/index")
@@ -125,8 +135,31 @@ public class IndexController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);
         }
 
+        String content;
+        if (filePath.toLowerCase().endsWith(".pdf")) {
+            // For PDFs, we can't readString. We need to use the extractor.
+            // However, we should probably have this logic in a shared place.
+            // For now, I'll expose a public method in FileIndexerService or just
+            // re-implement.
+            // Since I injected fileIndexerService, I can't use private methods.
+            // I'll update FileIndexerService to make extractPdfText public or add a
+            // getExtractedText method.
+            content = "[PDF File Content - Extracted Text]\n\n" + extractPdfText(fullPath);
+        } else {
+            content = Files.readString(fullPath);
+        }
+
         return Map.of(
                 "path", filePath,
-                "content", Files.readString(fullPath));
+                "content", content);
+    }
+
+    private String extractPdfText(Path path) {
+        try (PDDocument document = Loader.loadPDF(path.toFile())) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            return stripper.getText(document);
+        } catch (IOException e) {
+            return "Error extracting PDF text: " + e.getMessage();
+        }
     }
 }

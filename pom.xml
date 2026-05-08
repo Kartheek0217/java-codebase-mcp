@@ -18,6 +18,7 @@
         <java.version>25</java.version>
         <javaparser.version>3.26.2</javaparser.version>
         <lucene.version>10.1.0</lucene.version>
+        <pdfbox.version>3.0.4</pdfbox.version>
     </properties>
     <dependencies>
 
@@ -100,6 +101,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- PDFBox for PDF parsing -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
     </dependencies>

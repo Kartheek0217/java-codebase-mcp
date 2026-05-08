@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/ui/projects-summary');
             state.projects = await response.json();
             renderProjectSelect();
+            renderProjectsManagement();
             if (state.projects.length > 0) {
                 if (!state.selectedProjectId || !state.projects.find(p => p.id == state.selectedProjectId)) {
                     state.selectedProjectId = state.projects[0].id;
@@ -45,6 +46,61 @@ document.addEventListener('DOMContentLoaded', () => {
             `<option value="${p.id}" ${p.id == state.selectedProjectId ? 'selected' : ''}>${p.name}</option>`
         ).join('');
     }
+
+    function renderProjectsManagement() {
+        const container = document.getElementById('projects-manage-list');
+        if (!container) return;
+
+        if (state.projects.length === 0) {
+            container.innerHTML = '<div class="empty-msg">No projects found. Add one to get started!</div>';
+            return;
+        }
+
+        container.innerHTML = state.projects.map(p => `
+            <div class="project-manage-card">
+                <div class="project-info">
+                    <h4>${p.name}</h4>
+                    <p>${p.rootPath}</p>
+                    <div class="project-stats-mini">
+                        <span>${p.fileCount} Files</span> • 
+                        <span>${p.symbolCount} Symbols</span>
+                    </div>
+                </div>
+                <div class="project-manage-actions">
+                    <button class="btn-secondary btn-small" onclick="window.switchTabToDashboard('${p.id}')">Switch To</button>
+                    <button class="btn-danger btn-small" onclick="window.deleteProject('${p.id}')">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window.switchTabToDashboard = function (id) {
+        state.selectedProjectId = id;
+        localStorage.setItem('selectedProjectId', id);
+        projectSelect.value = id;
+        loadDashboardData();
+        switchTab('dashboard');
+    };
+
+    window.deleteProject = async function (id) {
+        if (!confirm('Are you sure you want to delete this project? This will remove all indexed data (but not your source files).')) return;
+
+        try {
+            const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                showNotification('Project deleted', 'success');
+                if (state.selectedProjectId == id) {
+                    state.selectedProjectId = null;
+                    localStorage.removeItem('selectedProjectId');
+                }
+                fetchProjects();
+            } else {
+                showNotification('Failed to delete project', 'error');
+            }
+        } catch (e) {
+            showNotification('Error deleting project', 'error');
+        }
+    };
 
     function setupEventListeners() {
         // Tab switching
@@ -66,11 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Dashboard actions
         document.getElementById('btn-trigger-scan').addEventListener('click', triggerScan);
         document.getElementById('btn-reconcile').addEventListener('click', triggerReconcile);
-        document.getElementById('btn-refresh').addEventListener('click', () => {
-            loadDashboardData();
-            if (state.currentTab === 'browser') fetchFiles();
-        });
-
         // Search
         document.getElementById('btn-search').addEventListener('click', performSearch);
         document.getElementById('search-input').addEventListener('keypress', (e) => {
@@ -79,7 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Modals
         const modal = document.getElementById('modal-project');
-        document.getElementById('btn-add-project').addEventListener('click', () => modal.classList.add('active'));
+        const addBtn = document.getElementById('btn-add-project-tab');
+        if (addBtn) addBtn.addEventListener('click', () => modal.classList.add('active'));
+
         document.getElementById('btn-cancel-project').addEventListener('click', () => modal.classList.remove('active'));
         document.getElementById('btn-save-project').addEventListener('click', saveProject);
 
@@ -91,7 +144,88 @@ document.addEventListener('DOMContentLoaded', () => {
         // Agent View
         document.getElementById('btn-start-session').addEventListener('click', startAISession);
         document.getElementById('btn-get-context').addEventListener('click', getAgentContext);
+
+        // Skills
+        document.getElementById('btn-learn-skill').addEventListener('click', learnSkill);
+        document.getElementById('skill-url-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') learnSkill();
+        });
+        document.getElementById('btn-clear-skills').addEventListener('click', clearSkills);
+
+        // Git
+        document.getElementById('btn-refresh-git').addEventListener('click', fetchGitStatus);
+        document.getElementById('btn-git-commit').addEventListener('click', commitChanges);
+        document.getElementById('commit-message-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') commitChanges();
+        });
+
+        // Close inline viewers
+        document.querySelectorAll('.close-inline-viewer').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const viewer = btn.getAttribute('data-viewer');
+                document.getElementById(`${viewer}-layout`).classList.remove('has-viewer');
+                document.getElementById(`${viewer}-viewer-pane`).style.display = 'none';
+            });
+        });
     }
+
+    window.viewFileContent = async function (path) {
+        if (!state.selectedProjectId) return;
+
+        const tabId = state.currentTab;
+
+        if (tabId === 'search' || tabId === 'git') {
+            // Inline viewing within the current tab
+            const layout = document.getElementById(`${tabId}-layout`);
+            const pane = document.getElementById(`${tabId}-viewer-pane`);
+            const filenameEl = document.getElementById(`${tabId}-viewer-filename`);
+            const codeEl = document.querySelector(`#${tabId}-viewer-code code`);
+            const symbolsEl = document.getElementById(`${tabId}-viewer-symbols`);
+
+            if (!layout || !pane) return; // Fallback to browser if elements missing
+
+            layout.classList.add('has-viewer');
+            pane.style.display = 'flex';
+            filenameEl.innerText = `Loading ${path}...`;
+            codeEl.innerText = 'Loading content...';
+            symbolsEl.innerHTML = '<li>Loading symbols...</li>';
+
+            try {
+                // Fetch content
+                const contentRes = await fetch(`/api/index/${state.selectedProjectId}/files/read?filePath=${encodeURIComponent(path)}`);
+                const contentData = await contentRes.json();
+                filenameEl.innerText = path;
+                codeEl.innerText = contentData.content;
+
+                // Fetch symbols
+                const symbolsRes = await fetch(`/api/ai/context?projectId=${state.selectedProjectId}&filePath=${encodeURIComponent(path)}`);
+                const contextData = await symbolsRes.json();
+                symbolsEl.innerHTML = contextData.symbols.map(s => `
+                    <li class="symbol-item" title="${s.type}">${s.name}</li>
+                `).join('') || '<li>No symbols found</li>';
+
+            } catch (e) {
+                console.error('Error loading inline viewer:', e);
+                filenameEl.innerText = 'Error loading file';
+                codeEl.innerText = 'Failed to fetch content.';
+            }
+        } else {
+            // Default behavior for other tabs: Switch to Browser and view there
+            switchTab('browser');
+            await viewFile(path);
+
+            // Highlight the file in the list if it exists
+            const fileItems = document.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                if (item.innerText.trim() === path) {
+                    item.classList.add('active');
+                    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+    };
 
     function switchTab(tabId) {
         state.currentTab = tabId;
@@ -105,6 +239,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tabId === 'browser') fetchFiles();
         if (tabId === 'settings') loadSettingsData();
+        if (tabId === 'projects') renderProjectsManagement();
+        if (tabId === 'skills') fetchSkills();
+        if (tabId === 'git') fetchGitStatus();
     }
 
     async function loadDashboardData() {
@@ -213,26 +350,50 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (results.length > 0) {
+            const firstResult = results[0];
+            const firstPath = firstResult.filePath || firstResult.name;
+            if (firstPath) viewFileContent(firstPath);
+        }
+
         container.innerHTML = results.map(res => {
             if (type === 'content') {
+                const matchesHtml = (res.matches || []).map(m => `
+                    <div class="match-item">
+                        <div class="match-header">
+                            <span>Line <span class="match-line-num">${m.lineNumber}</span> in <code>${m.functionName}</code></span>
+                        </div>
+                        <div class="result-snippet">${m.lineContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                    </div>
+                `).join('');
+
                 return `
                     <div class="search-result-item">
-                        <span class="result-path">${res.filePath} (Score: ${res.score.toFixed(2)})</span>
-                        <div class="result-snippet">${res.snippet.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                        <div class="search-result-header">
+                            <span class="result-path">${res.filePath} (Score: ${res.score.toFixed(2)})</span>
+                            <button class="btn-secondary btn-small" onclick="viewFileContent('${res.filePath.replace(/\\/g, '\\\\')}')">View Full File</button>
+                        </div>
+                        ${matchesHtml}
                     </div>
                 `;
             } else if (type === 'files') {
                 return `
                     <div class="search-result-item">
-                        <span class="result-path">${res.filePath}</span>
+                        <div class="search-result-header">
+                            <span class="result-path">${res.filePath}</span>
+                            <button class="btn-secondary btn-small" onclick="viewFileContent('${res.filePath.replace(/\\/g, '\\\\')}')">View Full File</button>
+                        </div>
                         <p>Size: ${res.sizeBytes} bytes | Last Modified: ${new Date(res.lastModified).toLocaleString()}</p>
                     </div>
                 `;
             } else {
                 return `
                     <div class="search-result-item">
-                        <span class="result-path">${res.name} (${res.type})</span>
-                        <p>File: ${res.filePath} | Line: ${res.startLine}</p>
+                        <div class="search-result-header">
+                            <span class="result-path">${res.name} (${res.type})</span>
+                            <button class="btn-secondary btn-small" onclick="viewFileContent('${res.filePath.replace(/\\/g, '\\\\')}')">View Full File</button>
+                        </div>
+                        <p>File: ${res.filePath} | Line: ${res.lineNumber || res.startLine || 'N/A'}</p>
                     </div>
                 `;
             }
@@ -346,8 +507,185 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { }
     }
 
-    function showNotification(msg, type) {
-        // Simple alert for now, could be improved
-        console.log(`[${type}] ${msg}`);
+    async function fetchSkills() {
+        if (!state.selectedProjectId) return;
+        const list = document.getElementById('skills-list');
+        list.innerHTML = '<div class="empty-msg">Loading skills...</div>';
+
+        try {
+            const res = await fetch(`/api/ai/skills?projectId=${state.selectedProjectId}`);
+            const skills = await res.json();
+            renderSkills(skills);
+        } catch (e) {
+            list.innerHTML = '<div class="empty-msg">Error loading skills</div>';
+        }
     }
+
+    function renderSkills(skills) {
+        const list = document.getElementById('skills-list');
+        if (!skills || skills.length === 0) {
+            list.innerHTML = '<div class="empty-msg">No skills learned yet for this project.</div>';
+            return;
+        }
+
+        list.innerHTML = skills.map(skill => `
+            <div class="skill-card">
+                <h4>${skill.name}</h4>
+                <p>${skill.description || 'No description available.'}</p>
+                <div class="skill-source">Source: ${skill.source}</div>
+                <button class="btn-secondary btn-view-skill" onclick="alert('Skill Content:\\n\\n' + \`${skill.name}\`)">View Full Instructions</button>
+            </div>
+        `).join('');
+    }
+
+    async function learnSkill() {
+        const url = document.getElementById('skill-url-input').value;
+        if (!url || !state.selectedProjectId) return alert('Please enter a URL');
+
+        showNotification('Learning skill...', 'info');
+        try {
+            const res = await fetch(`/api/ai/skills/learn?projectId=${state.selectedProjectId}&url=${encodeURIComponent(url)}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showNotification('Skill learned successfully', 'success');
+                document.getElementById('skill-url-input').value = '';
+                fetchSkills();
+            } else {
+                showNotification('Failed to learn skill', 'error');
+            }
+        } catch (e) {
+            showNotification('Error learning skill', 'error');
+        }
+    }
+
+    async function clearSkills() {
+        if (!state.selectedProjectId) return;
+        if (!confirm('Are you sure you want to clear all learned skills for this project?')) return;
+
+        showNotification('Clearing skills...', 'info');
+        try {
+            const res = await fetch(`/api/ai/skills?projectId=${state.selectedProjectId}`, { method: 'DELETE' });
+            if (res.ok) {
+                showNotification('Skills cleared', 'success');
+                fetchSkills();
+            } else {
+                showNotification('Failed to clear skills', 'error');
+            }
+        } catch (e) {
+            showNotification('Error clearing skills', 'error');
+        }
+    }
+
+    function showNotification(msg, type) {
+        // Simple console log for now, but in a real app this would be a toast
+        console.log(`[${type.toUpperCase()}] ${msg}`);
+        // Optional: simple alert for errors
+        if (type === 'error') alert(msg);
+    }
+
+    async function fetchGitStatus() {
+        if (!state.selectedProjectId) return;
+        const branchEl = document.getElementById('git-current-branch');
+        branchEl.innerText = 'loading...';
+
+        try {
+            const res = await fetch(`/api/projects/${state.selectedProjectId}/git-status`);
+            const status = await res.json();
+            renderGitStatus(status);
+        } catch (e) {
+            showNotification('Error fetching Git status', 'error');
+        }
+    }
+
+    function renderGitStatus(status) {
+        document.getElementById('git-current-branch').innerText = status.branch;
+
+        // Combine all unstaged changes
+        const unstaged = [
+            ...status.modified.map(f => ({ path: f, status: 'modified', staged: false })),
+            ...status.untracked.map(f => ({ path: f, status: 'untracked', staged: false })),
+            ...status.missing.map(f => ({ path: f, status: 'missing', staged: false }))
+        ];
+
+        // Combine staged changes
+        const staged = [
+            ...status.added.map(f => ({ path: f, status: 'added', staged: true })),
+            ...status.staged.map(f => ({ path: f, status: 'staged', staged: true })),
+            ...status.removed.map(f => ({ path: f, status: 'removed', staged: true }))
+        ];
+
+        renderGitFileList('git-changes-list', unstaged, 'git-changes-count');
+        renderGitFileList('git-staged-list', staged, 'git-staged-count');
+
+        // Auto-view the first changed file
+        const allChanges = [...unstaged, ...staged];
+        if (allChanges.length > 0) {
+            viewFileContent(allChanges[0].path);
+        }
+    }
+
+    function renderGitFileList(containerId, files, countId) {
+        const container = document.getElementById(containerId);
+        document.getElementById(countId).innerText = files.length;
+
+        if (files.length === 0) {
+            container.innerHTML = '<div class="empty-msg">No files</div>';
+            return;
+        }
+
+        container.innerHTML = files.map(file => `
+            <div class="git-file-item">
+                <div class="git-file-info">
+                    <span class="git-file-name">${file.path}</span>
+                    <span class="git-file-status">${file.status}</span>
+                </div>
+                <div class="git-actions">
+                    <button class="btn-secondary btn-small" onclick="viewGitFile('${file.path}')">View</button>
+                    ${file.staged
+                ? `<button class="btn-secondary btn-small" onclick="gitAction('discard', '${file.path}')">Unstage</button>`
+                : `<button class="btn-primary btn-small" onclick="gitAction('stage', '${file.path}')">Stage</button>`
+            }
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window.gitAction = async function (action, path) {
+        if (!state.selectedProjectId) return;
+        const endpoint = action === 'stage' ? 'stage' : 'discard';
+
+        try {
+            await fetch(`/api/projects/${state.selectedProjectId}/git/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([path])
+            });
+            fetchGitStatus();
+        } catch (e) {
+            showNotification(`Failed to ${action} file`, 'error');
+        }
+    };
+
+    async function commitChanges() {
+        const message = document.getElementById('commit-message-input').value;
+        if (!message) return alert('Please enter a commit message');
+
+        showNotification('Committing...', 'info');
+        try {
+            const res = await fetch(`/api/projects/${state.selectedProjectId}/git/commit?message=${encodeURIComponent(message)}`, { method: 'POST' });
+            if (res.ok) {
+                showNotification('Committed successfully', 'success');
+                document.getElementById('commit-message-input').value = '';
+                fetchGitStatus();
+            } else {
+                showNotification('Commit failed', 'error');
+            }
+        } catch (e) {
+            showNotification('Error committing', 'error');
+        }
+    }
+
+    window.viewGitFile = function (path) {
+        viewFileContent(path);
+    };
 });

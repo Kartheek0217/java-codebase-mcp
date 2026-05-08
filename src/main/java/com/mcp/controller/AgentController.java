@@ -4,40 +4,62 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.dto.ContentSearchResult;
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Project;
+import com.mcp.entity.Skill;
 import com.mcp.entity.Symbol;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
+import com.mcp.repository.SkillRepository;
 import com.mcp.repository.SymbolRepository;
 import com.mcp.service.FileIndexerService;
 import com.mcp.service.LuceneIndexService;
+import com.mcp.service.SkillService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.PostConstruct;
 
 @RestController
 @RequestMapping("/api/ai")
 @Tag(name = "Agent", description = "Endpoints optimized for AI agents to gather codebase context and perform semantic searches.")
 public class AgentController {
+    private static final Logger logger = LoggerFactory.getLogger(AgentController.class);
 
     private final FileIndexerService fileIndexerService;
     private final FileMetadataRepository fileMetadataRepository;
     private final SymbolRepository symbolRepository;
     private final LuceneIndexService luceneIndexService;
     private final ProjectRepository projectRepository;
+    private final SkillRepository skillRepository;
+    private final SkillService skillService;
 
     // Simple history tracking in-memory
     private final ConcurrentLinkedQueue<Map<String, Object>> accessHistory = new ConcurrentLinkedQueue<>();
@@ -49,8 +71,7 @@ public class AgentController {
         // Cleanup old sessions every hour (TTL: 1 hour)
         sessionCleanup.scheduleWithFixedDelay(() -> {
             long now = System.currentTimeMillis();
-            sessionStore.entrySet().removeIf(e -> 
-                (now - (Long) e.getValue().get("createdAt")) > 3600000L);
+            sessionStore.entrySet().removeIf(e -> (now - (Long) e.getValue().get("createdAt")) > 3600000L);
         }, 1, 1, TimeUnit.HOURS);
     }
 
@@ -58,12 +79,16 @@ public class AgentController {
             FileMetadataRepository fileMetadataRepository,
             SymbolRepository symbolRepository,
             LuceneIndexService luceneIndexService,
-            ProjectRepository projectRepository) {
+            ProjectRepository projectRepository,
+            SkillRepository skillRepository,
+            SkillService skillService) {
         this.fileIndexerService = fileIndexerService;
         this.fileMetadataRepository = fileMetadataRepository;
         this.symbolRepository = symbolRepository;
         this.luceneIndexService = luceneIndexService;
         this.projectRepository = projectRepository;
+        this.skillRepository = skillRepository;
+        this.skillService = skillService;
     }
 
     @GetMapping("/context")
@@ -178,6 +203,35 @@ public class AgentController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found");
         }
         return session;
+    }
+
+    @GetMapping("/skills")
+    @Operation(summary = "Get learned skills", description = "Returns a list of all skills learned for a specific project.", responses = {
+            @ApiResponse(responseCode = "200", description = "Skills retrieved successfully")
+    })
+    public List<Skill> getSkills(@RequestParam Long projectId) {
+        return skillRepository.findByProjectId(projectId);
+    }
+
+    @DeleteMapping("/skills")
+    @Operation(summary = "Clear all skills", description = "Deletes all learned skills for a specific project.")
+    public Map<String, String> deleteSkills(@RequestParam Long projectId) {
+        skillService.deleteSkillsByProject(projectId);
+        return Map.of("status", "success", "message", "All skills cleared for project: " + projectId);
+    }
+
+    @PostMapping("/skills/learn")
+    @Operation(summary = "Learn skill from URL", description = "Fetches a Markdown file from a URL and learns the skill defined in it.", responses = {
+            @ApiResponse(responseCode = "200", description = "Skill learning triggered successfully")
+    })
+    public Map<String, String> learnSkill(@RequestParam Long projectId, @RequestParam String url) {
+        try {
+            skillService.learnFromUrl(projectId, url);
+            return Map.of("status", "success", "message", "Skill learned successfully");
+        } catch (Exception e) {
+            logger.error("Failed to learn skill from URL: {}", url, e);
+            return Map.of("status", "error", "message", "Failed to learn skill: " + e.getMessage());
+        }
     }
 
     private void trackAccess(Long projectId, String type, String value) {
