@@ -10,6 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -35,6 +39,36 @@ public class SkillService {
         if (content != null) {
             learnSkillFromMarkdown(projectId, content, url);
         }
+    }
+
+    @Transactional
+    public void learnFromFile(Long projectId, String filePath) throws IOException {
+        logger.info("Learning skill from file: {} for project: {}", filePath, projectId);
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
+        Path projectRoot = Paths.get(project.getRootPath()).toAbsolutePath().normalize();
+        Path absoluteFilePath = projectRoot.resolve(filePath).toAbsolutePath().normalize();
+
+        // Security check: ensure the file is within the project root
+        if (!absoluteFilePath.startsWith(projectRoot)) {
+            logger.error("Security violation: attempt to access file outside project root: {}", absoluteFilePath);
+            throw new SecurityException("Access denied: File is outside project root");
+        }
+
+        if (!Files.exists(absoluteFilePath)) {
+            logger.error("File not found: {}", absoluteFilePath);
+            throw new IOException("File not found: " + filePath);
+        }
+
+        if (!Files.isRegularFile(absoluteFilePath)) {
+            logger.error("Not a regular file: {}", absoluteFilePath);
+            throw new IOException("Provided path is not a regular file: " + filePath);
+        }
+
+        String content = Files.readString(absoluteFilePath);
+        learnSkillFromMarkdown(projectId, content, filePath);
     }
 
     @Transactional

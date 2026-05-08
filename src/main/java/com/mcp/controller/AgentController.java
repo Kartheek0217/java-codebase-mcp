@@ -302,6 +302,37 @@ public class AgentController {
         }
     }
 
+    /**
+     * Instructs the agent to learn a new skill from a local file.
+     *
+     * @param projectId The ID of the project to associate the skill with
+     * @param filePath  The relative path to the skill definition file (Markdown)
+     * @return A status message indicating success or failure
+     */
+    @PostMapping("/skills/learn-from-file")
+    @Operation(summary = "Learn skill from local file", description = "Reads a Markdown file from a local path and learns the skill defined in it.", responses = {
+            @ApiResponse(responseCode = "200", description = "Skill learning triggered successfully"),
+            @ApiResponse(responseCode = "404", description = "File or Project not found"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
+    })
+    public Map<String, String> learnSkillFromFile(
+            @Parameter(description = "The ID of the project") @RequestParam Long projectId,
+            @Parameter(description = "The relative path to the file") @RequestParam String filePath) {
+        try {
+            skillService.learnFromFile(projectId, filePath);
+            return Map.of("status", "success", "message", "Skill learned successfully from file: " + filePath);
+        } catch (SecurityException e) {
+            logger.warn("Security violation while learning skill from file: {}", filePath);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
+        } catch (IOException e) {
+            logger.error("Failed to read skill file: {}", filePath, e);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (Exception e) {
+            logger.error("Failed to learn skill from file: {}", filePath, e);
+            return Map.of("status", "error", "message", "Failed to learn skill: " + e.getMessage());
+        }
+    }
+
     private void trackAccess(Long projectId, String type, String value) {
         Map<String, Object> entry = new HashMap<>();
         entry.put("projectId", projectId);
