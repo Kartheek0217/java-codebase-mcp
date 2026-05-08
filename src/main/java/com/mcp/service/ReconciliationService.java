@@ -28,16 +28,31 @@ public class ReconciliationService {
         this.fileIndexerService = fileIndexerService;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void reconcileProject(Long projectId) {
         logger.info("Starting reconciliation for project {}...", projectId);
 
         // 1. Identify orphaned records (in DB but file deleted)
         List<FileMetadata> allMetadata = fileMetadataRepository.findByProjectId(projectId);
+        List<String> orphanedPaths = new java.util.ArrayList<>();
+        
         for (FileMetadata metadata : allMetadata) {
             Path path = Paths.get(metadata.getFilePath());
             if (!Files.exists(path)) {
-                logger.info("Found orphaned record in project {}, deleting: {}", projectId, metadata.getFilePath());
-                fileIndexerService.deleteFileData(projectId, path);
+                logger.info("Found orphaned record in project {}, marking for deletion: {}", projectId, metadata.getFilePath());
+                orphanedPaths.add(metadata.getFilePath());
+            }
+        }
+
+        if (!orphanedPaths.isEmpty()) {
+            logger.info("Batch deleting {} orphaned records for project {}", orphanedPaths.size(), projectId);
+            // Batch delete symbols
+            fileIndexerService.getSymbolRepository().deleteByProjectIdAndFilePathIn(projectId, orphanedPaths);
+            // Batch delete metadata
+            fileMetadataRepository.deleteByProjectIdAndFilePathIn(projectId, orphanedPaths);
+            // Delete from Lucene
+            for (String filePath : orphanedPaths) {
+                fileIndexerService.getLuceneIndexService().deleteFileContent(projectId, filePath);
             }
         }
 

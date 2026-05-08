@@ -162,8 +162,13 @@ public class AgentController {
 
         trackAccess(projectId, "SYMBOLS", query);
         if (type != null && !type.isEmpty()) {
-            return symbolRepository.findByProjectIdAndNameContainingIgnoreCaseAndType(projectId, query,
-                    type.toUpperCase());
+            try {
+                com.mcp.entity.SymbolType symbolType = com.mcp.entity.SymbolType.valueOf(type.toUpperCase());
+                return symbolRepository.findByProjectIdAndNameContainingIgnoreCaseAndType(projectId, query, symbolType);
+            } catch (IllegalArgumentException e) {
+                logger.warn("Invalid symbol type provided: {}", type);
+                return symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query);
+            }
         } else {
             return symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query);
         }

@@ -35,6 +35,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Symbol;
+import com.mcp.entity.SymbolType;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.SymbolRepository;
 
@@ -42,6 +43,12 @@ import com.mcp.repository.SymbolRepository;
 public class FileIndexerService {
 
     private static final Logger logger = LoggerFactory.getLogger(FileIndexerService.class);
+    private static final Pattern JS_PATTERN = Pattern.compile(
+            "(?:\\bfunction\\s+([a-zA-Z0-9_$]+))|(?:\\bclass\\s+([a-zA-Z0-9_$]+))|(?:\\b(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>)");
+    private static final Pattern JSON_PATTERN = Pattern.compile("\"([^\"]+)\"\\s*:");
+    private static final Pattern ID_PATTERN = Pattern.compile("id=[\"']([^\"']+)[\"']");
+    private static final Pattern CSS_PATTERN = Pattern.compile("(?:^|\\s)([.#][a-zA-Z0-9_-]+)(?=\\s*\\{)");
+
     private final SymbolRepository symbolRepository;
     private final FileMetadataRepository fileMetadataRepository;
     private final LuceneIndexService luceneIndexService;
@@ -66,6 +73,10 @@ public class FileIndexerService {
 
     public LuceneIndexService getLuceneIndexService() {
         return luceneIndexService;
+    }
+
+    public SymbolRepository getSymbolRepository() {
+        return symbolRepository;
     }
 
     public void indexFile(Long projectId, Path path) {
@@ -166,45 +177,40 @@ public class FileIndexerService {
         if (lowerPath.endsWith(".js") || lowerPath.endsWith(".jsx") || lowerPath.endsWith(".ts")
                 || lowerPath.endsWith(".tsx") || lowerPath.endsWith(".vue")) {
             // JS/TS/Vue Scripts: Functions, Classes, and Arrow Functions
-            Pattern jsPattern = Pattern.compile(
-                    "(?:\\bfunction\\s+([a-zA-Z0-9_$]+))|(?:\\bclass\\s+([a-zA-Z0-9_$]+))|(?:\\b(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>)");
-            Matcher matcher = jsPattern.matcher(content);
+            Matcher matcher = JS_PATTERN.matcher(content);
             while (matcher.find()) {
                 if (matcher.group(1) != null) {
-                    addSymbol(symbols, matcher.group(1), "FUNCTION");
+                    addSymbol(symbols, matcher.group(1), SymbolType.FUNCTION);
                 } else if (matcher.group(2) != null) {
-                    addSymbol(symbols, matcher.group(2), "CLASS");
+                    addSymbol(symbols, matcher.group(2), SymbolType.CLASS);
                 } else if (matcher.group(3) != null) {
-                    addSymbol(symbols, matcher.group(3), "ARROW_FUNCTION");
+                    addSymbol(symbols, matcher.group(3), SymbolType.ARROW_FUNCTION);
                 }
             }
         }
 
         if (lowerPath.endsWith(".json")) {
             // JSON: Keys
-            Pattern jsonPattern = Pattern.compile("\"([^\"]+)\"\\s*:");
-            Matcher matcher = jsonPattern.matcher(content);
+            Matcher matcher = JSON_PATTERN.matcher(content);
             while (matcher.find()) {
-                addSymbol(symbols, matcher.group(1), "JSON_KEY");
+                addSymbol(symbols, matcher.group(1), SymbolType.JSON_KEY);
             }
         }
 
         if (lowerPath.endsWith(".html") || lowerPath.endsWith(".vue")) {
             // HTML/Vue Templates: IDs
-            Pattern idPattern = Pattern.compile("id=[\"']([^\"']+)[\"']");
-            Matcher matcher = idPattern.matcher(content);
+            Matcher matcher = ID_PATTERN.matcher(content);
             while (matcher.find()) {
-                addSymbol(symbols, matcher.group(1), "ID");
+                addSymbol(symbols, matcher.group(1), SymbolType.ID);
             }
         }
 
         if (lowerPath.endsWith(".css") || lowerPath.endsWith(".vue")) {
             // CSS/Vue Styles: Classes and IDs
-            Pattern cssPattern = Pattern.compile("(?:^|\\s)([.#][a-zA-Z0-9_-]+)(?=\\s*\\{)");
-            Matcher matcher = cssPattern.matcher(content);
+            Matcher matcher = CSS_PATTERN.matcher(content);
             while (matcher.find()) {
                 String selector = matcher.group(1);
-                String type = selector.startsWith(".") ? "CSS_CLASS" : "CSS_ID";
+                SymbolType type = selector.startsWith(".") ? SymbolType.CSS_CLASS : SymbolType.CSS_ID;
                 addSymbol(symbols, selector.substring(1), type);
             }
         }
@@ -212,7 +218,7 @@ public class FileIndexerService {
         return symbols;
     }
 
-    private void addSymbol(List<Symbol> symbols, String name, String type) {
+    private void addSymbol(List<Symbol> symbols, String name, SymbolType type) {
         Symbol s = new Symbol();
         s.setName(name);
         s.setType(type);
@@ -228,19 +234,19 @@ public class FileIndexerService {
             cu.accept(new VoidVisitorAdapter<List<Symbol>>() {
                 @Override
                 public void visit(ClassOrInterfaceDeclaration n, List<Symbol> arg) {
-                    arg.add(createSymbol(n.getNameAsString(), "CLASS"));
+                    arg.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
                     super.visit(n, arg);
                 }
 
                 @Override
                 public void visit(MethodDeclaration n, List<Symbol> arg) {
-                    arg.add(createSymbol(n.getNameAsString(), "METHOD"));
+                    arg.add(createSymbol(n.getNameAsString(), SymbolType.METHOD));
                     super.visit(n, arg);
                 }
 
                 @Override
                 public void visit(FieldDeclaration n, List<Symbol> arg) {
-                    n.getVariables().forEach(v -> arg.add(createSymbol(v.getNameAsString(), "FIELD")));
+                    n.getVariables().forEach(v -> arg.add(createSymbol(v.getNameAsString(), SymbolType.FIELD)));
                     super.visit(n, arg);
                 }
             }, symbols);
@@ -253,7 +259,7 @@ public class FileIndexerService {
         return symbols;
     }
 
-    private Symbol createSymbol(String name, String type) {
+    private Symbol createSymbol(String name, SymbolType type) {
         Symbol s = new Symbol();
         s.setName(name);
         s.setType(type);
@@ -280,11 +286,14 @@ public class FileIndexerService {
         }
 
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        // Use a buffered stream and compute checksum while reading to avoid multiple
-        // passes
+        // Optimization: Pre-calculate the result size to avoid unnecessary growth of
+        // ByteArrayOutputStream
+        long size = Files.size(path);
+        int initialSize = size > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) size;
+
         try (InputStream is = Files.newInputStream(path);
                 DigestInputStream dis = new DigestInputStream(new BufferedInputStream(is), digest);
-                ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream(initialSize)) {
 
             byte[] buffer = new byte[8192];
             int read;

@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.mcp.config.LuceneProperties;
 import com.mcp.dto.ContentSearchResult;
 
 import jakarta.annotation.PreDestroy;
@@ -50,6 +51,13 @@ public class LuceneIndexService {
     private final Map<Long, SearcherManager> searcherManagers = new ConcurrentHashMap<>();
     private final Set<Long> pendingCommits = ConcurrentHashMap.newKeySet();
     private final Set<Long> bulkModeProjects = ConcurrentHashMap.newKeySet();
+    private final StandardAnalyzer sharedAnalyzer = new StandardAnalyzer();
+
+    private final LuceneProperties luceneProperties;
+
+    public LuceneIndexService(LuceneProperties luceneProperties) {
+        this.luceneProperties = luceneProperties;
+    }
 
     public void setBulkMode(Long projectId, boolean enabled) {
         if (enabled) {
@@ -83,11 +91,10 @@ public class LuceneIndexService {
                     Files.createDirectories(indexPath);
                 }
                 Directory directory = FSDirectory.open(indexPath);
-                StandardAnalyzer analyzer = new StandardAnalyzer();
-                IndexWriterConfig config = new IndexWriterConfig(analyzer);
+                IndexWriterConfig config = new IndexWriterConfig(sharedAnalyzer);
                 config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
-                // Optimization: Increase RAM buffer for faster indexing
-                config.setRAMBufferSizeMB(256.0);
+                // Optimization: Use configurable RAM buffer
+                config.setRAMBufferSizeMB(luceneProperties.getBufferSize());
                 IndexWriter writer = new IndexWriter(directory, config);
 
                 SearcherManager sm = new SearcherManager(writer, true, true, new SearcherFactory());
@@ -156,8 +163,7 @@ public class LuceneIndexService {
 
             IndexSearcher searcher = sm.acquire();
             try {
-                StandardAnalyzer analyzer = new StandardAnalyzer();
-                QueryParser parser = new QueryParser("content", analyzer);
+                QueryParser parser = new QueryParser("content", sharedAnalyzer);
                 parser.setAllowLeadingWildcard(true);
                 parser.setDefaultOperator(QueryParser.Operator.AND);
 
@@ -175,7 +181,7 @@ public class LuceneIndexService {
                 TopDocs topDocs = searcher.search(query, 50);
 
                 if (topDocs.scoreDocs.length > 0) {
-                    UnifiedHighlighter highlighter = UnifiedHighlighter.builder(searcher, analyzer).build();
+                    UnifiedHighlighter highlighter = UnifiedHighlighter.builder(searcher, sharedAnalyzer).build();
                     String[] snippets = highlighter.highlight("content", query, topDocs, 5);
 
                     StoredFields storedFields = searcher.storedFields();

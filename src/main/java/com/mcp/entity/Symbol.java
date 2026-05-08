@@ -15,7 +15,8 @@ public class Symbol {
     private Long projectId;
 
     private String name;
-    private String type;
+    @Enumerated(EnumType.STRING)
+    private SymbolType type;
     private String filePath;
     private LocalDateTime lastModified;
 
@@ -44,11 +45,11 @@ public class Symbol {
         this.name = name;
     }
 
-    public String getType() {
+    public SymbolType getType() {
         return type;
     }
 
-    public void setType(String type) {
+    public void setType(SymbolType type) {
         this.type = type;
     }
 

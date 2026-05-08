@@ -19,5 +19,9 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, File
     @Transactional
     void deleteByProjectId(Long projectId);
 
+    @Modifying
+    @Transactional
+    void deleteByProjectIdAndFilePathIn(Long projectId, List<String> filePaths);
+
     long countByProjectId(Long projectId);
 }

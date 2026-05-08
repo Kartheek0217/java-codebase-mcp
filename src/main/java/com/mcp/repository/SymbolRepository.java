@@ -16,6 +16,10 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long> {
 
     @Modifying
     @Transactional
+    void deleteByProjectIdAndFilePathIn(Long projectId, List<String> filePaths);
+
+    @Modifying
+    @Transactional
     void deleteByProjectId(Long projectId);
 
     List<Symbol> findByProjectIdAndFilePath(Long projectId, String filePath);
@@ -24,7 +28,7 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long> {
 
     List<Symbol> findByProjectIdAndNameContainingIgnoreCase(Long projectId, String name);
 
-    List<Symbol> findByProjectIdAndNameContainingIgnoreCaseAndType(Long projectId, String name, String type);
+    List<Symbol> findByProjectIdAndNameContainingIgnoreCaseAndType(Long projectId, String name, com.mcp.entity.SymbolType type);
 
     long countByProjectId(Long projectId);
 }
