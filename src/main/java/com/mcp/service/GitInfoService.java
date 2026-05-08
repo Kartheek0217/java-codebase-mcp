@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -68,6 +69,14 @@ public class GitInfoService {
         } catch (Exception e) {
             logger.warn("Could not retrieve global Git information: {}", e.getMessage());
             gitAvailable = false;
+        }
+    }
+
+    public Optional<Repository> getRepositoryOptional(Long projectId) {
+        try {
+            return Optional.of(getRepository(projectId));
+        } catch (Exception e) {
+            return Optional.empty();
         }
     }
 

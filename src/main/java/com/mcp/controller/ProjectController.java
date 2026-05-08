@@ -25,41 +25,30 @@ public class ProjectController {
     }
 
     @PostMapping
-    @Operation(
-        summary = "Create a new project", 
-        description = "Initializes a new project with a unique name and root directory path. Once created, the system automatically starts background indexing of the directory.",
-        responses = {
+    @Operation(summary = "Create a new project", description = "Initializes a new project with a unique name and root directory path. Once created, the system automatically starts background indexing of the directory.", responses = {
             @ApiResponse(responseCode = "200", description = "Project created and indexing started successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid project name or root path")
-        }
-    )
+    })
     public Project createProject(
-            @Parameter(description = "Human-readable name for the project") @RequestParam String name, 
-            @Parameter(description = "Absolute path to the project's root directory on the local filesystem") @RequestParam String rootPath) throws IOException {
+            @Parameter(description = "Human-readable name for the project") @RequestParam String name,
+            @Parameter(description = "Absolute path to the project's root directory on the local filesystem") @RequestParam String rootPath)
+            throws IOException {
         return projectService.createProject(name, rootPath);
     }
 
     @GetMapping
-    @Operation(
-        summary = "List all projects", 
-        description = "Returns a list of all registered projects and their configurations.",
-        responses = {
+    @Operation(summary = "List all projects", description = "Returns a list of all registered projects and their configurations.", responses = {
             @ApiResponse(responseCode = "200", description = "List of projects retrieved successfully")
-        }
-    )
+    })
     public List<Project> getAllProjects() {
         return projectService.getAllProjects();
     }
 
     @GetMapping("/{id}")
-    @Operation(
-        summary = "Get project by ID", 
-        description = "Retrieves details for a specific project by its unique numeric ID.",
-        responses = {
+    @Operation(summary = "Get project by ID", description = "Retrieves details for a specific project by its unique numeric ID.", responses = {
             @ApiResponse(responseCode = "200", description = "Project details retrieved successfully"),
             @ApiResponse(responseCode = "404", description = "Project not found")
-        }
-    )
+    })
     public Project getProject(
             @Parameter(description = "Unique ID of the project") @PathVariable Long id) {
         return projectService.getProject(id);
@@ -94,14 +83,10 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(
-        summary = "Delete a project", 
-        description = "Removes the project registration and permanently deletes all associated indexed metadata, symbols, and Lucene search indices. Does NOT delete the actual source files.",
-        responses = {
+    @Operation(summary = "Delete a project", description = "Removes the project registration and permanently deletes all associated indexed metadata, symbols, and Lucene search indices. Does NOT delete the actual source files.", responses = {
             @ApiResponse(responseCode = "200", description = "Project and indices deleted successfully"),
             @ApiResponse(responseCode = "404", description = "Project not found")
-        }
-    )
+    })
     public void deleteProject(
             @Parameter(description = "Unique ID of the project to delete") @PathVariable Long id) {
         projectService.deleteProject(id);

@@ -238,7 +238,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentTabTitle.innerText = tabId.charAt(0).toUpperCase() + tabId.slice(1);
 
         if (tabId === 'browser') fetchFiles();
-        if (tabId === 'settings') loadSettingsData();
         if (tabId === 'projects') renderProjectsManagement();
         if (tabId === 'skills') fetchSkills();
         if (tabId === 'git') fetchGitStatus();
@@ -383,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="result-path">${res.filePath}</span>
                             <button class="btn-secondary btn-small" onclick="viewFileContent('${res.filePath.replace(/\\/g, '\\\\')}')">View Full File</button>
                         </div>
-                        <p>Size: ${res.sizeBytes} bytes | Last Modified: ${new Date(res.lastModified).toLocaleString()}</p>
+                        <p>Size: ${res.fileSize} bytes | Last Modified: ${new Date(res.lastScanned).toLocaleString()}</p>
                     </div>
                 `;
             } else {
@@ -486,26 +485,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function checkServerStatus() {
         try {
-            const res = await fetch('/api/status');
+            const res = await fetch('/health');
             const data = await res.json();
-            document.getElementById('server-status').innerText = `Server: Online (${data.version})`;
+            document.getElementById('server-status').innerText = `Server: Online (${data.status})`;
         } catch (e) {
             document.getElementById('server-status').innerText = 'Server: Offline';
             document.querySelector('.status-dot').className = 'status-dot red';
         }
     }
 
-    async function loadSettingsData() {
-        try {
-            const healthRes = await fetch('/api/health');
-            const health = await healthRes.json();
-            document.getElementById('health-details').innerHTML = `<pre>${JSON.stringify(health, null, 2)}</pre>`;
-
-            const gitRes = await fetch('/api/git-info');
-            const git = await gitRes.json();
-            document.getElementById('git-details').innerHTML = `<pre>${JSON.stringify(git, null, 2)}</pre>`;
-        } catch (e) { }
-    }
 
     async function fetchSkills() {
         if (!state.selectedProjectId) return;

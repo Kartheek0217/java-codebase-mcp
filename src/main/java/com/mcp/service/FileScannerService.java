@@ -1,19 +1,25 @@
 package com.mcp.service;
 
-import com.mcp.entity.Project;
-import com.mcp.repository.ProjectRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.*;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
+
+import org.eclipse.jgit.ignore.IgnoreNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.mcp.entity.Project;
+import com.mcp.repository.ProjectRepository;
 
 @Service
 public class FileScannerService {
@@ -42,15 +48,48 @@ public class FileScannerService {
             return;
         }
 
+        IgnoreNode ignoreNode = new IgnoreNode();
+        Path gitIgnorePath = root.resolve(".gitignore");
+        if (Files.exists(gitIgnorePath)) {
+            try (InputStream is = new FileInputStream(gitIgnorePath.toFile())) {
+                ignoreNode.parse(is);
+            } catch (IOException e) {
+                logger.warn("Could not parse .gitignore for project {}: {}", projectId, e.getMessage());
+            }
+        }
+
+        List<Path> filesToIndex;
         try (Stream<Path> paths = Files.walk(root)) {
-            List<Path> filesToIndex = paths
+            filesToIndex = paths
                     .filter(Files::isRegularFile)
-                    .filter(path -> !path.toString().contains("node_modules"))
-                    .filter(path -> !path.toString().contains(".git"))
-                    .filter(path -> !path.toString().contains("target/"))
-                    .filter(path -> !path.toString().contains("dist/"))
-                    .filter(path -> isIndexable(path))
+                    .filter(path -> {
+                        String relativePath = root.relativize(path).toString().replace("\\", "/");
+
+                        // Always skip .git directory and the .gitignore file itself
+                        if (relativePath.startsWith(".git/") || relativePath.equals(".git")
+                                || relativePath.equals(".gitignore")) {
+                            return false;
+                        }
+
+                        // Check if ignored by .gitignore rules
+                        if (ignoreNode.isIgnored(relativePath, false) == IgnoreNode.MatchResult.IGNORED) {
+                            return false;
+                        }
+
+                        // Default fallback filters for common large/generated directories
+                        // These act as a safety net if .gitignore is missing or incomplete
+                        if (relativePath.contains("node_modules/") ||
+                                relativePath.contains("target/") ||
+                                relativePath.contains("dist/")) {
+                            return false;
+                        }
+
+                        return isIndexable(path);
+                    })
                     .toList();
+        }
+
+        try {
 
             logger.info("Found {} indexable files in project {}", filesToIndex.size(), project.getName());
 
