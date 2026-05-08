@@ -1,21 +1,5 @@
 package com.mcp.service;
 
-import com.mcp.dto.ContentSearchResult;
-import jakarta.annotation.PreDestroy;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.*;
-import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.search.*;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +7,36 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.QueryTimeout;
+import org.apache.lucene.index.StoredFields;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.SearcherFactory;
+import org.apache.lucene.search.SearcherManager;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import com.mcp.dto.ContentSearchResult;
+
+import jakarta.annotation.PreDestroy;
 
 @Service
 public class LuceneIndexService {
@@ -34,6 +47,7 @@ public class LuceneIndexService {
 
     private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
     private final Map<Long, SearcherManager> searcherManagers = new ConcurrentHashMap<>();
+    private final Set<Long> pendingCommits = ConcurrentHashMap.newKeySet();
 
     private IndexWriter getWriter(Long projectId) throws IOException {
         return writers.computeIfAbsent(projectId, k -> {
@@ -47,7 +61,7 @@ public class LuceneIndexService {
                 IndexWriterConfig config = new IndexWriterConfig(analyzer);
                 config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
                 IndexWriter writer = new IndexWriter(directory, config);
-                
+
                 SearcherManager sm = new SearcherManager(writer, true, true, new SearcherFactory());
                 searcherManagers.put(projectId, sm);
                 return writer;
@@ -74,10 +88,10 @@ public class LuceneIndexService {
             Document doc = new Document();
             doc.add(new StringField("path", filePath, Field.Store.YES));
             doc.add(new TextField("content", content, Field.Store.YES));
-            
+
             writer.updateDocument(new Term("path", filePath), doc);
-            writer.commit();
-            
+            pendingCommits.add(projectId);
+
             SearcherManager sm = searcherManagers.get(projectId);
             if (sm != null) {
                 sm.maybeRefresh();
@@ -92,7 +106,7 @@ public class LuceneIndexService {
             IndexWriter writer = writers.get(projectId);
             if (writer != null) {
                 writer.deleteDocuments(new Term("path", filePath));
-                writer.commit();
+                pendingCommits.add(projectId);
                 SearcherManager sm = searcherManagers.get(projectId);
                 if (sm != null) {
                     sm.maybeRefresh();
@@ -107,24 +121,25 @@ public class LuceneIndexService {
         List<ContentSearchResult> results = new ArrayList<>();
         try {
             SearcherManager sm = getSearcherManager(projectId);
-            if (sm == null) return results;
+            if (sm == null)
+                return results;
 
             IndexSearcher searcher = sm.acquire();
             try {
                 StandardAnalyzer analyzer = new StandardAnalyzer();
                 QueryParser parser = new QueryParser("content", analyzer);
                 Query query = parser.parse(queryStr);
-                
+
                 // Add timeout
                 searcher.setTimeout(new IndexSearcherTimeout(SEARCH_TIMEOUT_MS));
-                
+
                 TopDocs topDocs = searcher.search(query, 50);
                 StoredFields storedFields = searcher.storedFields();
-                
+
                 for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
                     Document doc = storedFields.document(scoreDoc.doc);
                     String filePath = doc.get("path");
-                    
+
                     List<ContentSearchResult.ContentMatch> matches = extractMatches(Paths.get(filePath), queryStr);
                     if (!matches.isEmpty()) {
                         results.add(new ContentSearchResult(filePath, scoreDoc.score, matches));
@@ -142,7 +157,8 @@ public class LuceneIndexService {
     public boolean verifyIndex(Long projectId) {
         try {
             SearcherManager sm = getSearcherManager(projectId);
-            if (sm == null) return false;
+            if (sm == null)
+                return false;
             IndexSearcher searcher = sm.acquire();
             try {
                 return searcher.getIndexReader().numDocs() >= 0;
@@ -158,25 +174,29 @@ public class LuceneIndexService {
     private List<ContentSearchResult.ContentMatch> extractMatches(Path path, String query) {
         List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
         long startTime = System.currentTimeMillis();
-        
+
         try {
-            if (!Files.exists(path)) return matches;
-            
+            if (!Files.exists(path))
+                return matches;
+
             List<String> allLines = Files.readAllLines(path);
             int lineNum = 0;
             String lowerQuery = query.toLowerCase().replace("*", "").replace("?", "");
-            
+
             for (String line : allLines) {
-                if (System.currentTimeMillis() - startTime > 500) break;
-                
+                if (System.currentTimeMillis() - startTime > 500)
+                    break;
+
                 lineNum++;
                 if (line.toLowerCase().contains(lowerQuery)) {
                     String functionName = findContainingFunction(allLines, lineNum);
                     int startLine = Math.max(1, lineNum - 3);
                     int endLine = Math.min(allLines.size(), lineNum + 3);
-                    
-                    matches.add(new ContentSearchResult.ContentMatch(lineNum, line.trim(), functionName, startLine, endLine));
-                    if (matches.size() >= 10) break;
+
+                    matches.add(new ContentSearchResult.ContentMatch(lineNum, line.trim(), functionName, startLine,
+                            endLine));
+                    if (matches.size() >= 10)
+                        break;
                 }
             }
         } catch (Exception e) {
@@ -189,8 +209,10 @@ public class LuceneIndexService {
         // Heuristic: scan upwards for method or class definitions
         for (int i = currentLine - 1; i >= 0; i--) {
             String line = lines.get(i).trim();
-            if (line.isEmpty() || line.startsWith("@") || line.startsWith("//") || line.startsWith("/*") || line.startsWith("*")) continue;
-            
+            if (line.isEmpty() || line.startsWith("@") || line.startsWith("//") || line.startsWith("/*")
+                    || line.startsWith("*"))
+                continue;
+
             // Method signature heuristic: contains ( and ) and { (or { on next line)
             if (line.contains("(") && line.contains(")")) {
                 int parenIdx = line.indexOf("(");
@@ -199,18 +221,23 @@ public class LuceneIndexService {
                 if (parts.length > 0) {
                     String name = parts[parts.length - 1];
                     // Basic check to avoid keywords
-                    if (!name.equals("if") && !name.equals("for") && !name.equals("while") && !name.equals("switch") && !name.equals("catch")) {
+                    if (!name.equals("if") && !name.equals("for") && !name.equals("while") && !name.equals("switch")
+                            && !name.equals("catch")) {
                         return name;
                     }
                 }
             }
             // Class signature heuristic
-            if (line.contains("class ") || line.contains("interface ") || line.contains("enum ") || line.contains("record ")) {
+            if (line.contains("class ") || line.contains("interface ") || line.contains("enum ")
+                    || line.contains("record ")) {
                 String type = "class ";
-                if (line.contains("interface ")) type = "interface ";
-                else if (line.contains("enum ")) type = "enum ";
-                else if (line.contains("record ")) type = "record ";
-                
+                if (line.contains("interface "))
+                    type = "interface ";
+                else if (line.contains("enum "))
+                    type = "enum ";
+                else if (line.contains("record "))
+                    type = "record ";
+
                 int classIdx = line.indexOf(type);
                 String afterClass = line.substring(classIdx + type.length()).trim();
                 String[] parts = afterClass.split("\\s+");
@@ -232,6 +259,31 @@ public class LuceneIndexService {
         @Override
         public boolean shouldExit() {
             return System.currentTimeMillis() > timeoutAt;
+        }
+    }
+
+    @Scheduled(fixedDelay = 5000)
+    public void scheduledCommit() {
+        if (pendingCommits.isEmpty())
+            return;
+
+        logger.debug("Running scheduled commit for {} projects", pendingCommits.size());
+        java.util.Iterator<Long> iterator = pendingCommits.iterator();
+        while (iterator.hasNext()) {
+            Long projectId = iterator.next();
+            IndexWriter writer = writers.get(projectId);
+            if (writer != null) {
+                try {
+                    writer.commit();
+                    SearcherManager sm = searcherManagers.get(projectId);
+                    if (sm != null) {
+                        sm.maybeRefresh();
+                    }
+                } catch (IOException e) {
+                    logger.error("Error during scheduled commit for project {}", projectId, e);
+                }
+            }
+            iterator.remove();
         }
     }
 

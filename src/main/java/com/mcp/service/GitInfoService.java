@@ -3,6 +3,7 @@ package com.mcp.service;
 import com.mcp.entity.Project;
 import com.mcp.repository.ProjectRepository;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.lib.ObjectId;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class GitInfoService {
@@ -25,6 +27,7 @@ public class GitInfoService {
     private static final Logger logger = LoggerFactory.getLogger(GitInfoService.class);
 
     private final ProjectRepository projectRepository;
+    private final Map<Long, Repository> repositoryCache = new ConcurrentHashMap<>();
 
     private String commitHash;
     private String commitMessage;
@@ -69,37 +72,43 @@ public class GitInfoService {
     }
 
     private Repository getRepository(Long projectId) throws IOException {
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
-        
-        FileRepositoryBuilder builder = new FileRepositoryBuilder();
-        Repository repository = builder
-                .readEnvironment()
-                .findGitDir(new File(project.getRootPath()))
-                .build();
+        return repositoryCache.computeIfAbsent(projectId, id -> {
+            try {
+                Project project = projectRepository.findById(id)
+                        .orElseThrow(() -> new RuntimeException("Project not found: " + id));
 
-        if (repository == null || !repository.getDirectory().exists()) {
-            throw new RuntimeException("Git repository not found for project: " + project.getName());
-        }
-        return repository;
+                FileRepositoryBuilder builder = new FileRepositoryBuilder();
+                Repository repository = builder
+                        .readEnvironment()
+                        .findGitDir(new File(project.getRootPath()))
+                        .build();
+
+                if (repository == null || !repository.getDirectory().exists()) {
+                    throw new RuntimeException("Git repository not found for project: " + project.getName());
+                }
+                return repository;
+            } catch (IOException e) {
+                throw new RuntimeException("Error opening Git repository", e);
+            }
+        });
     }
 
     public Map<String, Object> getProjectStatus(Long projectId) {
-        try (Repository repository = getRepository(projectId);
-             Git git = new Git(repository)) {
-            
-            Status status = git.status().call();
-            Map<String, Object> result = new HashMap<>();
-            result.put("branch", repository.getBranch());
-            result.put("clean", status.isClean());
-            result.put("modified", status.getModified());
-            result.put("added", status.getAdded());
-            result.put("removed", status.getRemoved());
-            result.put("missing", status.getMissing());
-            result.put("untracked", status.getUntracked());
-            result.put("staged", status.getChanged()); // staged changes (modified in index vs HEAD)
-            
-            return result;
+        try {
+            Repository repository = getRepository(projectId);
+            try (Git git = new Git(repository)) {
+                Status status = git.status().call();
+                Map<String, Object> result = new HashMap<>();
+                result.put("branch", repository.getBranch());
+                result.put("clean", status.isClean());
+                result.put("modified", status.getModified());
+                result.put("added", status.getAdded());
+                result.put("removed", status.getRemoved());
+                result.put("missing", status.getMissing());
+                result.put("untracked", status.getUntracked());
+                result.put("staged", status.getChanged());
+                return result;
+            }
         } catch (Exception e) {
             logger.error("Error getting Git status for project {}: {}", projectId, e.getMessage());
             throw new RuntimeException("Could not get Git status: " + e.getMessage());
@@ -107,30 +116,29 @@ public class GitInfoService {
     }
 
     public void stageFiles(Long projectId, List<String> patterns) {
-        try (Repository repository = getRepository(projectId);
-             Git git = new Git(repository)) {
-            
-            var addCommand = git.add();
-            for (String pattern : patterns) {
-                addCommand.addFilepattern(pattern);
-            }
-            addCommand.call();
-            
-            // Also handle deleted files if needed (git add -A behavior)
-            var rmCommand = git.rm();
-            boolean hasDeletions = false;
-            Status status = git.status().call();
-            Set<String> missing = status.getMissing();
-            for (String pattern : patterns) {
-                if (missing.contains(pattern)) {
-                    rmCommand.addFilepattern(pattern);
-                    hasDeletions = true;
+        try {
+            Repository repository = getRepository(projectId);
+            try (Git git = new Git(repository)) {
+                var addCommand = git.add();
+                for (String pattern : patterns) {
+                    addCommand.addFilepattern(pattern);
+                }
+                addCommand.call();
+
+                var rmCommand = git.rm();
+                boolean hasDeletions = false;
+                Status status = git.status().call();
+                Set<String> missing = status.getMissing();
+                for (String pattern : patterns) {
+                    if (missing.contains(pattern)) {
+                        rmCommand.addFilepattern(pattern);
+                        hasDeletions = true;
+                    }
+                }
+                if (hasDeletions) {
+                    rmCommand.call();
                 }
             }
-            if (hasDeletions) {
-                rmCommand.call();
-            }
-            
         } catch (Exception e) {
             logger.error("Error staging files for project {}: {}", projectId, e.getMessage());
             throw new RuntimeException("Could not stage files: " + e.getMessage());
@@ -138,15 +146,15 @@ public class GitInfoService {
     }
 
     public void discardChanges(Long projectId, List<String> patterns) {
-        try (Repository repository = getRepository(projectId);
-             Git git = new Git(repository)) {
-            
-            var checkoutCommand = git.checkout();
-            for (String pattern : patterns) {
-                checkoutCommand.addPath(pattern);
+        try {
+            Repository repository = getRepository(projectId);
+            try (Git git = new Git(repository)) {
+                var checkoutCommand = git.checkout();
+                for (String pattern : patterns) {
+                    checkoutCommand.addPath(pattern);
+                }
+                checkoutCommand.call();
             }
-            checkoutCommand.call();
-            
         } catch (Exception e) {
             logger.error("Error discarding changes for project {}: {}", projectId, e.getMessage());
             throw new RuntimeException("Could not discard changes: " + e.getMessage());
@@ -154,18 +162,24 @@ public class GitInfoService {
     }
 
     public String commit(Long projectId, String message) {
-        try (Repository repository = getRepository(projectId);
-             Git git = new Git(repository)) {
-            
-            var commit = git.commit()
-                    .setMessage(message)
-                    .call();
-            
-            return commit.getName().substring(0, 8);
+        try {
+            Repository repository = getRepository(projectId);
+            try (Git git = new Git(repository)) {
+                var commit = git.commit()
+                        .setMessage(message)
+                        .call();
+                return commit.getName().substring(0, 8);
+            }
         } catch (Exception e) {
             logger.error("Error committing for project {}: {}", projectId, e.getMessage());
             throw new RuntimeException("Could not commit changes: " + e.getMessage());
         }
+    }
+
+    @PreDestroy
+    public void closeAllRepositories() {
+        repositoryCache.values().forEach(Repository::close);
+        repositoryCache.clear();
     }
 
     public String getCommitHash() {

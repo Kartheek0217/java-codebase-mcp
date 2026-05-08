@@ -18,8 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
@@ -35,21 +37,20 @@ public class FileIndexerService {
     private final LuceneIndexService luceneIndexService;
     private final Cache<String, List<Symbol>> symbolCache;
 
-    public FileIndexerService(SymbolRepository symbolRepository, 
-                              FileMetadataRepository fileMetadataRepository,
-                              LuceneIndexService luceneIndexService,
-                              Cache<String, List<Symbol>> symbolCache) {
+    public FileIndexerService(SymbolRepository symbolRepository,
+            FileMetadataRepository fileMetadataRepository,
+            LuceneIndexService luceneIndexService,
+            Cache<String, List<Symbol>> symbolCache) {
         this.symbolRepository = symbolRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.luceneIndexService = luceneIndexService;
         this.symbolCache = symbolCache;
-        
+
         ParserConfiguration config = new ParserConfiguration();
-        config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17); 
+        config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         StaticJavaParser.setConfiguration(config);
     }
 
-    @Transactional
     public void indexFile(Long projectId, Path path) {
         logger.debug("indexFile called for project {} and path {}", projectId, path);
         try {
@@ -60,7 +61,7 @@ public class FileIndexerService {
 
             FileMetadataId id = new FileMetadataId(projectId, filePath);
             FileMetadata metadata = fileMetadataRepository.findById(id).orElse(null);
-            
+
             if (metadata != null && metadata.getChecksum().equals(checksum)) {
                 logger.debug("File unchanged: {}", filePath);
                 return;
@@ -68,40 +69,50 @@ public class FileIndexerService {
 
             logger.info("Indexing file: {}", filePath);
             String content = Files.readString(path);
-            
-            // Clear existing data
-            symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
-            symbolCache.invalidate(projectId + ":" + filePath);
 
-            // Parse symbols ONLY for Java files (for now)
+            List<Symbol> symbols = null;
             if (filePath.toLowerCase().endsWith(".java")) {
-                List<Symbol> symbols = extractSymbols(content, path);
-                for (Symbol s : symbols) {
-                    s.setProjectId(projectId);
-                    s.setFilePath(filePath);
-                    s.setLastModified(now);
-                }
-                symbolRepository.saveAll(symbols);
-                symbolCache.put(projectId + ":" + filePath, symbols);
+                symbols = extractSymbols(content, path);
             }
 
-            // Index content in Lucene
+            // Update metadata and symbols in a single transaction
+            saveFileData(projectId, filePath, checksum, fileSize, now, symbols);
+
+            // Index content in Lucene (Outside DB transaction)
             luceneIndexService.indexFileContent(projectId, filePath, content);
-
-            // Update metadata
-            if (metadata == null) {
-                metadata = new FileMetadata();
-                metadata.setProjectId(projectId);
-                metadata.setFilePath(filePath);
-            }
-            metadata.setChecksum(checksum);
-            metadata.setFileSize(fileSize);
-            metadata.setLastScanned(now);
-            fileMetadataRepository.save(metadata);
 
         } catch (Throwable t) {
             logger.error("Critical error indexing file: {}", path, t);
         }
+    }
+
+    @Transactional
+    protected void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
+            List<Symbol> symbols) {
+        // Clear existing symbols
+        symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
+        symbolCache.invalidate(projectId + ":" + filePath);
+
+        if (symbols != null && !symbols.isEmpty()) {
+            for (Symbol s : symbols) {
+                s.setProjectId(projectId);
+                s.setFilePath(filePath);
+                s.setLastModified(now);
+            }
+            symbolRepository.saveAll(symbols);
+            symbolCache.put(projectId + ":" + filePath, symbols);
+        }
+
+        FileMetadataId id = new FileMetadataId(projectId, filePath);
+        FileMetadata metadata = fileMetadataRepository.findById(id).orElse(new FileMetadata());
+        if (metadata.getProjectId() == null) {
+            metadata.setProjectId(projectId);
+            metadata.setFilePath(filePath);
+        }
+        metadata.setChecksum(checksum);
+        metadata.setFileSize(fileSize);
+        metadata.setLastScanned(now);
+        fileMetadataRepository.save(metadata);
     }
 
     public List<Symbol> getSymbols(Long projectId, String filePath) {
@@ -124,7 +135,7 @@ public class FileIndexerService {
         List<Symbol> symbols = new ArrayList<>();
         try {
             CompilationUnit cu = StaticJavaParser.parse(content);
-            
+
             cu.findAll(ClassOrInterfaceDeclaration.class).forEach(c -> {
                 Symbol s = new Symbol();
                 s.setName(c.getNameAsString());
@@ -145,23 +156,30 @@ public class FileIndexerService {
                     symbols.add(s);
                 });
             });
-            
+
             logger.info("Extracted {} symbols from file: {}", symbols.size(), path);
         } catch (Throwable t) {
             logger.error("StaticJavaParser failed for file: {}", path, t);
         }
-        
+
         return symbols;
     }
 
     private String computeChecksum(Path path) throws IOException, NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] bytes = Files.readAllBytes(path);
-        byte[] hash = digest.digest(bytes);
+        try (InputStream is = Files.newInputStream(path);
+                DigestInputStream dis = new DigestInputStream(is, digest)) {
+            byte[] buffer = new byte[8192];
+            while (dis.read(buffer) != -1) {
+                // Read through the stream to update the digest
+            }
+        }
+        byte[] hash = digest.digest();
         StringBuilder hexString = new StringBuilder();
         for (byte b : hash) {
             String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
+            if (hex.length() == 1)
+                hexString.append('0');
             hexString.append(hex);
         }
         return hexString.toString();
