@@ -1,18 +1,22 @@
 package com.mcp.controller;
 
-import com.mcp.repository.ProjectRepository;
-import com.mcp.service.GitInfoService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.mcp.repository.ProjectRepository;
+import com.mcp.service.GitInfoService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
+@RequestMapping("/api")
 @Tag(name = "System", description = "High-level system status and monitoring endpoints. Used to verify overall health and versioning.")
 public class StatusController {
 
@@ -25,13 +29,9 @@ public class StatusController {
     }
 
     @GetMapping("/status")
-    @Operation(
-        summary = "Get system status and metadata", 
-        description = "Returns application status, version, uptime, and metadata about the server's own Git repository. Also includes the total number of managed projects.",
-        responses = {
+    @Operation(summary = "Get system status and metadata", description = "Returns application status, version, uptime, and metadata about the server's own Git repository. Also includes the total number of managed projects.", responses = {
             @ApiResponse(responseCode = "200", description = "System status retrieved successfully")
-        }
-    )
+    })
     public Map<String, Object> getStatus() {
         Map<String, Object> status = new HashMap<>();
         status.put("status", "OK");

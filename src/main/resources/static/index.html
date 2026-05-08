@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Codebase MCP Dashboard</title>
+    <meta name="description" content="A powerful UI for managing and searching your Java codebase using MCP.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">⚡</span>
+                <h1>Codebase MCP</h1>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </button>
+                <button class="nav-item" data-tab="search">
+                    <span class="icon">🔍</span> Global Search
+                </button>
+                <button class="nav-item" data-tab="browser">
+                    <span class="icon">📂</span> File Browser
+                </button>
+                <button class="nav-item" data-tab="agent">
+                    <span class="icon">🤖</span> AI Agent View
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <span class="icon">⚙️</span> Settings
+                </button>
+            </nav>
+
+            <div class="project-selector-container">
+                <label for="project-select">Active Project</label>
+                <select id="project-select" class="project-select">
+                    <option value="">Loading projects...</option>
+                </select>
+                <button id="btn-add-project" class="btn-secondary">+ New Project</button>
+            </div>
+
+            <div class="system-status">
+                <div class="status-indicator">
+                    <span class="status-dot green"></span>
+                    <span id="server-status">Server: Online</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <h2 id="current-tab-title">Dashboard</h2>
+                <div class="header-actions">
+                    <button id="btn-refresh" class="btn-icon">🔄</button>
+                    <div class="user-badge">Admin</div>
+                </div>
+            </header>
+
+            <!-- Dashboard Tab -->
+            <section id="tab-dashboard" class="tab-pane active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-icon">📄</span>
+                        <div class="stat-info">
+                            <h3 id="stat-files">0</h3>
+                            <p>Files Indexed</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">🏷️</span>
+                        <div class="stat-info">
+                            <h3 id="stat-symbols">0</h3>
+                            <p>AST Symbols</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">🌿</span>
+                        <div class="stat-info">
+                            <h3 id="stat-branch">N/A</h3>
+                            <p>Git Branch</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-actions">
+                    <button id="btn-trigger-scan" class="btn-primary">Trigger Full Scan</button>
+                    <button id="btn-reconcile" class="btn-secondary">Reconcile Index</button>
+                </div>
+
+                <div class="recent-activity">
+                    <h3>Recent History</h3>
+                    <ul id="history-list" class="activity-list">
+                        <li class="empty-msg">No recent activity</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Search Tab -->
+            <section id="tab-search" class="tab-pane">
+                <div class="search-container">
+                    <div class="search-bar">
+                        <input type="text" id="search-input" placeholder="Search content, files, or symbols...">
+                        <button id="btn-search" class="btn-primary">Search</button>
+                    </div>
+                    <div class="search-filters">
+                        <label><input type="radio" name="search-type" value="content" checked> Content</label>
+                        <label><input type="radio" name="search-type" value="files"> Files</label>
+                        <label><input type="radio" name="search-type" value="symbols"> Symbols</label>
+                    </div>
+                </div>
+                <div id="search-results" class="results-container">
+                    <div class="empty-msg">Enter a query to begin searching</div>
+                </div>
+            </section>
+
+            <!-- Browser Tab -->
+            <section id="tab-browser" class="tab-pane">
+                <div class="browser-layout">
+                    <div class="file-list-container">
+                        <input type="text" id="file-filter" placeholder="Filter files...">
+                        <ul id="file-list" class="file-list"></ul>
+                    </div>
+                    <div class="file-viewer-container">
+                        <div id="file-viewer-header" class="viewer-header">Select a file to view</div>
+                        <div class="viewer-content">
+                            <pre id="code-viewer"><code class="language-java">// Code will appear here</code></pre>
+                            <div id="symbol-sidebar" class="symbol-sidebar">
+                                <h4>Symbols</h4>
+                                <ul id="file-symbols"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Agent View -->
+            <section id="tab-agent" class="tab-pane">
+                <div class="agent-view">
+                    <div class="agent-header">
+                        <p>This view shows the context being provided to AI agents.</p>
+                        <button id="btn-start-session" class="btn-secondary">Start AI Session</button>
+                    </div>
+                    <div id="session-info" class="session-info hidden">
+                        Session ID: <span id="session-id"></span>
+                    </div>
+                    <div class="context-tester">
+                        <h4>Context Tester</h4>
+                        <div class="input-row">
+                            <input type="text" id="agent-file-path"
+                                placeholder="File path (e.g. src/main/java/App.java)">
+                            <button id="btn-get-context" class="btn-primary">Get Context</button>
+                        </div>
+                    </div>
+                    <div id="agent-context-output" class="context-output">
+                        <div class="empty-msg">Request context for a file to see what the agent receives.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="tab-settings" class="tab-pane">
+                <div class="settings-container">
+                    <div class="settings-card">
+                        <h3>Server Health</h3>
+                        <div id="health-details">Loading...</div>
+                    </div>
+                    <div class="settings-card">
+                        <h3>Git Information</h3>
+                        <div id="git-details">Loading...</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-project" class="modal">
+        <div class="modal-content">
+            <h3>Add New Project</h3>
+            <div class="form-group">
+                <label>Project Name</label>
+                <input type="text" id="new-project-name" placeholder="e.g. My Awesome Project">
+            </div>
+            <div class="form-group">
+                <label>Root Directory (Absolute Path)</label>
+                <input type="text" id="new-project-path" placeholder="e.g. C:\Users\Dev\Project">
+            </div>
+            <div class="modal-actions">
+                <button id="btn-cancel-project" class="btn-secondary">Cancel</button>
+                <button id="btn-save-project" class="btn-primary">Create Project</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
