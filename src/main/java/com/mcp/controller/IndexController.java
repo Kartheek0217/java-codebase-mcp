@@ -61,6 +61,12 @@ public class IndexController {
         this.projectRepository = projectRepository;
     }
 
+    /**
+     * Retrieves indexing statistics for a specific project.
+     *
+     * @param projectId ID of the project
+     * @return A map containing file and symbol counts
+     */
     @GetMapping("/{projectId}/status")
     @Operation(summary = "Get project index statistics", description = "Returns counts of indexed files and AST symbols for a specific project. Useful for verifying index completeness.", responses = {
             @ApiResponse(responseCode = "200", description = "Statistics retrieved successfully"),
@@ -75,6 +81,13 @@ public class IndexController {
         return status;
     }
 
+    /**
+     * Manually triggers a directory scan for the specified project.
+     *
+     * @param projectId ID of the project to scan
+     * @return A status message
+     * @throws IOException If the scan fails
+     */
     @PostMapping("/{projectId}/trigger-scan")
     @Operation(summary = "Manually trigger directory scan", description = "Forces the system to re-scan the project root directory and update the index with any new or modified files.", responses = {
             @ApiResponse(responseCode = "200", description = "Scan completed successfully")
@@ -85,6 +98,13 @@ public class IndexController {
         return "Scan triggered and completed for project " + projectId;
     }
 
+    /**
+     * Reconciles the database with the filesystem by removing deleted files from
+     * the index.
+     *
+     * @param projectId ID of the project to reconcile
+     * @return A status message
+     */
     @PostMapping("/{projectId}/reconcile")
     @Operation(summary = "Reconcile database with filesystem", description = "Performs a deep sync to remove database entries for files that no longer exist on disk and update entries for modified files.", responses = {
             @ApiResponse(responseCode = "200", description = "Reconciliation completed successfully")
@@ -95,6 +115,13 @@ public class IndexController {
         return "Reconciliation triggered and completed for project " + projectId;
     }
 
+    /**
+     * Searches for files within a project by their relative path.
+     *
+     * @param projectId ID of the project
+     * @param query     Substring of the file path to search for
+     * @return A list of matching file metadata
+     */
     @GetMapping("/{projectId}/files/search")
     @Operation(summary = "Search files by path", description = "Finds indexed files whose paths match the provided search query (case-insensitive substring match).", responses = {
             @ApiResponse(responseCode = "200", description = "Files found successfully")
@@ -105,6 +132,13 @@ public class IndexController {
         return fileMetadataRepository.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query);
     }
 
+    /**
+     * Performs a full-text content search across all indexed files using Lucene.
+     *
+     * @param projectId ID of the project
+     * @param query     The text query to search for
+     * @return A list of results with matching snippets
+     */
     @GetMapping("/{projectId}/search-content")
     @Operation(summary = "Search file content (Lucene)", description = "Performs high-performance full-text search across all indexed files using Lucene. Returns matching lines and context.", responses = {
             @ApiResponse(responseCode = "200", description = "Search results retrieved successfully")
@@ -115,6 +149,14 @@ public class IndexController {
         return luceneIndexService.searchContent(projectId, query);
     }
 
+    /**
+     * Reads the raw content of a file.
+     *
+     * @param projectId ID of the project
+     * @param filePath  Relative path of the file
+     * @return A map containing the file path and content
+     * @throws IOException If the file cannot be read
+     */
     @GetMapping("/{projectId}/files/read")
     @Operation(summary = "Read file content", description = "Retrieves the raw text content of a file within the project.", responses = {
             @ApiResponse(responseCode = "200", description = "File content retrieved successfully"),

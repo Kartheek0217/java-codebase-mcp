@@ -32,6 +32,11 @@ public class UIHelperController {
         this.symbolRepository = symbolRepository;
     }
 
+    /**
+     * Retrieves a summary of all projects for the UI.
+     *
+     * @return A list of maps containing project ID, name, path, and basic counts
+     */
     @GetMapping("/projects-summary")
     @Operation(summary = "Get a summary of all projects", description = "Returns IDs, names, and basic statistics for all projects to populate UI selectors.")
     public List<Map<String, Object>> getProjectsSummary() {
@@ -50,6 +55,12 @@ public class UIHelperController {
         return summary;
     }
 
+    /**
+     * Retrieves detailed statistics for a specific project.
+     *
+     * @param projectId The ID of the project
+     * @return A map containing detailed file and symbol statistics
+     */
     @GetMapping("/project-stats")
     @Operation(summary = "Get detailed stats for a project by ID")
     public Map<String, Object> getProjectStats(Long projectId) {
@@ -60,6 +71,12 @@ public class UIHelperController {
         return stats;
     }
 
+    /**
+     * Retrieves detailed information about a specific symbol by its ID.
+     *
+     * @param id The unique ID of the symbol
+     * @return The Symbol entity
+     */
     @GetMapping("/symbols/{id}")
     @Operation(summary = "Get symbol details by ID")
     public com.mcp.entity.Symbol getSymbolById(@org.springframework.web.bind.annotation.PathVariable Long id) {

@@ -24,6 +24,11 @@ public class GitInfoController {
         this.gitInfoService = gitInfoService;
     }
 
+    /**
+     * Retrieves global Git metadata for the MCP server itself.
+     *
+     * @return A map containing commit hash, branch name, and status
+     */
     @GetMapping
     @Operation(summary = "Get global server Git info", description = "Returns Git metadata about the MCP server's own source code (commit, branch, message).", responses = {
             @ApiResponse(responseCode = "200", description = "Global Git info retrieved successfully")

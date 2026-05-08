@@ -22,6 +22,11 @@ public class HealthController {
         this.projectRepository = projectRepository;
     }
 
+    /**
+     * Performs a system-wide health check, including database and indexing status.
+     *
+     * @return A map containing health status and component details
+     */
     @GetMapping("/health")
     @Operation(summary = "Detailed health check", description = "Returns the status of the server, database connectivity, and index readiness.", responses = {
             @ApiResponse(responseCode = "200", description = "System is healthy")

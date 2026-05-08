@@ -91,6 +91,16 @@ public class AgentController {
         this.skillService = skillService;
     }
 
+    /**
+     * Retrieves the full context for a specific file, including its content,
+     * indexed symbols, and metadata.
+     *
+     * @param projectId     The ID of the project containing the file
+     * @param filePath      The relative path of the file from the project root
+     * @param correlationId Optional correlation ID for tracing AI agent requests
+     * @return A map containing the file content, symbols, and metadata
+     * @throws IOException If the file cannot be read
+     */
     @GetMapping("/context")
     @Operation(summary = "Get full context for a file", description = "Retrieves the full content of a file along with its AST-extracted symbols (classes, methods, variables) and metadata. This is the primary endpoint for an AI agent to 'read' a file with architectural awareness.", responses = {
             @ApiResponse(responseCode = "200", description = "File context retrieved successfully"),
@@ -132,6 +142,15 @@ public class AgentController {
         return context;
     }
 
+    /**
+     * Searches for symbols (classes, methods, fields) across the project based on a
+     * query.
+     *
+     * @param projectId The ID of the project to search in
+     * @param query     The search query string
+     * @param type      Optional filter for symbol type (e.g., CLASS, METHOD)
+     * @return A list of matching symbols
+     */
     @GetMapping("/symbols")
     @Operation(summary = "AI-optimized symbol search", description = "Searches for symbols (classes, methods, fields) across the project by name or type.", responses = {
             @ApiResponse(responseCode = "200", description = "Symbols retrieved successfully")
@@ -150,6 +169,13 @@ public class AgentController {
         }
     }
 
+    /**
+     * Performs a semantic search for code snippets relevant to the provided query.
+     *
+     * @param projectId The ID of the project to search in
+     * @param query     The natural language or code-based query
+     * @return A list of content search results with matching snippets
+     */
     @GetMapping("/suggest")
     @Operation(summary = "Suggest relevant code snippets", description = "Performs a semantic/full-text search across the project to find code snippets relevant to the provided query. Useful for AI agents to find 'where' a feature might be implemented.", responses = {
             @ApiResponse(responseCode = "200", description = "Suggestions retrieved successfully")
@@ -161,6 +187,12 @@ public class AgentController {
         return luceneIndexService.searchContent(projectId, query);
     }
 
+    /**
+     * Retrieves the access history for a specific project.
+     *
+     * @param projectId The ID of the project
+     * @return A list of recent access entries
+     */
     @GetMapping("/history")
     @Operation(summary = "Get project access history", description = "Returns a list of the most recent files or queries accessed by the AI agent for this project. Helps in maintaining conversation context.", responses = {
             @ApiResponse(responseCode = "200", description = "History retrieved successfully")
@@ -173,6 +205,12 @@ public class AgentController {
                 .toList();
     }
 
+    /**
+     * Starts a new session for multi-turn AI interactions.
+     *
+     * @param projectId The ID of the project for the session
+     * @return A map containing the generated sessionId
+     */
     @PostMapping("/session/start")
     @Operation(summary = "Start a new AI session", description = "Initializes a session for multi-turn conversations with an AI agent.", responses = {
             @ApiResponse(responseCode = "200", description = "Session started successfully"),
@@ -192,6 +230,12 @@ public class AgentController {
         return Map.of("sessionId", sessionId);
     }
 
+    /**
+     * Retrieves details of an existing AI session.
+     *
+     * @param sessionId The unique ID of the session
+     * @return The session data
+     */
     @GetMapping("/session/{sessionId}")
     @Operation(summary = "Get AI session details", description = "Retrieves the current state and history of an AI session.", responses = {
             @ApiResponse(responseCode = "200", description = "Session retrieved successfully"),
@@ -205,6 +249,12 @@ public class AgentController {
         return session;
     }
 
+    /**
+     * Retrieves all learned skills for a project.
+     *
+     * @param projectId The ID of the project
+     * @return A list of learned skills
+     */
     @GetMapping("/skills")
     @Operation(summary = "Get learned skills", description = "Returns a list of all skills learned for a specific project.", responses = {
             @ApiResponse(responseCode = "200", description = "Skills retrieved successfully")
@@ -213,6 +263,12 @@ public class AgentController {
         return skillRepository.findByProjectId(projectId);
     }
 
+    /**
+     * Deletes all learned skills for a specific project.
+     *
+     * @param projectId The ID of the project
+     * @return A status message indicating success
+     */
     @DeleteMapping("/skills")
     @Operation(summary = "Clear all skills", description = "Deletes all learned skills for a specific project.")
     public Map<String, String> deleteSkills(@RequestParam Long projectId) {
@@ -220,6 +276,13 @@ public class AgentController {
         return Map.of("status", "success", "message", "All skills cleared for project: " + projectId);
     }
 
+    /**
+     * Instructs the agent to learn a new skill from a provided URL.
+     *
+     * @param projectId The ID of the project to associate the skill with
+     * @param url       The URL to the skill definition (Markdown)
+     * @return A status message indicating success or failure
+     */
     @PostMapping("/skills/learn")
     @Operation(summary = "Learn skill from URL", description = "Fetches a Markdown file from a URL and learns the skill defined in it.", responses = {
             @ApiResponse(responseCode = "200", description = "Skill learning triggered successfully")
