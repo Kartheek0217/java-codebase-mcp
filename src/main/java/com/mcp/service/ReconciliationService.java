@@ -20,9 +20,9 @@ public class ReconciliationService {
     private final FileScannerService fileScannerService;
     private final FileIndexerService fileIndexerService;
 
-    public ReconciliationService(FileMetadataRepository fileMetadataRepository, 
-                                 FileScannerService fileScannerService,
-                                 FileIndexerService fileIndexerService) {
+    public ReconciliationService(FileMetadataRepository fileMetadataRepository,
+            FileScannerService fileScannerService,
+            FileIndexerService fileIndexerService) {
         this.fileMetadataRepository = fileMetadataRepository;
         this.fileScannerService = fileScannerService;
         this.fileIndexerService = fileIndexerService;
@@ -30,7 +30,7 @@ public class ReconciliationService {
 
     public void reconcileProject(Long projectId) {
         logger.info("Starting reconciliation for project {}...", projectId);
-        
+
         // 1. Identify orphaned records (in DB but file deleted)
         List<FileMetadata> allMetadata = fileMetadataRepository.findByProjectId(projectId);
         for (FileMetadata metadata : allMetadata) {

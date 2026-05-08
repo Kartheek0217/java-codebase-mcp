@@ -12,10 +12,12 @@ import java.util.List;
 @Repository
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, FileMetadataId> {
     List<FileMetadata> findByProjectId(Long projectId);
+
     List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query);
-    
+
     @Modifying
     @Transactional
     void deleteByProjectId(Long projectId);
+
     long countByProjectId(Long projectId);
 }

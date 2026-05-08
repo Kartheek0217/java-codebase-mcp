@@ -21,18 +21,43 @@ public class FileMetadata {
     private LocalDateTime lastScanned;
 
     // Getters and Setters
-    public Long getProjectId() { return projectId; }
-    public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public Long getProjectId() {
+        return projectId;
+    }
 
-    public String getFilePath() { return filePath; }
-    public void setFilePath(String filePath) { this.filePath = filePath; }
+    public void setProjectId(Long projectId) {
+        this.projectId = projectId;
+    }
 
-    public String getChecksum() { return checksum; }
-    public void setChecksum(String checksum) { this.checksum = checksum; }
+    public String getFilePath() {
+        return filePath;
+    }
 
-    public LocalDateTime getLastScanned() { return lastScanned; }
-    public void setLastScanned(LocalDateTime lastScanned) { this.lastScanned = lastScanned; }
+    public void setFilePath(String filePath) {
+        this.filePath = filePath;
+    }
 
-    public Long getFileSize() { return fileSize; }
-    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+    public String getChecksum() {
+        return checksum;
+    }
+
+    public void setChecksum(String checksum) {
+        this.checksum = checksum;
+    }
+
+    public LocalDateTime getLastScanned() {
+        return lastScanned;
+    }
+
+    public void setLastScanned(LocalDateTime lastScanned) {
+        this.lastScanned = lastScanned;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
+    }
 }

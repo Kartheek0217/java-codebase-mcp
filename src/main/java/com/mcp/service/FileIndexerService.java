@@ -1,7 +1,10 @@
 package com.mcp.service;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
@@ -28,6 +31,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Symbol;
@@ -60,6 +64,10 @@ public class FileIndexerService {
         StaticJavaParser.setConfiguration(config);
     }
 
+    public LuceneIndexService getLuceneIndexService() {
+        return luceneIndexService;
+    }
+
     public void indexFile(Long projectId, Path path) {
         logger.debug("indexFile called for project {} and path {}", projectId, path);
         try {
@@ -90,8 +98,9 @@ public class FileIndexerService {
                 symbols = extractGeneralSymbols(content, filePath);
             }
 
-            // Update metadata and symbols in a single transaction
-            saveFileData(projectId, filePath, checksum, fileSize, now, symbols);
+            // Update metadata and symbols in a single transaction (Reuse existing metadata
+            // object)
+            saveFileData(projectId, filePath, checksum, fileSize, now, symbols, metadata);
 
             // Index content in Lucene (Outside DB transaction)
             luceneIndexService.indexFileContent(projectId, filePath, content);
@@ -103,7 +112,7 @@ public class FileIndexerService {
 
     @Transactional
     protected void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
-            List<Symbol> symbols) {
+            List<Symbol> symbols, FileMetadata existingMetadata) {
         // Clear existing symbols
         symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
         symbolCache.invalidate(projectId + ":" + filePath);
@@ -118,8 +127,12 @@ public class FileIndexerService {
             symbolCache.put(projectId + ":" + filePath, symbols);
         }
 
-        FileMetadataId id = new FileMetadataId(projectId, filePath);
-        FileMetadata metadata = fileMetadataRepository.findById(id).orElse(new FileMetadata());
+        FileMetadata metadata = existingMetadata;
+        if (metadata == null) {
+            FileMetadataId id = new FileMetadataId(projectId, filePath);
+            metadata = fileMetadataRepository.findById(id).orElse(new FileMetadata());
+        }
+
         if (metadata.getProjectId() == null) {
             metadata.setProjectId(projectId);
             metadata.setFilePath(filePath);
@@ -211,26 +224,26 @@ public class FileIndexerService {
         try {
             CompilationUnit cu = StaticJavaParser.parse(content);
 
-            cu.findAll(ClassOrInterfaceDeclaration.class).forEach(c -> {
-                Symbol s = new Symbol();
-                s.setName(c.getNameAsString());
-                s.setType("CLASS");
-                symbols.add(s);
-            });
-            cu.findAll(MethodDeclaration.class).forEach(m -> {
-                Symbol s = new Symbol();
-                s.setName(m.getNameAsString());
-                s.setType("METHOD");
-                symbols.add(s);
-            });
-            cu.findAll(FieldDeclaration.class).forEach(f -> {
-                f.getVariables().forEach(v -> {
-                    Symbol s = new Symbol();
-                    s.setName(v.getNameAsString());
-                    s.setType("FIELD");
-                    symbols.add(s);
-                });
-            });
+            // Optimization: Use a single pass visitor to extract all symbols
+            cu.accept(new VoidVisitorAdapter<List<Symbol>>() {
+                @Override
+                public void visit(ClassOrInterfaceDeclaration n, List<Symbol> arg) {
+                    arg.add(createSymbol(n.getNameAsString(), "CLASS"));
+                    super.visit(n, arg);
+                }
+
+                @Override
+                public void visit(MethodDeclaration n, List<Symbol> arg) {
+                    arg.add(createSymbol(n.getNameAsString(), "METHOD"));
+                    super.visit(n, arg);
+                }
+
+                @Override
+                public void visit(FieldDeclaration n, List<Symbol> arg) {
+                    n.getVariables().forEach(v -> arg.add(createSymbol(v.getNameAsString(), "FIELD")));
+                    super.visit(n, arg);
+                }
+            }, symbols);
 
             logger.info("Extracted {} symbols from file: {}", symbols.size(), path);
         } catch (Throwable t) {
@@ -238,6 +251,13 @@ public class FileIndexerService {
         }
 
         return symbols;
+    }
+
+    private Symbol createSymbol(String name, String type) {
+        Symbol s = new Symbol();
+        s.setName(name);
+        s.setType(type);
+        return s;
     }
 
     private String extractPdfText(Path path) {
@@ -256,21 +276,36 @@ public class FileIndexerService {
     private ReadResult readFileAndChecksum(Path path) throws IOException, NoSuchAlgorithmException {
         String filePath = path.toString().toLowerCase();
         if (filePath.endsWith(".pdf")) {
-            // PDF still needs separate processing for now as PDFBox handles its own stream
             return new ReadResult(extractPdfText(path), computeChecksum(path), Files.size(path));
         }
 
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] bytes = Files.readAllBytes(path);
-        digest.update(bytes);
+        // Use a buffered stream and compute checksum while reading to avoid multiple
+        // passes
+        try (InputStream is = Files.newInputStream(path);
+                DigestInputStream dis = new DigestInputStream(new BufferedInputStream(is), digest);
+                ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
 
-        byte[] hash = digest.digest();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = dis.read(buffer)) != -1) {
+                bos.write(buffer, 0, read);
+            }
+
+            byte[] hash = digest.digest();
+            String checksum = bytesToHex(hash);
+            String content = bos.toString(StandardCharsets.UTF_8);
+
+            return new ReadResult(content, checksum, bos.size());
+        }
+    }
+
+    private String bytesToHex(byte[] hash) {
         StringBuilder hexString = new StringBuilder();
         for (byte b : hash) {
             hexString.append(String.format("%02x", b));
         }
-
-        return new ReadResult(new String(bytes), hexString.toString(), bytes.length);
+        return hexString.toString();
     }
 
     private String computeChecksum(Path path) throws IOException, NoSuchAlgorithmException {

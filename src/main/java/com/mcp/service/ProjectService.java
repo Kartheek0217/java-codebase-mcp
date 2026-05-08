@@ -22,9 +22,9 @@ public class ProjectService {
     private final FileScannerService fileScannerService;
     private final DirectoryWatcherService watcherService;
 
-    public ProjectService(ProjectRepository projectRepository, 
-                          FileScannerService fileScannerService,
-                          DirectoryWatcherService watcherService) {
+    public ProjectService(ProjectRepository projectRepository,
+            FileScannerService fileScannerService,
+            DirectoryWatcherService watcherService) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
         this.watcherService = watcherService;
@@ -47,7 +47,7 @@ public class ProjectService {
     public Project createProject(String name, String rootPath) throws IOException {
         Project project = new Project(name, rootPath);
         final Project savedProject = projectRepository.save(project);
-        
+
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -62,7 +62,7 @@ public class ProjectService {
                 }
             }
         });
-        
+
         return savedProject;
     }
 

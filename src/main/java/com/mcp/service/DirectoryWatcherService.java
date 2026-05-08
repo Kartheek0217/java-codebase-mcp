@@ -25,12 +25,12 @@ public class DirectoryWatcherService {
     private final Map<Path, ScheduledFuture<?>> debounceMap = new ConcurrentHashMap<>();
     private final ExecutorService watcherExecutor = Executors.newVirtualThreadPerTaskExecutor();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    
+
     private final FileIndexerService fileIndexerService;
 
     private static final List<String> INDEXABLE_EXTENSIONS = List.of(
-            ".java", ".ts", ".tsx", ".vue", ".js", ".jsx", ".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql"
-    );
+            ".java", ".ts", ".tsx", ".vue", ".js", ".jsx", ".html", ".css", ".json", ".md", ".yaml", ".yml",
+            ".properties", ".sql");
 
     public DirectoryWatcherService(FileIndexerService fileIndexerService) {
         this.fileIndexerService = fileIndexerService;
@@ -43,7 +43,7 @@ public class DirectoryWatcherService {
 
         Path scanDirectory = Paths.get(project.getRootPath()).toAbsolutePath();
         logger.info("Starting DirectoryWatcher for project {} on: {}", project.getName(), scanDirectory);
-        
+
         DirectoryWatcher watcher = DirectoryWatcher.builder()
                 .path(scanDirectory)
                 .listener(event -> {
@@ -53,7 +53,7 @@ public class DirectoryWatcherService {
                         case DELETE -> FileEvent.Type.DELETED;
                         default -> null;
                     };
-                    
+
                     if (type != null && event.path() != null && isIndexable(event.path())) {
                         debounce(project.getId(), type, event.path());
                     }

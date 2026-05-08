@@ -49,6 +49,31 @@ public class LuceneIndexService {
     private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
     private final Map<Long, SearcherManager> searcherManagers = new ConcurrentHashMap<>();
     private final Set<Long> pendingCommits = ConcurrentHashMap.newKeySet();
+    private final Set<Long> bulkModeProjects = ConcurrentHashMap.newKeySet();
+
+    public void setBulkMode(Long projectId, boolean enabled) {
+        if (enabled) {
+            bulkModeProjects.add(projectId);
+        } else {
+            bulkModeProjects.remove(projectId);
+            try {
+                commitAndRefresh(projectId);
+            } catch (IOException e) {
+                logger.error("Error during final commit/refresh for project {}", projectId, e);
+            }
+        }
+    }
+
+    public void commitAndRefresh(Long projectId) throws IOException {
+        IndexWriter writer = writers.get(projectId);
+        if (writer != null) {
+            writer.commit();
+            SearcherManager sm = searcherManagers.get(projectId);
+            if (sm != null) {
+                sm.maybeRefreshBlocking();
+            }
+        }
+    }
 
     private IndexWriter getWriter(Long projectId) throws IOException {
         return writers.computeIfAbsent(projectId, k -> {
@@ -61,6 +86,8 @@ public class LuceneIndexService {
                 StandardAnalyzer analyzer = new StandardAnalyzer();
                 IndexWriterConfig config = new IndexWriterConfig(analyzer);
                 config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
+                // Optimization: Increase RAM buffer for faster indexing
+                config.setRAMBufferSizeMB(256.0);
                 IndexWriter writer = new IndexWriter(directory, config);
 
                 SearcherManager sm = new SearcherManager(writer, true, true, new SearcherFactory());
@@ -93,9 +120,11 @@ public class LuceneIndexService {
             writer.updateDocument(new Term("path", filePath), doc);
             pendingCommits.add(projectId);
 
-            SearcherManager sm = searcherManagers.get(projectId);
-            if (sm != null) {
-                sm.maybeRefresh();
+            if (!bulkModeProjects.contains(projectId)) {
+                SearcherManager sm = searcherManagers.get(projectId);
+                if (sm != null) {
+                    sm.maybeRefresh();
+                }
             }
         } catch (IOException e) {
             logger.error("Error indexing content for file: {}", filePath, e);
