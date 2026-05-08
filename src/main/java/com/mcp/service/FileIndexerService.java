@@ -10,6 +10,8 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -88,6 +90,8 @@ public class FileIndexerService {
                 symbols = extractSymbols(content, path);
             } else if (filePath.toLowerCase().endsWith(".md")) {
                 skillService.learnSkillFromMarkdown(projectId, content, filePath);
+            } else {
+                symbols = extractGeneralSymbols(content, filePath);
             }
 
             // Update metadata and symbols in a single transaction
@@ -144,6 +148,66 @@ public class FileIndexerService {
         fileMetadataRepository.deleteById(new FileMetadataId(projectId, filePath));
         luceneIndexService.deleteFileContent(projectId, filePath);
         symbolCache.invalidate(projectId + ":" + filePath);
+    }
+
+    private List<Symbol> extractGeneralSymbols(String content, String filePath) {
+        List<Symbol> symbols = new ArrayList<>();
+        String lowerPath = filePath.toLowerCase();
+
+        if (lowerPath.endsWith(".js") || lowerPath.endsWith(".jsx") || lowerPath.endsWith(".ts")
+                || lowerPath.endsWith(".tsx") || lowerPath.endsWith(".vue")) {
+            // JS/TS/Vue Scripts: Functions, Classes, and Arrow Functions
+            Pattern jsPattern = Pattern.compile(
+                    "(?:\\bfunction\\s+([a-zA-Z0-9_$]+))|(?:\\bclass\\s+([a-zA-Z0-9_$]+))|(?:\\b(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>)");
+            Matcher matcher = jsPattern.matcher(content);
+            while (matcher.find()) {
+                if (matcher.group(1) != null) {
+                    addSymbol(symbols, matcher.group(1), "FUNCTION");
+                } else if (matcher.group(2) != null) {
+                    addSymbol(symbols, matcher.group(2), "CLASS");
+                } else if (matcher.group(3) != null) {
+                    addSymbol(symbols, matcher.group(3), "ARROW_FUNCTION");
+                }
+            }
+        }
+
+        if (lowerPath.endsWith(".json")) {
+            // JSON: Keys
+            Pattern jsonPattern = Pattern.compile("\"([^\"]+)\"\\s*:");
+            Matcher matcher = jsonPattern.matcher(content);
+            while (matcher.find()) {
+                addSymbol(symbols, matcher.group(1), "JSON_KEY");
+            }
+        }
+
+        if (lowerPath.endsWith(".html") || lowerPath.endsWith(".vue")) {
+            // HTML/Vue Templates: IDs
+            Pattern idPattern = Pattern.compile("id=[\"']([^\"']+)[\"']");
+            Matcher matcher = idPattern.matcher(content);
+            while (matcher.find()) {
+                addSymbol(symbols, matcher.group(1), "ID");
+            }
+        }
+
+        if (lowerPath.endsWith(".css") || lowerPath.endsWith(".vue")) {
+            // CSS/Vue Styles: Classes and IDs
+            Pattern cssPattern = Pattern.compile("(?:^|\\s)([.#][a-zA-Z0-9_-]+)(?=\\s*\\{)");
+            Matcher matcher = cssPattern.matcher(content);
+            while (matcher.find()) {
+                String selector = matcher.group(1);
+                String type = selector.startsWith(".") ? "CSS_CLASS" : "CSS_ID";
+                addSymbol(symbols, selector.substring(1), type);
+            }
+        }
+
+        return symbols;
+    }
+
+    private void addSymbol(List<Symbol> symbols, String name, String type) {
+        Symbol s = new Symbol();
+        s.setName(name);
+        s.setType(type);
+        symbols.add(s);
     }
 
     private List<Symbol> extractSymbols(String content, Path path) {
