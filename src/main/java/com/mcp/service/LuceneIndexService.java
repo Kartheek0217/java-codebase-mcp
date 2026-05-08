@@ -27,6 +27,7 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.uhighlight.UnifiedHighlighter;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.slf4j.Logger;
@@ -143,19 +144,22 @@ public class LuceneIndexService {
                 searcher.setTimeout(new IndexSearcherTimeout(SEARCH_TIMEOUT_MS));
 
                 TopDocs topDocs = searcher.search(query, 50);
-                StoredFields storedFields = searcher.storedFields();
 
-                for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-                    Document doc = storedFields.document(scoreDoc.doc);
-                    String filePath = doc.get("path");
-                    String content = doc.get("content");
+                if (topDocs.scoreDocs.length > 0) {
+                    UnifiedHighlighter highlighter = UnifiedHighlighter.builder(searcher, analyzer).build();
+                    String[] snippets = highlighter.highlight("content", query, topDocs, 5);
 
-                    if (content == null)
-                        continue;
+                    StoredFields storedFields = searcher.storedFields();
+                    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
+                        ScoreDoc scoreDoc = topDocs.scoreDocs[i];
+                        Document doc = storedFields.document(scoreDoc.doc);
+                        String filePath = doc.get("path");
+                        String snippet = (snippets != null && i < snippets.length) ? snippets[i] : "";
 
-                    List<ContentSearchResult.ContentMatch> matches = extractMatchesFromContent(content, queryStr);
-                    if (!matches.isEmpty()) {
-                        results.add(new ContentSearchResult(filePath, scoreDoc.score, matches));
+                        if (snippet != null && !snippet.isEmpty()) {
+                            List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet);
+                            results.add(new ContentSearchResult(filePath, scoreDoc.score, matches));
+                        }
                     }
                 }
             } finally {
@@ -184,83 +188,24 @@ public class LuceneIndexService {
         }
     }
 
-    private List<ContentSearchResult.ContentMatch> extractMatchesFromContent(String content, String query) {
+    private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet) {
         List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
-        long startTime = System.currentTimeMillis();
+        // UnifiedHighlighter by default uses ... as a separator between passages
+        String[] passages = snippet.split("(?i)<b>...</b>|\\.\\.\\.");
 
-        try {
-            String[] allLines = content.split("\\r?\\n");
-            int lineNum = 0;
-            String lowerQuery = query.toLowerCase().replace("*", "").replace("?", "").replace("\"", "").trim();
-
-            if (lowerQuery.isEmpty())
-                return matches;
-
-            List<String> lineList = List.of(allLines);
-            for (String line : allLines) {
-                if (System.currentTimeMillis() - startTime > 500)
-                    break;
-
-                lineNum++;
-                if (line.toLowerCase().contains(lowerQuery)) {
-                    String functionName = findContainingFunction(lineList, lineNum);
-                    int startLine = Math.max(1, lineNum - 3);
-                    int endLine = Math.min(allLines.length, lineNum + 3);
-
-                    matches.add(new ContentSearchResult.ContentMatch(lineNum, line.trim(), functionName, startLine,
-                            endLine));
-                    if (matches.size() >= 10)
-                        break;
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Could not extract matches from content: {}", e.getMessage());
-        }
-        return matches;
-    }
-
-    private String findContainingFunction(List<String> lines, int currentLine) {
-        // Heuristic: scan upwards for method or class definitions
-        for (int i = currentLine - 1; i >= 0; i--) {
-            String line = lines.get(i).trim();
-            if (line.isEmpty() || line.startsWith("@") || line.startsWith("//") || line.startsWith("/*")
-                    || line.startsWith("*"))
+        for (String passage : passages) {
+            String cleanPassage = passage.replaceAll("<b>|</b>", "").trim();
+            if (cleanPassage.isEmpty())
                 continue;
 
-            // Method signature heuristic: contains ( and ) and { (or { on next line)
-            if (line.contains("(") && line.contains(")")) {
-                int parenIdx = line.indexOf("(");
-                String beforeParen = line.substring(0, parenIdx).trim();
-                String[] parts = beforeParen.split("\\s+");
-                if (parts.length > 0) {
-                    String name = parts[parts.length - 1];
-                    // Basic check to avoid keywords
-                    if (!name.equals("if") && !name.equals("for") && !name.equals("while") && !name.equals("switch")
-                            && !name.equals("catch")) {
-                        return name;
-                    }
-                }
-            }
-            // Class signature heuristic
-            if (line.contains("class ") || line.contains("interface ") || line.contains("enum ")
-                    || line.contains("record ")) {
-                String type = "class ";
-                if (line.contains("interface "))
-                    type = "interface ";
-                else if (line.contains("enum "))
-                    type = "enum ";
-                else if (line.contains("record "))
-                    type = "record ";
-
-                int classIdx = line.indexOf(type);
-                String afterClass = line.substring(classIdx + type.length()).trim();
-                String[] parts = afterClass.split("\\s+");
-                if (parts.length > 0) {
-                    return parts[0];
-                }
-            }
+            // Note: Since we don't have the original line numbers easily from the
+            // highlighter
+            // without custom PassageFormatter, we'll set it to 0 for now or use a
+            // heuristic.
+            // For now, let's just provide the snippet content.
+            matches.add(new ContentSearchResult.ContentMatch(0, cleanPassage, "unknown", 0, 0));
         }
-        return "unknown";
+        return matches;
     }
 
     private static class IndexSearcherTimeout implements QueryTimeout {

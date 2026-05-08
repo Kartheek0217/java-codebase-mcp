@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
@@ -58,9 +57,8 @@ public class FileScannerService {
             }
         }
 
-        List<Path> filesToIndex;
         try (Stream<Path> paths = Files.walk(root)) {
-            filesToIndex = paths
+            List<CompletableFuture<Void>> futures = paths
                     .filter(Files::isRegularFile)
                     .filter(path -> {
                         String relativePath = root.relativize(path).toString().replace("\\", "/");
@@ -77,7 +75,6 @@ public class FileScannerService {
                         }
 
                         // Default fallback filters for common large/generated directories
-                        // These act as a safety net if .gitignore is missing or incomplete
                         if (relativePath.contains("node_modules/") ||
                                 relativePath.contains("target/") ||
                                 relativePath.contains("dist/")) {
@@ -86,35 +83,15 @@ public class FileScannerService {
 
                         return isIndexable(path);
                     })
-                    .toList();
-        }
-
-        try {
-
-            logger.info("Found {} indexable files in project {}", filesToIndex.size(), project.getName());
-
-            List<CompletableFuture<Void>> futures = filesToIndex.stream()
                     .map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path),
                             scanExecutor))
                     .toList();
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-                    .handle((v, ex) -> {
-                        for (int i = 0; i < futures.size(); i++) {
-                            try {
-                                futures.get(i).get();
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                logger.error("Scan interrupted", e);
-                                break;
-                            } catch (ExecutionException e) {
-                                logger.error("Scan failed for file: {}", filesToIndex.get(i), e.getCause());
-                            }
-                        }
-                        return null;
-                    }).join();
+            logger.info("Submitted {} indexing tasks for project {}", futures.size(), project.getName());
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
         } catch (Exception e) {
-            logger.error("Error walking directory tree for project {}", projectId, e);
+            logger.error("Error during project scan for project {}", projectId, e);
         }
         logger.info("Scan for project {} completed.", project.getName());
     }

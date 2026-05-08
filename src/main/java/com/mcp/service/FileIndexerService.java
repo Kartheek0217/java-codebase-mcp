@@ -64,12 +64,15 @@ public class FileIndexerService {
         logger.debug("indexFile called for project {} and path {}", projectId, path);
         try {
             String filePath = path.toAbsolutePath().toString();
-            String checksum = computeChecksum(path);
-            long fileSize = Files.size(path);
-            LocalDateTime now = LocalDateTime.now();
-
             FileMetadataId id = new FileMetadataId(projectId, filePath);
             FileMetadata metadata = fileMetadataRepository.findById(id).orElse(null);
+
+            // Optimization: Read file once and compute checksum while reading
+            ReadResult result = readFileAndChecksum(path);
+            String checksum = result.checksum;
+            String content = result.content;
+            long fileSize = result.fileSize;
+            LocalDateTime now = LocalDateTime.now();
 
             if (metadata != null && metadata.getChecksum().equals(checksum)) {
                 logger.debug("File unchanged: {}", filePath);
@@ -77,13 +80,6 @@ public class FileIndexerService {
             }
 
             logger.info("Indexing file: {}", filePath);
-
-            String content;
-            if (filePath.toLowerCase().endsWith(".pdf")) {
-                content = extractPdfText(path);
-            } else {
-                content = Files.readString(path);
-            }
 
             List<Symbol> symbols = null;
             if (filePath.toLowerCase().endsWith(".java")) {
@@ -254,22 +250,41 @@ public class FileIndexerService {
         }
     }
 
+    private record ReadResult(String content, String checksum, long fileSize) {
+    }
+
+    private ReadResult readFileAndChecksum(Path path) throws IOException, NoSuchAlgorithmException {
+        String filePath = path.toString().toLowerCase();
+        if (filePath.endsWith(".pdf")) {
+            // PDF still needs separate processing for now as PDFBox handles its own stream
+            return new ReadResult(extractPdfText(path), computeChecksum(path), Files.size(path));
+        }
+
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] bytes = Files.readAllBytes(path);
+        digest.update(bytes);
+
+        byte[] hash = digest.digest();
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : hash) {
+            hexString.append(String.format("%02x", b));
+        }
+
+        return new ReadResult(new String(bytes), hexString.toString(), bytes.length);
+    }
+
     private String computeChecksum(Path path) throws IOException, NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream is = Files.newInputStream(path);
                 DigestInputStream dis = new DigestInputStream(is, digest)) {
             byte[] buffer = new byte[8192];
             while (dis.read(buffer) != -1) {
-                // Read through the stream to update the digest
             }
         }
         byte[] hash = digest.digest();
         StringBuilder hexString = new StringBuilder();
         for (byte b : hash) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1)
-                hexString.append('0');
-            hexString.append(hex);
+            hexString.append(String.format("%02x", b));
         }
         return hexString.toString();
     }
