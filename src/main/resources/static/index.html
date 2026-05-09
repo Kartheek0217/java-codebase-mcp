@@ -42,6 +42,9 @@
                 <button class="nav-item" data-tab="git">
                     <span class="icon">🌿</span> Git
                 </button>
+                <button class="nav-item" data-tab="web">
+                    <span class="icon">🌐</span> Web Tools
+                </button>
                 <button class="nav-item" data-tab="projects">
                     <span class="icon">📁</span> Projects
                 </button>
@@ -159,7 +162,10 @@
                         <ul id="file-list" class="file-list"></ul>
                     </div>
                     <div class="file-viewer-container">
-                        <div id="file-viewer-header" class="viewer-header">Select a file to view</div>
+                        <div id="file-viewer-header" class="viewer-header">
+                            <span>Select a file to view</span>
+                            <button id="btn-summarize-file" class="btn-secondary btn-small hidden">Summarize File</button>
+                        </div>
                         <div class="viewer-content">
                             <div class="code-editor-area">
                                 <pre id="code-viewer"><code class="language-java"></code></pre>
@@ -173,26 +179,118 @@
                 </div>
             </section>
 
-            <!-- AI Agent View -->
-            <section id="tab-agent" class="tab-pane">
-                <div class="agent-view">
-                    <div class="agent-header">
-                        <p>This view shows the context being provided to AI agents.</p>
-                        <button id="btn-start-session" class="btn-secondary">Start AI Session</button>
+            <!-- Web Tools Tab -->
+            <section id="tab-web" class="tab-pane">
+                <div class="web-tools-layout">
+                    <div class="web-tools-sidebar">
+                        <nav class="web-nav">
+                            <button class="web-nav-item active" data-web-tab="web-search">Web Search</button>
+                            <button class="web-nav-item" data-web-tab="web-crawler">Web Crawler</button>
+                            <button class="web-nav-item" data-web-tab="web-extract">Data Extraction</button>
+                        </nav>
                     </div>
-                    <div id="session-info" class="session-info hidden">
-                        Session ID: <span id="session-id"></span>
-                    </div>
-                    <div class="context-tester">
-                        <h4>Context Tester</h4>
-                        <div class="input-row">
-                            <input type="text" id="agent-file-path"
-                                placeholder="File path (e.g. src/main/java/App.java)">
-                            <button id="btn-get-context" class="btn-primary">Get Context</button>
+                    <div class="web-tools-content">
+                        <!-- Web Search -->
+                        <div id="web-tab-web-search" class="web-pane active">
+                            <div class="search-container">
+                                <div class="search-bar">
+                                    <input type="text" id="web-search-input" placeholder="Search the web (via crawl index)...">
+                                    <button id="btn-web-search" class="btn-primary">Search Web</button>
+                                </div>
+                                <div class="search-filters">
+                                    <input type="text" id="web-search-site" placeholder="Site filter (optional)...">
+                                    <label>Limit: <input type="number" id="web-search-limit" value="10" min="1" max="50"></label>
+                                </div>
+                            </div>
+                            <div id="web-search-results" class="results-container">
+                                <div class="empty-msg">Perform a web search to see results.</div>
+                            </div>
+                        </div>
+
+                        <!-- Web Crawler -->
+                        <div id="web-tab-web-crawler" class="web-pane">
+                            <div class="crawler-header">
+                                <h3>Active Crawl Jobs</h3>
+                                <button id="btn-new-crawl" class="btn-primary">+ New Crawl</button>
+                            </div>
+                            <div id="crawler-jobs-list" class="crawler-list">
+                                <div class="empty-msg">Loading crawl jobs...</div>
+                            </div>
+                        </div>
+
+                        <!-- Data Extraction -->
+                        <div id="web-tab-web-extract" class="web-pane">
+                            <div class="extraction-container">
+                                <div class="extraction-card">
+                                    <h4>Quick Metadata Fetch</h4>
+                                    <div class="input-row">
+                                        <input type="text" id="extract-meta-url" placeholder="https://example.com">
+                                        <button id="btn-extract-meta" class="btn-secondary">Fetch Metadata</button>
+                                    </div>
+                                    <div id="extract-meta-output" class="result-box"></div>
+                                </div>
+                                <div class="extraction-card">
+                                    <h4>Structured Extraction</h4>
+                                    <div class="form-group">
+                                        <label>URL</label>
+                                        <input type="text" id="extract-data-url" placeholder="https://example.com/products">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Selectors (JSON format)</label>
+                                        <textarea id="extract-selectors" placeholder='[{"name": "title", "query": "h1"}, {"name": "price", "query": ".price"}]' style="width: 100%; min-height: 100px; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: 'JetBrains Mono', monospace;"></textarea>
+                                    </div>
+                                    <button id="btn-extract-data" class="btn-primary">Execute Extraction</button>
+                                    <div id="extract-data-output" class="result-box"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div id="agent-context-output" class="context-output">
-                        <div class="empty-msg">Request context for a file to see what the agent receives.</div>
+                </div>
+            </section>
+
+            <!-- AI Agent View -->
+            <section id="tab-agent" class="tab-pane">
+                    <div class="agent-layout">
+                        <div class="agent-main">
+                            <div class="agent-header">
+                                <p>gathered context and semantic utilities for AI agents.</p>
+                                <button id="btn-start-session" class="btn-secondary">Start AI Session</button>
+                            </div>
+                            <div id="session-info" class="session-info hidden">
+                                Active Session: <span id="session-id" class="badge"></span>
+                            </div>
+
+                            <div class="agent-tools-grid">
+                                <div class="agent-card">
+                                    <h4>Project Topology</h4>
+                                    <p class="card-desc">Visualize file dependencies and entry points.</p>
+                                    <button id="btn-get-topology" class="btn-secondary btn-small">Fetch Topology</button>
+                                    <div id="topology-output" class="topology-view"></div>
+                                </div>
+
+                                <div class="agent-card">
+                                    <h4>Smart Suggestions</h4>
+                                    <p class="card-desc">Find relevant code snippets using semantic search.</p>
+                                    <div class="input-row">
+                                        <input type="text" id="suggest-query" placeholder="e.g. how to handle authentication?">
+                                        <button id="btn-get-suggestions" class="btn-primary btn-small">Suggest</button>
+                                    </div>
+                                    <div id="suggestions-output" class="suggestions-list"></div>
+                                </div>
+                            </div>
+
+                            <div class="context-tester agent-card">
+                                <h4>Batch Context Tester</h4>
+                                <div class="input-row">
+                                    <input type="text" id="agent-file-path"
+                                        placeholder="Comma separated paths...">
+                                    <button id="btn-get-context" class="btn-primary">Fetch Batch</button>
+                                </div>
+                                <div id="agent-context-output" class="context-output">
+                                    <div class="empty-msg">Request context to see agent data format.</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -287,21 +385,31 @@
         </main>
     </div>
 
-    <!-- Modals -->
-    <div id="modal-project" class="modal">
+    <!-- New Crawl Modal -->
+    <div id="modal-crawl" class="modal">
         <div class="modal-content">
-            <h3>Add New Project</h3>
+            <h3>Start New Web Crawl</h3>
             <div class="form-group">
-                <label>Project Name</label>
-                <input type="text" id="new-project-name" placeholder="e.g. My Awesome Project">
+                <label>Start URL</label>
+                <input type="text" id="crawl-url" placeholder="https://docs.example.com">
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Max Depth</label>
+                    <input type="number" id="crawl-depth" value="2" min="1" max="10">
+                </div>
+                <div class="form-group">
+                    <label>Max Pages</label>
+                    <input type="number" id="crawl-pages" value="100" min="1" max="1000">
+                </div>
             </div>
             <div class="form-group">
-                <label>Root Directory (Absolute Path)</label>
-                <input type="text" id="new-project-path" placeholder="e.g. C:\Users\Dev\Project">
+                <label>Include Patterns (regex, one per line)</label>
+                <textarea id="crawl-include" style="width: 100%; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; padding: 10px;"></textarea>
             </div>
             <div class="modal-actions">
-                <button id="btn-cancel-project" class="btn-secondary">Cancel</button>
-                <button id="btn-save-project" class="btn-primary">Create Project</button>
+                <button id="btn-cancel-crawl" class="btn-secondary">Cancel</button>
+                <button id="btn-start-crawl-exec" class="btn-primary">Start Crawl</button>
             </div>
         </div>
     </div>

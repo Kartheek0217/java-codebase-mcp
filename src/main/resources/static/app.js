@@ -4,7 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
         projects: [],
         selectedProjectId: localStorage.getItem('selectedProjectId') || null,
         files: [],
-        currentSessionId: null
+        currentSessionId: null,
+        webTab: 'web-search'
     };
 
     // DOM Elements
@@ -159,6 +160,36 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') commitChanges();
         });
 
+        // Web Tools Tab Switching
+        document.querySelectorAll('.web-nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const tab = item.getAttribute('data-web-tab');
+                switchWebTab(tab);
+            });
+        });
+
+        // Web Search
+        document.getElementById('btn-web-search').addEventListener('click', performWebSearch);
+        document.getElementById('web-search-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performWebSearch();
+        });
+
+        // Crawler
+        document.getElementById('btn-new-crawl').addEventListener('click', () => document.getElementById('modal-crawl').classList.add('active'));
+        document.getElementById('btn-cancel-crawl').addEventListener('click', () => document.getElementById('modal-crawl').classList.remove('active'));
+        document.getElementById('btn-start-crawl-exec').addEventListener('click', startCrawl);
+
+        // Extraction
+        document.getElementById('btn-extract-meta').addEventListener('click', fetchMetadata);
+        document.getElementById('btn-extract-data').addEventListener('click', performExtraction);
+
+        // Agent View Enhancements
+        document.getElementById('btn-get-topology').addEventListener('click', fetchTopology);
+        document.getElementById('btn-get-suggestions').addEventListener('click', fetchSuggestions);
+
+        // File Summarizer
+        document.getElementById('btn-summarize-file').addEventListener('click', summarizeActiveFile);
+
         // Close inline viewers
         document.querySelectorAll('.close-inline-viewer').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -241,6 +272,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabId === 'projects') renderProjectsManagement();
         if (tabId === 'skills') fetchSkills();
         if (tabId === 'git') fetchGitStatus();
+        if (tabId === 'web') fetchCrawlJobs();
+    }
+
+    function switchWebTab(tabId) {
+        state.webTab = tabId;
+        document.querySelectorAll('.web-nav-item').forEach(i => i.classList.remove('active'));
+        document.querySelector(`[data-web-tab="${tabId}"]`).classList.add('active');
+
+        document.querySelectorAll('.web-pane').forEach(p => p.classList.remove('active'));
+        document.getElementById(`web-tab-${tabId}`).classList.add('active');
+
+        if (tabId === 'web-crawler') fetchCrawlJobs();
     }
 
     async function loadDashboardData() {
@@ -449,10 +492,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 <li class="symbol-item" title="${s.type}">${s.name}</li>
             `).join('') || '<li>No symbols</li>';
 
+            // Show summarize button
+            const summarizeBtn = document.getElementById('btn-summarize-file');
+            summarizeBtn.classList.remove('hidden');
+            summarizeBtn.setAttribute('data-path', path);
+
         } catch (e) {
             header.innerText = 'Error loading file';
             code.innerText = 'Failed to fetch content';
         }
+    }
+
+    async function summarizeActiveFile() {
+        const path = document.getElementById('btn-summarize-file').getAttribute('data-path');
+        if (!path || !state.selectedProjectId) return;
+
+        showNotification('Summarizing...', 'info');
+        try {
+            const res = await fetch(`/api/ai/summarize?projectId=${state.selectedProjectId}&filePath=${encodeURIComponent(path)}`);
+            const data = await res.json();
+            
+            // Show summary in a nice way - for now, alert is okay but let's use the code viewer
+            const summaryText = `[FILE SUMMARY]\n\nLines: ${data.lines}\nSymbols: ${data.symbols?.length || 0}\n\nContent Preview:\n${data.content}`;
+            alert(summaryText);
+        } catch (e) { showNotification('Failed to summarize', 'error'); }
     }
 
     async function startAISession() {
@@ -468,18 +531,196 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function getAgentContext() {
-        const path = document.getElementById('agent-file-path').value;
-        if (!path || !state.selectedProjectId) return;
+        const pathsInput = document.getElementById('agent-file-path').value;
+        if (!pathsInput || !state.selectedProjectId) return;
 
+        const paths = pathsInput.split(',').map(p => p.trim());
         const output = document.getElementById('agent-context-output');
         output.innerHTML = 'Fetching context...';
 
         try {
-            const res = await fetch(`/api/ai/context?projectId=${state.selectedProjectId}&filePath=${encodeURIComponent(path)}`);
+            let res;
+            if (paths.length > 1) {
+                res = await fetch(`/api/ai/context/batch?projectId=${state.selectedProjectId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(paths)
+                });
+            } else {
+                res = await fetch(`/api/ai/context?projectId=${state.selectedProjectId}&filePath=${encodeURIComponent(paths[0])}`);
+            }
             const data = await res.json();
             output.innerHTML = `<pre>${JSON.stringify(data, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
         } catch (e) {
             output.innerHTML = 'Error fetching context';
+        }
+    }
+
+    async function fetchTopology() {
+        if (!state.selectedProjectId) return;
+        const output = document.getElementById('topology-output');
+        output.innerHTML = 'Fetching topology...';
+        try {
+            const res = await fetch(`/api/ai/topology?projectId=${state.selectedProjectId}`);
+            const data = await res.json();
+            output.innerHTML = `<pre>${JSON.stringify(data, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+        } catch (e) { output.innerHTML = 'Error loading topology'; }
+    }
+
+    async function fetchSuggestions() {
+        const query = document.getElementById('suggest-query').value;
+        if (!query || !state.selectedProjectId) return;
+        const output = document.getElementById('suggestions-output');
+        output.innerHTML = 'Analyzing...';
+        try {
+            const res = await fetch(`/api/ai/suggest?projectId=${state.selectedProjectId}&query=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            if (!data || data.length === 0) {
+                output.innerHTML = 'No suggestions found.';
+                return;
+            }
+            output.innerHTML = data.map(item => `
+                <div class="suggestion-item">
+                    <span class="suggestion-path">${item.filePath} (Score: ${item.score.toFixed(2)})</span>
+                    <div class="result-snippet">${item.matches?.[0]?.lineContent || 'No snippet available'}</div>
+                </div>
+            `).join('');
+        } catch (e) { output.innerHTML = 'Error loading suggestions'; }
+    }
+
+    // WEB TOOLS LOGIC
+    async function performWebSearch() {
+        const query = document.getElementById('web-search-input').value;
+        if (!query || !state.selectedProjectId) return;
+        
+        const site = document.getElementById('web-search-site').value;
+        const limit = document.getElementById('web-search-limit').value;
+        const container = document.getElementById('web-search-results');
+        container.innerHTML = '<div class="empty-msg">Searching web index...</div>';
+
+        try {
+            const url = `/api/web/search?projectId=${state.selectedProjectId}&q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}&limit=${limit}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="empty-msg">No web results found. Try crawling some sites first!</div>';
+                return;
+            }
+
+            container.innerHTML = data.map(item => `
+                <div class="search-result-item">
+                    <div class="search-result-header">
+                        <span class="result-path">${item.url}</span>
+                        <span class="badge">Score: ${item.score.toFixed(2)}</span>
+                    </div>
+                    <h4>${item.title || 'Untitled Page'}</h4>
+                    <p>${item.snippet || 'No snippet available.'}</p>
+                </div>
+            `).join('');
+        } catch (e) { container.innerHTML = '<div class="empty-msg">Web search failed.</div>'; }
+    }
+
+    async function fetchCrawlJobs() {
+        const container = document.getElementById('crawler-jobs-list');
+        try {
+            const res = await fetch('/api/web/crawl');
+            const jobs = await res.json();
+            if (!jobs || jobs.length === 0) {
+                container.innerHTML = '<div class="empty-msg">No crawl jobs found.</div>';
+                return;
+            }
+            container.innerHTML = jobs.map(job => `
+                <div class="crawl-job-card">
+                    <div class="job-info">
+                        <h4>${job.startUrl}</h4>
+                        <div class="job-meta">
+                            ID: ${job.id} | Pages: ${job.pagesCrawled} | Created: ${new Date(job.createdAt).toLocaleString()}
+                        </div>
+                    </div>
+                    <div class="job-actions">
+                        <span class="status-tag ${job.status.toLowerCase()}">${job.status}</span>
+                        ${job.status === 'RUNNING' ? `<button class="btn-secondary btn-small" onclick="window.stopCrawl('${job.id}')">Stop</button>` : ''}
+                        <button class="btn-danger btn-small" onclick="window.deleteCrawlJob('${job.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) { container.innerHTML = '<div class="empty-msg">Failed to load jobs.</div>'; }
+    }
+
+    async function startCrawl() {
+        const url = document.getElementById('crawl-url').value;
+        if (!url || !state.selectedProjectId) return alert('Start URL is required');
+
+        const request = {
+            projectId: state.selectedProjectId,
+            startUrl: url,
+            maxDepth: parseInt(document.getElementById('crawl-depth').value),
+            maxPages: parseInt(document.getElementById('crawl-pages').value),
+            includePatterns: document.getElementById('crawl-include').value.split('\n').filter(p => p.trim())
+        };
+
+        try {
+            const res = await fetch('/api/web/crawl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+            if (res.ok) {
+                document.getElementById('modal-crawl').classList.remove('active');
+                showNotification('Crawl job started', 'success');
+                fetchCrawlJobs();
+            } else { showNotification('Failed to start crawl', 'error'); }
+        } catch (e) { showNotification('Error starting crawl', 'error'); }
+    }
+
+    window.stopCrawl = async function(id) {
+        try {
+            await fetch(`/api/web/crawl/${id}/stop`, { method: 'POST' });
+            fetchCrawlJobs();
+        } catch (e) { showNotification('Failed to stop crawl', 'error'); }
+    };
+
+    window.deleteCrawlJob = async function(id) {
+        if (!confirm('Delete this crawl job and all its results?')) return;
+        try {
+            await fetch(`/api/web/crawl/${id}`, { method: 'DELETE' });
+            fetchCrawlJobs();
+        } catch (e) { showNotification('Failed to delete job', 'error'); }
+    };
+
+    async function fetchMetadata() {
+        const url = document.getElementById('extract-meta-url').value;
+        if (!url) return;
+        const output = document.getElementById('extract-meta-output');
+        output.innerText = 'Fetching...';
+        try {
+            const res = await fetch(`/api/web/extract/metadata?url=${encodeURIComponent(url)}`);
+            const data = await res.json();
+            output.innerText = JSON.stringify(data, null, 2);
+        } catch (e) { output.innerText = 'Failed to fetch metadata.'; }
+    }
+
+    async function performExtraction() {
+        const url = document.getElementById('extract-data-url').value;
+        const selectorsStr = document.getElementById('extract-selectors').value;
+        if (!url || !selectorsStr) return alert('URL and Selectors are required');
+
+        const output = document.getElementById('extract-data-output');
+        output.innerText = 'Extracting...';
+
+        try {
+            const selectors = JSON.parse(selectorsStr);
+            const res = await fetch('/api/web/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, selectors })
+            });
+            const data = await res.json();
+            output.innerText = JSON.stringify(data, null, 2);
+        } catch (e) { 
+            output.innerText = 'Extraction failed. Ensure selectors are valid JSON.';
+            console.error(e);
         }
     }
 
