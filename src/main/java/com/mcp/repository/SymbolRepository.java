@@ -10,25 +10,26 @@ import java.util.List;
 
 @Repository
 public interface SymbolRepository extends JpaRepository<Symbol, Long> {
-    @Modifying
-    @Transactional
-    void deleteByProjectIdAndFilePath(Long projectId, String filePath);
+	@Modifying
+	@Transactional
+	void deleteByProjectIdAndFilePath(Long projectId, String filePath);
 
-    @Modifying
-    @Transactional
-    void deleteByProjectIdAndFilePathIn(Long projectId, List<String> filePaths);
+	@Modifying
+	@Transactional
+	void deleteByProjectIdAndFilePathIn(Long projectId, List<String> filePaths);
 
-    @Modifying
-    @Transactional
-    void deleteByProjectId(Long projectId);
+	@Modifying
+	@Transactional
+	void deleteByProjectId(Long projectId);
 
-    List<Symbol> findByProjectIdAndFilePath(Long projectId, String filePath);
+	List<Symbol> findByProjectIdAndFilePath(Long projectId, String filePath);
 
-    List<Symbol> findByProjectId(Long projectId);
+	List<Symbol> findByProjectId(Long projectId);
 
-    List<Symbol> findByProjectIdAndNameContainingIgnoreCase(Long projectId, String name);
+	List<Symbol> findByProjectIdAndNameContainingIgnoreCase(Long projectId, String name);
 
-    List<Symbol> findByProjectIdAndNameContainingIgnoreCaseAndType(Long projectId, String name, com.mcp.entity.SymbolType type);
+	List<Symbol> findByProjectIdAndNameContainingIgnoreCaseAndType(Long projectId, String name,
+			com.mcp.entity.SymbolType type);
 
-    long countByProjectId(Long projectId);
+	long countByProjectId(Long projectId);
 }

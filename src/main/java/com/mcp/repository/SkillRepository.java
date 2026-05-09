@@ -10,9 +10,9 @@ import com.mcp.entity.Skill;
 
 @Repository
 public interface SkillRepository extends JpaRepository<Skill, Long> {
-    List<Skill> findByProjectId(Long projectId);
+	List<Skill> findByProjectId(Long projectId);
 
-    Optional<Skill> findByProjectIdAndName(Long projectId, String name);
+	Optional<Skill> findByProjectIdAndName(Long projectId, String name);
 
-    void deleteByProjectId(Long projectId);
+	void deleteByProjectId(Long projectId);
 }

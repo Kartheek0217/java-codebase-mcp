@@ -19,3 +19,4 @@ buildNumber.properties
 /data/
 err.txt
 out.txt
+.settings/

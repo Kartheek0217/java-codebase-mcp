@@ -11,17 +11,17 @@ import java.util.List;
 
 @Repository
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, FileMetadataId> {
-    List<FileMetadata> findByProjectId(Long projectId);
+	List<FileMetadata> findByProjectId(Long projectId);
 
-    List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query);
+	List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query);
 
-    @Modifying
-    @Transactional
-    void deleteByProjectId(Long projectId);
+	@Modifying
+	@Transactional
+	void deleteByProjectId(Long projectId);
 
-    @Modifying
-    @Transactional
-    void deleteByProjectIdAndFilePathIn(Long projectId, List<String> filePaths);
+	@Modifying
+	@Transactional
+	void deleteByProjectIdAndFilePathIn(Long projectId, List<String> filePaths);
 
-    long countByProjectId(Long projectId);
+	long countByProjectId(Long projectId);
 }
