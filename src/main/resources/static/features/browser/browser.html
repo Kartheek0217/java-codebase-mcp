@@ -1,0 +1,21 @@
+<div class="browser-layout">
+    <div class="file-list-container">
+        <input type="text" id="file-filter" placeholder="Filter files...">
+        <ul id="file-list" class="file-list"></ul>
+    </div>
+    <div class="file-viewer-container">
+        <div id="file-viewer-header" class="viewer-header">
+            <span>Select a file to view</span>
+            <button id="btn-summarize-file" class="btn-secondary btn-small hidden">Summarize File</button>
+        </div>
+        <div class="viewer-content">
+            <div class="code-editor-area">
+                <pre id="code-viewer"><code class="language-java"></code></pre>
+            </div>
+            <div class="viewer-sidebar">
+                <h5>Symbols</h5>
+                <ul id="file-symbols" class="symbol-list"></ul>
+            </div>
+        </div>
+    </div>
+</div>

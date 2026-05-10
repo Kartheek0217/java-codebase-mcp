@@ -86,10 +86,10 @@ public class IndexController {
 	@PostMapping("/{projectId}/trigger-scan")
 	@Operation(summary = "Manually trigger directory scan", description = "Forces the system to re-scan the project root directory and update the index with any new or modified files.", responses = {
 			@ApiResponse(responseCode = "200", description = "Scan completed successfully") })
-	public String triggerScan(@Parameter(description = "ID of the project to scan") @PathVariable Long projectId)
+	public Map<String, String> triggerScan(@Parameter(description = "ID of the project to scan") @PathVariable Long projectId)
 			throws IOException {
 		fileScannerService.scanProject(projectId);
-		return "Scan triggered and completed for project " + projectId;
+		return Map.of("status", "success", "message", "Scan triggered and completed for project " + projectId);
 	}
 
 	/**
@@ -102,10 +102,10 @@ public class IndexController {
 	@PostMapping("/{projectId}/reconcile")
 	@Operation(summary = "Reconcile database with filesystem", description = "Performs a deep sync to remove database entries for files that no longer exist on disk and update entries for modified files.", responses = {
 			@ApiResponse(responseCode = "200", description = "Reconciliation completed successfully") })
-	public String triggerReconcile(
+	public Map<String, String> triggerReconcile(
 			@Parameter(description = "ID of the project to reconcile") @PathVariable Long projectId) {
 		reconciliationService.reconcileProject(projectId);
-		return "Reconciliation triggered and completed for project " + projectId;
+		return Map.of("status", "success", "message", "Reconciliation triggered and completed for project " + projectId);
 	}
 
 	/**
@@ -179,7 +179,7 @@ public class IndexController {
 			content = Files.readString(fullPath);
 		}
 
-		return Map.of("path", filePath, "content", content);
+		return Map.of("path", filePath, "content", com.mcp.util.CodeUtils.addLineNumbers(content));
 	}
 
 	private String extractPdfText(Path path) {

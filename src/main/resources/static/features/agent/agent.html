@@ -1,0 +1,42 @@
+<div class="agent-layout">
+    <div class="agent-main">
+        <div class="agent-header">
+            <p>gathered context and semantic utilities for AI agents.</p>
+            <button id="btn-start-session" class="btn-secondary">Start AI Session</button>
+        </div>
+        <div id="session-info" class="session-info hidden">
+            Active Session: <span id="session-id" class="badge"></span>
+        </div>
+
+        <div class="agent-tools-grid">
+            <div class="agent-card">
+                <h4>Project Topology</h4>
+                <p class="card-desc">Visualize file dependencies and entry points.</p>
+                <button id="btn-get-topology" class="btn-secondary btn-small">Fetch Topology</button>
+                <div id="topology-output" class="topology-view"></div>
+            </div>
+
+            <div class="agent-card">
+                <h4>Smart Suggestions</h4>
+                <p class="card-desc">Find relevant code snippets using semantic search.</p>
+                <div class="input-row">
+                    <input type="text" id="suggest-query" placeholder="e.g. how to handle authentication?">
+                    <button id="btn-get-suggestions" class="btn-primary btn-small">Suggest</button>
+                </div>
+                <div id="suggestions-output" class="suggestions-list"></div>
+            </div>
+        </div>
+
+        <div class="context-tester agent-card">
+            <h4>Batch Context Tester</h4>
+            <div class="input-row">
+                <input type="text" id="agent-file-path"
+                    placeholder="Comma separated paths...">
+                <button id="btn-get-context" class="btn-primary">Fetch Batch</button>
+            </div>
+            <div id="agent-context-output" class="context-output">
+                <div class="empty-msg">Request context to see agent data format.</div>
+            </div>
+        </div>
+    </div>
+</div>

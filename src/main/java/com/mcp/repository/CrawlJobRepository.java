@@ -13,4 +13,8 @@ public interface CrawlJobRepository extends JpaRepository<CrawlJob, Long> {
 	List<CrawlJob> findByProjectId(Long projectId);
 
 	List<CrawlJob> findByStatus(CrawlStatus status);
+
+	@org.springframework.data.jpa.repository.Modifying
+	@org.springframework.transaction.annotation.Transactional
+	void deleteByProjectId(Long projectId);
 }

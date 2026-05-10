@@ -1,0 +1,52 @@
+<div id="git-layout" class="split-layout has-viewer">
+    <div class="pane-results">
+        <div class="git-container">
+            <div class="git-header">
+                <div class="git-branch-info">
+                    <span class="icon">🌿</span> Current Branch: <span
+                        id="git-current-branch">loading...</span>
+                </div>
+                <button id="btn-refresh-git" class="btn-secondary">Refresh Status</button>
+            </div>
+
+            <div class="git-grid">
+                <div class="git-section">
+                    <h3>Changes <span id="git-changes-count" class="badge">0</span></h3>
+                    <div id="git-changes-list" class="git-file-list">
+                        <div class="empty-msg">No changes detected</div>
+                    </div>
+                </div>
+
+                <div class="git-section">
+                    <h3>Staged <span id="git-staged-count" class="badge">0</span></h3>
+                    <div id="git-staged-list" class="git-file-list">
+                        <div class="empty-msg">Nothing staged</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="git-commit-footer">
+                <div class="commit-form">
+                    <input type="text" id="commit-message-input" placeholder="Commit message...">
+                    <button id="btn-git-commit" class="btn-primary">Commit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="git-viewer-pane" class="file-viewer-container">
+        <div class="viewer-header">
+            <span id="git-viewer-filename">File View</span>
+            <button class="btn-icon close-inline-viewer" data-viewer="git">✖</button>
+        </div>
+        <div class="viewer-content">
+            <div id="git-viewer-code" class="code-editor-area">
+                <pre><code class="language-java"></code></pre>
+            </div>
+            <div class="viewer-sidebar">
+                <h5>Symbols</h5>
+                <ul id="git-viewer-symbols" class="symbol-list"></ul>
+            </div>
+        </div>
+    </div>
+</div>

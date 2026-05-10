@@ -17,4 +17,8 @@ public interface CrawledPageRepository extends JpaRepository<CrawledPage, Long> 
 	Optional<CrawledPage> findByUrlAndProjectId(String url, Long projectId);
 
 	boolean existsByUrlAndProjectId(String url, Long projectId);
+
+	@org.springframework.data.jpa.repository.Modifying
+	@org.springframework.transaction.annotation.Transactional
+	void deleteByProjectId(Long projectId);
 }

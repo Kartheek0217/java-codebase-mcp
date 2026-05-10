@@ -1,0 +1,91 @@
+export async function apiFetch(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'No error body');
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+        
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            return await response.json();
+        }
+        
+        const text = await response.text();
+        if (!text) return null;
+        
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            return text;
+        }
+    } catch (error) {
+        console.error(`API Fetch Error (${url}):`, error);
+        throw error;
+    }
+}
+
+export const API = {
+    projects: {
+        listSummary: () => apiFetch('/api/ui/projects-summary'),
+        delete: (id) => apiFetch(`/api/projects/${id}`, { method: 'DELETE' }),
+        create: (name, path) => apiFetch(`/api/projects?name=${encodeURIComponent(name)}&rootPath=${encodeURIComponent(path)}`, { method: 'POST' }),
+        getStatus: (id) => apiFetch(`/api/index/${id}/status`),
+        getGitStatus: (id) => apiFetch(`/api/projects/${id}/git-status`)
+    },
+    index: {
+        triggerScan: (id) => apiFetch(`/api/index/${id}/trigger-scan`, { method: 'POST' }),
+        reconcile: (id) => apiFetch(`/api/index/${id}/reconcile`, { method: 'POST' }),
+        readFile: (id, path) => apiFetch(`/api/index/${id}/files/read?filePath=${encodeURIComponent(path)}`),
+        searchContent: (id, query) => apiFetch(`/api/index/${id}/search-content?query=${encodeURIComponent(query)}`),
+        searchFiles: (id, query) => apiFetch(`/api/index/${id}/files/search?query=${encodeURIComponent(query)}`)
+    },
+    ai: {
+        getHistory: (projectId) => apiFetch(`/api/ai/history?projectId=${projectId}`),
+        getSymbols: (projectId, query) => apiFetch(`/api/ai/symbols?projectId=${projectId}&query=${encodeURIComponent(query)}`),
+        getContext: (projectId, path) => apiFetch(`/api/ai/context?projectId=${projectId}&filePath=${encodeURIComponent(path)}`),
+        getBatchContext: (projectId, paths) => apiFetch(`/api/ai/context/batch?projectId=${projectId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paths)
+        }),
+        summarize: (projectId, path) => apiFetch(`/api/ai/summarize?projectId=${projectId}&filePath=${encodeURIComponent(path)}`),
+        startSession: (projectId) => apiFetch(`/api/ai/session/start?projectId=${projectId}`, { method: 'POST' }),
+        getTopology: (projectId) => apiFetch(`/api/ai/topology?projectId=${projectId}`),
+        getSuggestions: (projectId, query) => apiFetch(`/api/ai/suggest?projectId=${projectId}&query=${encodeURIComponent(query)}`),
+        getSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`),
+        learnSkill: (projectId, url) => apiFetch(`/api/ai/skills/learn?projectId=${projectId}&url=${encodeURIComponent(url)}`, { method: 'POST' }),
+        clearSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`, { method: 'DELETE' })
+    },
+    web: {
+        search: (projectId, q, site, limit) => apiFetch(`/api/web/search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
+        listCrawlJobs: () => apiFetch('/api/web/crawl'),
+        startCrawl: (request) => apiFetch('/api/web/crawl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request)
+        }),
+        stopCrawl: (id) => apiFetch(`/api/web/crawl/${id}/stop`, { method: 'POST' }),
+        deleteCrawl: (id) => apiFetch(`/api/web/crawl/${id}`, { method: 'DELETE' }),
+        extractMetadata: (url) => apiFetch(`/api/web/extract/metadata?url=${encodeURIComponent(url)}`),
+        extractData: (url, selectors) => apiFetch('/api/web/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, selectors })
+        })
+    },
+    git: {
+        stage: (projectId, paths) => apiFetch(`/api/projects/${projectId}/git/stage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paths)
+        }),
+        discard: (projectId, paths) => apiFetch(`/api/projects/${projectId}/git/discard`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paths)
+        }),
+        commit: (projectId, message) => apiFetch(`/api/projects/${projectId}/git/commit?message=${encodeURIComponent(message)}`, { method: 'POST' })
+    },
+    health: () => apiFetch('/health')
+};

@@ -222,8 +222,8 @@ public class AgentController {
 		String currentChecksum = metadata != null ? metadata.getChecksum() : null;
 		boolean hasChanged = lastChecksum != null && !lastChecksum.equals(currentChecksum);
 
-		if (content != null && (maxLines != null || lineRange != null)) {
-			content = truncateContent(content, maxLines, lineRange);
+		if (content != null) {
+			content = com.mcp.util.CodeUtils.truncateAndAddLineNumbers(content, maxLines, lineRange);
 		}
 
 		List<SymbolDTO> symbolDTOs = symbols.stream().map(this::toSymbolDTO).collect(Collectors.toList());
@@ -516,46 +516,6 @@ public class AgentController {
 		int lines = dto.content() == null ? 0 : dto.content().split("\\r?\\n").length;
 
 		return new CompressedContextDTO(dto.path(), dto.content(), symbols, lines);
-	}
-
-	private String truncateContent(String content, Integer maxLines, String lineRange) {
-		if (content == null || content.isEmpty())
-			return content;
-		String[] lines = content.split("\\r?\\n");
-
-		int start = 0;
-		int end = lines.length;
-
-		if (lineRange != null && !lineRange.isEmpty()) {
-			String[] range = lineRange.split("-");
-			if (range.length == 2) {
-				try {
-					start = Math.max(0, Integer.parseInt(range[0]) - 1);
-					end = Math.min(lines.length, Integer.parseInt(range[1]));
-				} catch (NumberFormatException e) {
-					logger.warn("Invalid line range format: {}", lineRange);
-				}
-			}
-		}
-
-		if (maxLines != null && maxLines > 0) {
-			end = Math.min(end, start + maxLines);
-		}
-
-		if (start >= lines.length)
-			return "";
-		if (start < 0)
-			start = 0;
-		if (end > lines.length)
-			end = lines.length;
-		if (start >= end)
-			return "";
-
-		StringBuilder sb = new StringBuilder();
-		for (int i = start; i < end; i++) {
-			sb.append(lines[i]).append("\n");
-		}
-		return sb.toString();
 	}
 
 	private SymbolDTO toSymbolDTO(Symbol symbol) {

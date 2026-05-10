@@ -21,13 +21,31 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final FileScannerService fileScannerService;
     private final DirectoryWatcherService watcherService;
+    private final com.mcp.repository.SymbolRepository symbolRepository;
+    private final com.mcp.repository.FileMetadataRepository fileMetadataRepository;
+    private final com.mcp.repository.SkillRepository skillRepository;
+    private final com.mcp.repository.CrawlJobRepository crawlJobRepository;
+    private final com.mcp.repository.CrawledPageRepository crawledPageRepository;
+    private final LuceneIndexService luceneIndexService;
 
     public ProjectService(ProjectRepository projectRepository,
             FileScannerService fileScannerService,
-            DirectoryWatcherService watcherService) {
+            DirectoryWatcherService watcherService,
+            com.mcp.repository.SymbolRepository symbolRepository,
+            com.mcp.repository.FileMetadataRepository fileMetadataRepository,
+            com.mcp.repository.SkillRepository skillRepository,
+            com.mcp.repository.CrawlJobRepository crawlJobRepository,
+            com.mcp.repository.CrawledPageRepository crawledPageRepository,
+            LuceneIndexService luceneIndexService) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
         this.watcherService = watcherService;
+        this.symbolRepository = symbolRepository;
+        this.fileMetadataRepository = fileMetadataRepository;
+        this.skillRepository = skillRepository;
+        this.crawlJobRepository = crawlJobRepository;
+        this.crawledPageRepository = crawledPageRepository;
+        this.luceneIndexService = luceneIndexService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -77,7 +95,23 @@ public class ProjectService {
     @Transactional
     public void deleteProject(Long id) {
         Project project = getProject(id);
+        
+        // 1. Stop watchers
         watcherService.stopWatching(id);
+        
+        // 2. Clean up associated data in DB
+        symbolRepository.deleteByProjectId(id);
+        fileMetadataRepository.deleteByProjectId(id);
+        skillRepository.deleteByProjectId(id);
+        crawledPageRepository.deleteByProjectId(id);
+        crawlJobRepository.deleteByProjectId(id);
+        
+        // 3. Delete Lucene indices
+        luceneIndexService.deleteIndex(id);
+        
+        // 4. Finally delete the project record
         projectRepository.delete(project);
+        
+        logger.info("Project {} deleted successfully with all associated data.", id);
     }
 }

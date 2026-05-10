@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
-public record CrawlJobRequestDTO(@NotNull Long projectId, @NotBlank String startUrl, @Min(0) int maxDepth,
-		@Min(1) int maxPages, @Min(0) int delayMs, boolean respectRobotsTxt, List<String> includePatterns,
+public record CrawlJobRequestDTO(@NotNull Long projectId, @NotBlank String startUrl, @Min(0) Integer maxDepth,
+		@Min(1) Integer maxPages, @Min(0) Integer delayMs, Boolean respectRobotsTxt, List<String> includePatterns,
 		List<String> excludePatterns) {
 }

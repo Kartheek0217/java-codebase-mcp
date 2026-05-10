@@ -47,10 +47,10 @@ public class WebCrawlController {
 		CrawlJob job = new CrawlJob();
 		job.setProjectId(request.projectId());
 		job.setStartUrl(request.startUrl());
-		job.setMaxDepth(request.maxDepth());
-		job.setMaxPages(request.maxPages());
-		job.setDelayMs(request.delayMs());
-		job.setRespectRobots(request.respectRobotsTxt());
+		job.setMaxDepth(request.maxDepth() != null ? request.maxDepth() : 2);
+		job.setMaxPages(request.maxPages() != null ? request.maxPages() : 100);
+		job.setDelayMs(request.delayMs() != null ? request.delayMs() : 0);
+		job.setRespectRobots(request.respectRobotsTxt() != null ? request.respectRobotsTxt() : true);
 		if (request.includePatterns() != null) {
 			job.setIncludePattern(String.join("|", request.includePatterns()));
 		}

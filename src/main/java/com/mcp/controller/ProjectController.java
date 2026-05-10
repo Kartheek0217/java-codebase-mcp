@@ -117,8 +117,9 @@ public class ProjectController {
 	 */
 	@PostMapping("/{id}/git/commit")
 	@Operation(summary = "Commit changes", description = "Creates a new Git commit for the specified project.")
-	public String commit(@PathVariable Long id, @RequestParam String message) {
-		return gitInfoService.commit(id, message);
+	public java.util.Map<String, String> commit(@PathVariable Long id, @RequestParam String message) {
+		String hash = gitInfoService.commit(id, message);
+		return java.util.Map.of("status", "success", "commitHash", hash, "message", "Changes committed successfully");
 	}
 
 	/**

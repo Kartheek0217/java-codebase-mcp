@@ -1,0 +1,28 @@
+<div class="projects-manage-container">
+    <div class="projects-header-bar">
+        <h3>All Projects</h3>
+        <button id="btn-add-project-tab" class="btn-primary">+ Add New Project</button>
+    </div>
+    <div id="projects-manage-list" class="projects-list-grid">
+        <div class="empty-msg">Loading projects...</div>
+    </div>
+</div>
+
+<!-- Add Project Modal -->
+<div id="modal-project" class="modal">
+    <div class="modal-content">
+        <h3>Add New Project</h3>
+        <div class="form-group">
+            <label>Project Name</label>
+            <input type="text" id="new-project-name" placeholder="e.g. My Java App">
+        </div>
+        <div class="form-group">
+            <label>Root Directory Path (Absolute)</label>
+            <input type="text" id="new-project-path" placeholder="/path/to/project">
+        </div>
+        <div class="modal-actions">
+            <button id="btn-cancel-project" class="btn-secondary">Cancel</button>
+            <button id="btn-save-project" class="btn-primary">Save Project</button>
+        </div>
+    </div>
+</div>

@@ -251,7 +251,7 @@ public class LuceneIndexService {
 						String snippet = (snippets != null && i < snippets.length) ? snippets[i] : "";
 
 						if (snippet != null && !snippet.isEmpty()) {
-							List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet);
+							List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet, filePath);
 							results.add(new ContentSearchResult(filePath, title, scoreDoc.score, matches));
 						}
 					}
@@ -282,8 +282,15 @@ public class LuceneIndexService {
 		}
 	}
 
-	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet) {
+	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet, String filePath) {
 		List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
+		String fileContent = null;
+		try {
+			fileContent = Files.readString(Paths.get(filePath));
+		} catch (Exception e) {
+			logger.warn("Could not read file {} for line number lookup", filePath);
+		}
+
 		// UnifiedHighlighter by default uses ... as a separator between passages
 		String[] passages = snippet.split("(?i)<b>...</b>|\\.\\.\\.");
 
@@ -292,12 +299,19 @@ public class LuceneIndexService {
 			if (cleanPassage.isEmpty())
 				continue;
 
-			// Note: Since we don't have the original line numbers easily from the
-			// highlighter
-			// without custom PassageFormatter, we'll set it to 0 for now or use a
-			// heuristic.
-			// For now, let's just provide the snippet content.
-			matches.add(new ContentSearchResult.ContentMatch(0, cleanPassage, "unknown", 0, 0));
+			int lineNumber = 0;
+			if (fileContent != null) {
+				int index = fileContent.indexOf(cleanPassage);
+				if (index != -1) {
+					lineNumber = 1;
+					for (int i = 0; i < index; i++) {
+						if (fileContent.charAt(i) == '\n')
+							lineNumber++;
+					}
+				}
+			}
+
+			matches.add(new ContentSearchResult.ContentMatch(lineNumber, cleanPassage, "unknown", 0, 0));
 		}
 		return matches;
 	}
@@ -338,6 +352,40 @@ public class LuceneIndexService {
 			}
 			iterator.remove();
 		}
+	}
+
+	public void deleteIndex(Long projectId) {
+		try {
+			SearcherManager sm = searcherManagers.remove(projectId);
+			if (sm != null) {
+				sm.close();
+			}
+			IndexWriter writer = writers.remove(projectId);
+			if (writer != null) {
+				writer.close();
+			}
+			Path indexPath = Paths.get(BASE_INDEX_DIR, String.valueOf(projectId));
+			if (Files.exists(indexPath)) {
+				deleteDirectory(indexPath);
+			}
+		} catch (IOException e) {
+			logger.error("Error deleting index for project {}", projectId, e);
+		}
+	}
+
+	private void deleteDirectory(Path path) throws IOException {
+		if (Files.isDirectory(path)) {
+			try (java.util.stream.Stream<Path> entries = Files.list(path)) {
+				entries.forEach(entry -> {
+					try {
+						deleteDirectory(entry);
+					} catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+				});
+			}
+		}
+		Files.delete(path);
 	}
 
 	@PreDestroy
