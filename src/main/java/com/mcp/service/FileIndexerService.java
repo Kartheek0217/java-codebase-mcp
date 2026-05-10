@@ -25,18 +25,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.github.benmanes.caffeine.cache.Cache;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Symbol;
+import com.mcp.entity.SymbolCall;
 import com.mcp.entity.SymbolType;
 import com.mcp.repository.FileMetadataRepository;
+import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
 
 @Service
@@ -54,18 +58,22 @@ public class FileIndexerService {
 	private final LuceneIndexService luceneIndexService;
 	private final Cache<String, List<Symbol>> symbolCache;
 	private final SkillService skillService;
+	private final SymbolCallRepository symbolCallRepository;
+	private final JavaParser javaParser;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
-			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService) {
+			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
+			SymbolCallRepository symbolCallRepository) {
 		this.symbolRepository = symbolRepository;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.luceneIndexService = luceneIndexService;
 		this.symbolCache = symbolCache;
 		this.skillService = skillService;
+		this.symbolCallRepository = symbolCallRepository;
 
 		ParserConfiguration config = new ParserConfiguration();
-		config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
-		StaticJavaParser.setConfiguration(config);
+		config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+		this.javaParser = new JavaParser(config);
 	}
 
 	public LuceneIndexService getLuceneIndexService() {
@@ -98,10 +106,12 @@ public class FileIndexerService {
 			logger.info("Indexing file: {}", filePath);
 
 			List<Symbol> symbols = null;
+			List<CallInfo> calls = null;
 			String dependencies = null;
 			if (filePath.toLowerCase().endsWith(".java")) {
 				JavaAnalysisResult javaResult = extractJavaData(content, path);
 				symbols = javaResult.symbols;
+				calls = javaResult.calls;
 				dependencies = javaResult.dependencies;
 			} else if (filePath.toLowerCase().endsWith(".md")) {
 				skillService.learnSkillFromMarkdown(projectId, content, filePath);
@@ -111,7 +121,7 @@ public class FileIndexerService {
 
 			// Update metadata and symbols in a single transaction (Reuse existing metadata
 			// object)
-			saveFileData(projectId, filePath, checksum, fileSize, now, symbols, dependencies, metadata);
+			saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
 
 			// Index content in Lucene (Outside DB transaction)
 			luceneIndexService.indexFileContent(projectId, filePath, content);
@@ -123,9 +133,10 @@ public class FileIndexerService {
 
 	@Transactional
 	protected void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
-			List<Symbol> symbols, String dependencies, FileMetadata existingMetadata) {
-		// Clear existing symbols
+			List<Symbol> symbols, List<CallInfo> calls, String dependencies, FileMetadata existingMetadata) {
+		// Clear existing symbols and their calls from this file
 		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
+		symbolCallRepository.deleteByProjectIdAndCallerFilePath(projectId, filePath);
 		symbolCache.invalidate(projectId + ":" + filePath);
 
 		if (symbols != null && !symbols.isEmpty()) {
@@ -136,6 +147,26 @@ public class FileIndexerService {
 			}
 			symbolRepository.saveAll(symbols);
 			symbolCache.put(projectId + ":" + filePath, symbols);
+
+			// Save calls after symbols are persisted to resolve caller IDs
+			if (calls != null && !calls.isEmpty()) {
+				List<SymbolCall> symbolCalls = new ArrayList<>();
+				for (CallInfo ci : calls) {
+					// Find the caller symbol by name in the current file symbols
+					symbols.stream()
+							.filter(s -> s.getName().equals(ci.callerName) && s.getType() == SymbolType.METHOD)
+							.findFirst()
+							.ifPresent(caller -> {
+								SymbolCall sc = new SymbolCall();
+								sc.setProjectId(projectId);
+								sc.setCallerId(caller.getId());
+								sc.setCallerFilePath(filePath);
+								sc.setCalleeName(ci.calleeName);
+								symbolCalls.add(sc);
+							});
+				}
+				symbolCallRepository.saveAll(symbolCalls);
+			}
 		}
 
 		FileMetadata metadata = existingMetadata;
@@ -226,47 +257,75 @@ public class FileIndexerService {
 		symbols.add(s);
 	}
 
-	private record JavaAnalysisResult(List<Symbol> symbols, String dependencies) {}
+	private record CallInfo(String callerName, String calleeName) {
+	}
+
+	private record JavaAnalysisResult(List<Symbol> symbols, List<CallInfo> calls, String dependencies) {
+	}
 
 	private JavaAnalysisResult extractJavaData(String content, Path path) {
 		List<Symbol> symbols = new ArrayList<>();
+		List<CallInfo> calls = new ArrayList<>();
 		StringBuilder dependencies = new StringBuilder();
 		try {
-			CompilationUnit cu = StaticJavaParser.parse(content);
+			ParseResult<CompilationUnit> parseResult = javaParser.parse(content);
+			if (!parseResult.isSuccessful()) {
+				logger.error("JavaParser failed for file: {}. Problems: {}", path, parseResult.getProblems());
+				return new JavaAnalysisResult(new ArrayList<>(), new ArrayList<>(), "");
+			}
+			CompilationUnit cu = parseResult.getResult().get();
 
 			// Extract imports
 			cu.getImports().forEach(i -> {
-				if (dependencies.length() > 0) dependencies.append(",");
+				if (dependencies.length() > 0)
+					dependencies.append(",");
 				dependencies.append(i.getNameAsString());
 			});
 
-			// Optimization: Use a single pass visitor to extract all symbols
-			cu.accept(new VoidVisitorAdapter<List<Symbol>>() {
+			// Optimization: Use a single pass visitor to extract all symbols and calls
+			cu.accept(new VoidVisitorAdapter<Object>() {
+				private String currentMethod = null;
+
 				@Override
-				public void visit(ClassOrInterfaceDeclaration n, List<Symbol> arg) {
-					arg.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+				public void visit(ClassOrInterfaceDeclaration n, Object arg) {
+					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
 					super.visit(n, arg);
 				}
 
 				@Override
-				public void visit(MethodDeclaration n, List<Symbol> arg) {
-					arg.add(createSymbol(n.getNameAsString(), SymbolType.METHOD));
+				public void visit(MethodDeclaration n, Object arg) {
+					String oldMethod = currentMethod;
+					currentMethod = n.getNameAsString();
+					symbols.add(createSymbol(currentMethod, SymbolType.METHOD));
+					super.visit(n, arg);
+					currentMethod = oldMethod;
+				}
+
+				@Override
+				public void visit(MethodCallExpr n, Object arg) {
+					if (currentMethod != null) {
+						calls.add(new CallInfo(currentMethod, n.getNameAsString()));
+					}
 					super.visit(n, arg);
 				}
 
 				@Override
-				public void visit(FieldDeclaration n, List<Symbol> arg) {
-					n.getVariables().forEach(v -> arg.add(createSymbol(v.getNameAsString(), SymbolType.FIELD)));
+				public void visit(FieldDeclaration n, Object arg) {
+					n.getVariables().forEach(v -> symbols.add(createSymbol(v.getNameAsString(), SymbolType.FIELD)));
 					super.visit(n, arg);
 				}
-			}, symbols);
+			}, null);
 
-			logger.info("Extracted {} symbols and {} imports from file: {}", symbols.size(), cu.getImports().size(), path);
+			logger.info("Extracted {} symbols, {} calls, and {} imports from file: {}",
+					symbols.size(), calls.size(), cu.getImports().size(), path);
+			if (symbols.isEmpty()) {
+				logger.warn("No symbols extracted from Java file: {}", path);
+			}
 		} catch (Throwable t) {
-			logger.error("StaticJavaParser failed for file: {}", path, t);
+			logger.error("StaticJavaParser failed for file: {}. Error: {}", path, t.getMessage(), t);
 		}
 
-		return new JavaAnalysisResult(symbols, dependencies.toString());
+		return new JavaAnalysisResult(symbols, calls, dependencies.toString());
 	}
 
 	private Symbol createSymbol(String name, SymbolType type) {

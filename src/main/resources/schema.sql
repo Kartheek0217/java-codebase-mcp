@@ -119,3 +119,18 @@ CREATE INDEX IF NOT EXISTS idx_rules_project ON project_rules(project_id);
 CREATE INDEX IF NOT EXISTS idx_rules_category ON project_rules(project_id, category);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON project_tasks(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_steps_task ON task_steps(task_id, step_number);
+
+-- Symbol Calls (Hierarchy)
+CREATE TABLE IF NOT EXISTS symbol_calls (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    caller_id BIGINT NOT NULL,
+    caller_file_path VARCHAR(512),
+    callee_name VARCHAR(255) NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (caller_id) REFERENCES symbols(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_symbol_calls_caller ON symbol_calls(caller_id);
+CREATE INDEX IF NOT EXISTS idx_symbol_calls_callee ON symbol_calls(project_id, callee_name);
+CREATE INDEX IF NOT EXISTS idx_symbol_calls_file ON symbol_calls(project_id, caller_file_path);

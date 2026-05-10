@@ -2,6 +2,10 @@ package com.mcp.util;
 
 public class CodeUtils {
 
+	private CodeUtils() {
+
+	}
+
 	public static String addLineNumbers(String content) {
 		if (content == null || content.isEmpty())
 			return content;

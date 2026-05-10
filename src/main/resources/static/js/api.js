@@ -5,15 +5,15 @@ export async function apiFetch(url, options = {}) {
             const errorText = await response.text().catch(() => 'No error body');
             throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
         }
-        
+
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
             return await response.json();
         }
-        
+
         const text = await response.text();
         if (!text) return null;
-        
+
         try {
             return JSON.parse(text);
         } catch (e) {
@@ -117,5 +117,11 @@ export const API = {
         }),
         commit: (projectId, message) => apiFetch(`/api/projects/${projectId}/git/commit?message=${encodeURIComponent(message)}`, { method: 'POST' })
     },
-    health: () => apiFetch('/health')
+    health: () => apiFetch('/health'),
+    ui: {
+        getProjectsSummary: () => apiFetch('/api/ui/projects-summary'),
+        getProjectStats: (projectId) => apiFetch(`/api/ui/project-stats?projectId=${projectId}`),
+        getSymbolById: (id) => apiFetch(`/api/ui/symbols/${id}`),
+        getCallHierarchy: (id) => apiFetch(`/api/ui/symbols/${id}/hierarchy`)
+    }
 };

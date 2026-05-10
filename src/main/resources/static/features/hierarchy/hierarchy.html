@@ -1,0 +1,34 @@
+<div class="hierarchy-container">
+    <div class="hierarchy-header">
+        <div class="search-box">
+            <input type="text" id="hierarchy-symbol-search" placeholder="Search for a method (e.g. scanProject)...">
+            <button id="hierarchy-search-btn" class="btn-primary">Analyze Hierarchy</button>
+        </div>
+    </div>
+
+    <div class="hierarchy-layout">
+        <!-- Results List -->
+        <div class="hierarchy-results" id="hierarchy-search-results">
+            <p class="placeholder-text">Search for a method to analyze its call hierarchy.</p>
+        </div>
+
+        <!-- Hierarchy Tree -->
+        <div class="hierarchy-view" id="hierarchy-main-view" style="display: none;">
+            <div class="view-header">
+                <h3 id="selected-symbol-name">Method Name</h3>
+                <span id="selected-symbol-path" class="symbol-path">path/to/file.java</span>
+            </div>
+
+            <div class="columns">
+                <div class="column">
+                    <h4>Incoming Calls (Callers)</h4>
+                    <div id="incoming-calls" class="call-list"></div>
+                </div>
+                <div class="column">
+                    <h4>Outgoing Calls (Callees)</h4>
+                    <div id="outgoing-calls" class="call-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

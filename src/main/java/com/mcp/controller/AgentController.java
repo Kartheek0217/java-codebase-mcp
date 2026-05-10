@@ -44,6 +44,7 @@ import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Project;
 import com.mcp.entity.Skill;
 import com.mcp.entity.Symbol;
+import com.mcp.entity.SymbolType;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SkillRepository;
@@ -54,7 +55,6 @@ import com.mcp.service.LuceneIndexService;
 import com.mcp.service.SkillService;
 import com.mcp.service.TopologyService;
 import com.mcp.util.CodeUtils;
-import com.mcp.entity.SymbolType;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -521,7 +521,7 @@ public class AgentController {
 	}
 
 	private SymbolDTO toSymbolDTO(Symbol symbol) {
-		return new SymbolDTO(symbol.getName(), symbol.getType(), symbol.getFilePath());
+		return new SymbolDTO(symbol.getId(), symbol.getName(), symbol.getType(), symbol.getFilePath());
 	}
 
 	private ContextDTO filterFields(ContextDTO dto, String fieldsStr) {
@@ -531,9 +531,7 @@ public class AgentController {
 		return new ContextDTO(fieldSet.contains("path") ? dto.path() : null,
 				fieldSet.contains("content") ? dto.content() : null,
 				fieldSet.contains("symbols") ? dto.symbols() : null,
-				fieldSet.contains("metadata") ? dto.metadata() : null, dto._correlationId(), // Always include
-																								// correlation ID if
-																								// present
+				fieldSet.contains("metadata") ? dto.metadata() : null, dto._correlationId(),
 				fieldSet.contains("alreadyviewed") ? dto.alreadyViewed() : null,
 				fieldSet.contains("haschanged") ? dto.hasChanged() : null);
 	}

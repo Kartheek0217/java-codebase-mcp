@@ -13,6 +13,7 @@ import { initGit, fetchGitStatus } from './features/git/git.js';
 import { initProjects, renderProjectsManagement } from './features/projects/projects.js';
 import { initRules, fetchRules } from './features/rules/rules.js';
 import { initTasks, fetchTasks } from './features/tasks/tasks.js';
+import { initHierarchy } from './features/hierarchy/hierarchy.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     init();
@@ -22,7 +23,7 @@ async function init() {
     setupGlobalEventListeners();
     await fetchProjects();
     checkServerStatus();
-    
+
     // Load initial tab (Dashboard)
     await switchTab('dashboard');
 }
@@ -32,7 +33,7 @@ async function fetchProjects() {
     try {
         state.projects = await API.projects.listSummary();
         renderProjectSelect();
-        
+
         if (state.projects.length > 0) {
             if (!state.selectedProjectId || !state.projects.find(p => p.id == state.selectedProjectId)) {
                 state.selectedProjectId = state.projects[0].id;
@@ -73,7 +74,7 @@ function setupGlobalEventListeners() {
 
 async function switchTab(tabId) {
     state.currentTab = tabId;
-    
+
     // Update UI
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     document.querySelector(`[data-tab=\"${tabId}\"]`).classList.add('active');
@@ -105,6 +106,7 @@ async function initializeFeature(tabId) {
         case 'tasks': await initTasks(); break;
         case 'git': await initGit(); break;
         case 'projects': initProjects(onProjectSwitch); break;
+        case 'hierarchy': initHierarchy(); break;
     }
 }
 
@@ -117,6 +119,7 @@ async function refreshFeature(tabId) {
         case 'tasks': await fetchTasks(); break;
         case 'git': await fetchGitStatus(); break;
         case 'projects': renderProjectsManagement(); break;
+        case 'hierarchy': document.getElementById('tab-hierarchy').innerHTML = ''; break; // Clear on project switch
     }
 }
 
@@ -177,7 +180,7 @@ window.viewFileContent = async function (path) {
     } else {
         await switchTab('browser');
         await viewFile(path);
-        
+
         // Highlight in list
         const fileItems = document.querySelectorAll('.file-item');
         fileItems.forEach(item => {
