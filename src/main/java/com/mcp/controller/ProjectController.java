@@ -2,6 +2,7 @@ package com.mcp.controller;
 
 import com.mcp.entity.Project;
 import com.mcp.service.ProjectService;
+import com.mcp.service.GitInfoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,9 +18,9 @@ import java.util.List;
 public class ProjectController {
 
 	private final ProjectService projectService;
-	private final com.mcp.service.GitInfoService gitInfoService;
+	private final GitInfoService gitInfoService;
 
-	public ProjectController(ProjectService projectService, com.mcp.service.GitInfoService gitInfoService) {
+	public ProjectController(ProjectService projectService, GitInfoService gitInfoService) {
 		this.projectService = projectService;
 		this.gitInfoService = gitInfoService;
 	}
@@ -120,6 +121,17 @@ public class ProjectController {
 	public java.util.Map<String, String> commit(@PathVariable Long id, @RequestParam String message) {
 		String hash = gitInfoService.commit(id, message);
 		return java.util.Map.of("status", "success", "commitHash", hash, "message", "Changes committed successfully");
+	}
+
+	/**
+	 * Triggers a full re-index of a project.
+	 *
+	 * @param id The project ID
+	 */
+	@PostMapping("/{id}/reindex")
+	@Operation(summary = "Re-index project", description = "Deletes existing indices and triggers a fresh scan and analysis of all files in the project.")
+	public void reindexProject(@PathVariable Long id) {
+		projectService.reindexProject(id);
 	}
 
 	/**

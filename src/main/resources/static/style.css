@@ -1381,3 +1381,27 @@ body {
     border: 1px solid var(--border);
     border-radius: 6px;
 }
+
+/* Hyperlinks Styling */
+.search-result-item h4 a,
+.crawl-job-card h4 a {
+    color: var(--text-main);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.search-result-item h4 a:hover,
+.crawl-job-card h4 a:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.result-path {
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.result-path:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}

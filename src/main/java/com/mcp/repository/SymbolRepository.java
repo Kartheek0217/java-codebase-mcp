@@ -1,6 +1,7 @@
 package com.mcp.repository;
 
 import com.mcp.entity.Symbol;
+import com.mcp.entity.SymbolType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Repository;
@@ -29,7 +30,7 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long> {
 	List<Symbol> findByProjectIdAndNameContainingIgnoreCase(Long projectId, String name);
 
 	List<Symbol> findByProjectIdAndNameContainingIgnoreCaseAndType(Long projectId, String name,
-			com.mcp.entity.SymbolType type);
+			SymbolType type);
 
 	long countByProjectId(Long projectId);
 }

@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.mcp.analysis.CodeAnalyzer;
 import com.mcp.config.LuceneProperties;
 import com.mcp.dto.ContentSearchResult;
 
@@ -52,7 +53,7 @@ public class LuceneIndexService {
 	private final Map<Long, Long> lastAccessTimes = new ConcurrentHashMap<>();
 	private final Set<Long> pendingCommits = ConcurrentHashMap.newKeySet();
 	private final Set<Long> bulkModeProjects = ConcurrentHashMap.newKeySet();
-	private final StandardAnalyzer sharedAnalyzer = new StandardAnalyzer();
+	private final Analyzer sharedAnalyzer = new CodeAnalyzer();
 
 	private final LuceneProperties luceneProperties;
 
@@ -246,6 +247,7 @@ public class LuceneIndexService {
 					String[] snippets = highlighter.highlight("content", query, topDocs, 5);
 
 					StoredFields storedFields = searcher.storedFields();
+					Map<String, String> fileContentCache = new java.util.HashMap<>();
 					for (int i = offset; i < topDocs.scoreDocs.length; i++) {
 						ScoreDoc scoreDoc = topDocs.scoreDocs[i];
 						Document doc = storedFields.document(scoreDoc.doc);
@@ -254,7 +256,7 @@ public class LuceneIndexService {
 						String snippet = (snippets != null && i < snippets.length) ? snippets[i] : "";
 
 						if (snippet != null && !snippet.isEmpty()) {
-							List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet, filePath);
+							List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet, filePath, fileContentCache);
 							results.add(new ContentSearchResult(filePath, title, scoreDoc.score, matches));
 						}
 					}
@@ -285,13 +287,19 @@ public class LuceneIndexService {
 		}
 	}
 
-	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet, String filePath) {
+	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet, String filePath, Map<String, String> cache) {
 		List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
-		String fileContent = null;
-		try {
-			fileContent = Files.readString(Paths.get(filePath));
-		} catch (Exception e) {
-			logger.warn("Could not read file {} for line number lookup", filePath);
+		String fileContent = cache.computeIfAbsent(filePath, path -> {
+			try {
+				return Files.readString(Paths.get(path));
+			} catch (Exception e) {
+				logger.warn("Could not read file {} for line number lookup", path);
+				return "";
+			}
+		});
+
+		if (fileContent != null && fileContent.isEmpty()) {
+			fileContent = null;
 		}
 
 		// UnifiedHighlighter by default uses ... as a separator between passages

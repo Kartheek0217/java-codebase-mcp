@@ -29,6 +29,7 @@ import com.mcp.repository.SymbolRepository;
 import com.mcp.service.FileScannerService;
 import com.mcp.service.LuceneIndexService;
 import com.mcp.service.ReconciliationService;
+import com.mcp.util.CodeUtils;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -179,7 +180,7 @@ public class IndexController {
 			content = Files.readString(fullPath);
 		}
 
-		return Map.of("path", filePath, "content", com.mcp.util.CodeUtils.addLineNumbers(content));
+		return Map.of("path", filePath, "content", CodeUtils.addLineNumbers(content));
 	}
 
 	private String extractPdfText(Path path) {

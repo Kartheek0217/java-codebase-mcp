@@ -2,6 +2,11 @@ package com.mcp.service;
 
 import com.mcp.entity.Project;
 import com.mcp.repository.ProjectRepository;
+import com.mcp.repository.SymbolRepository;
+import com.mcp.repository.FileMetadataRepository;
+import com.mcp.repository.SkillRepository;
+import com.mcp.repository.CrawlJobRepository;
+import com.mcp.repository.CrawledPageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -21,21 +26,21 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final FileScannerService fileScannerService;
     private final DirectoryWatcherService watcherService;
-    private final com.mcp.repository.SymbolRepository symbolRepository;
-    private final com.mcp.repository.FileMetadataRepository fileMetadataRepository;
-    private final com.mcp.repository.SkillRepository skillRepository;
-    private final com.mcp.repository.CrawlJobRepository crawlJobRepository;
-    private final com.mcp.repository.CrawledPageRepository crawledPageRepository;
+    private final SymbolRepository symbolRepository;
+    private final FileMetadataRepository fileMetadataRepository;
+    private final SkillRepository skillRepository;
+    private final CrawlJobRepository crawlJobRepository;
+    private final CrawledPageRepository crawledPageRepository;
     private final LuceneIndexService luceneIndexService;
 
     public ProjectService(ProjectRepository projectRepository,
             FileScannerService fileScannerService,
             DirectoryWatcherService watcherService,
-            com.mcp.repository.SymbolRepository symbolRepository,
-            com.mcp.repository.FileMetadataRepository fileMetadataRepository,
-            com.mcp.repository.SkillRepository skillRepository,
-            com.mcp.repository.CrawlJobRepository crawlJobRepository,
-            com.mcp.repository.CrawledPageRepository crawledPageRepository,
+            SymbolRepository symbolRepository,
+            FileMetadataRepository fileMetadataRepository,
+            SkillRepository skillRepository,
+            CrawlJobRepository crawlJobRepository,
+            CrawledPageRepository crawledPageRepository,
             LuceneIndexService luceneIndexService) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
@@ -90,6 +95,33 @@ public class ProjectService {
 
     public Project getProject(Long id) {
         return projectRepository.findById(id).orElseThrow(() -> new RuntimeException("Project not found"));
+    }
+
+    @Transactional
+    public void reindexProject(Long id) {
+        Project project = getProject(id);
+        logger.info("Triggering full re-index for project: {}", project.getName());
+
+        // 1. Stop watchers
+        watcherService.stopWatching(id);
+
+        // 2. Clean up associated data in DB
+        symbolRepository.deleteByProjectId(id);
+        fileMetadataRepository.deleteByProjectId(id);
+        // We keep skills and crawl data unless specifically asked, 
+        // but for code analysis we need symbols and file metadata gone.
+
+        // 3. Delete Lucene indices
+        luceneIndexService.deleteIndex(id);
+
+        // 4. Trigger new scan
+        try {
+            watcherService.startWatching(project);
+            fileScannerService.scanProject(id);
+        } catch (IOException e) {
+            logger.error("Failed to restart watcher/scan during re-indexing for project {}", id, e);
+            throw new RuntimeException("Re-indexing failed", e);
+        }
     }
 
     @Transactional

@@ -59,10 +59,10 @@ async function performWebSearch() {
         container.innerHTML = data.map(item => `
             <div class=\"search-result-item\">
                 <div class=\"search-result-header\">
-                    <span class=\"result-path\">${item.url}</span>
+                    <a href=\"${item.url}\" target=\"_blank\" class=\"result-path\">${item.url}</a>
                     <span class=\"badge\">Score: ${item.score.toFixed(2)}</span>
                 </div>
-                <h4>${item.title || 'Untitled Page'}</h4>
+                <h4><a href=\"${item.url}\" target=\"_blank\">${item.title || 'Untitled Page'}</a></h4>
                 <p>${item.snippet || 'No snippet available.'}</p>
             </div>
         `).join('');
@@ -80,7 +80,7 @@ async function fetchCrawlJobs() {
         container.innerHTML = jobs.map(job => `
             <div class=\"crawl-job-card\">
                 <div class=\"job-info\">
-                    <h4>${job.startUrl}</h4>
+                    <h4><a href=\"${job.startUrl}\" target=\"_blank\">${job.startUrl}</a></h4>
                     <div class=\"job-meta\">
                         ID: ${job.id} | Pages: ${job.pagesCrawled} | Created: ${new Date(job.createdAt).toLocaleString()}
                     </div>

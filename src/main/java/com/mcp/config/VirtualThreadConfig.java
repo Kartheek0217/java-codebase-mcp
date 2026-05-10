@@ -1,6 +1,8 @@
 package com.mcp.config;
 
 import java.util.concurrent.Executors;
+import java.util.List;
+import java.time.Duration;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
@@ -11,6 +13,7 @@ import org.springframework.core.task.support.TaskExecutorAdapter;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.mcp.entity.Symbol;
 
 @Configuration
 public class VirtualThreadConfig {
@@ -26,16 +29,16 @@ public class VirtualThreadConfig {
 		CaffeineCacheManager cacheManager = new CaffeineCacheManager("topology", "symbols");
 		cacheManager.setCaffeine(Caffeine.newBuilder()
 				.maximumSize(1000)
-				.expireAfterAccess(java.time.Duration.ofMinutes(30))
+				.expireAfterAccess(Duration.ofMinutes(30))
 				.recordStats());
 		return cacheManager;
 	}
 
 	@Bean
-	public Cache<String, java.util.List<com.mcp.entity.Symbol>> symbolCache() {
+	public Cache<String, List<Symbol>> symbolCache() {
 		return Caffeine.newBuilder()
 				.maximumSize(50_000)
-				.expireAfterAccess(java.time.Duration.ofMinutes(60))
+				.expireAfterAccess(Duration.ofMinutes(60))
 				.recordStats()
 				.build();
 	}

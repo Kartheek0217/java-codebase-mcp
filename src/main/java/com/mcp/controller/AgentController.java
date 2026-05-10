@@ -53,6 +53,8 @@ import com.mcp.service.FileIndexerService;
 import com.mcp.service.LuceneIndexService;
 import com.mcp.service.SkillService;
 import com.mcp.service.TopologyService;
+import com.mcp.util.CodeUtils;
+import com.mcp.entity.SymbolType;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -223,10 +225,10 @@ public class AgentController {
 		boolean hasChanged = lastChecksum != null && !lastChecksum.equals(currentChecksum);
 
 		if (content != null) {
-			content = com.mcp.util.CodeUtils.truncateAndAddLineNumbers(content, maxLines, lineRange);
+			content = CodeUtils.truncateAndAddLineNumbers(content, maxLines, lineRange);
 		}
 
-		List<SymbolDTO> symbolDTOs = symbols.stream().map(this::toSymbolDTO).collect(Collectors.toList());
+		List<SymbolDTO> symbolDTOs = symbols.stream().map(this::toSymbolDTO).toList();
 
 		FileMetadataDTO metadataDTO = toMetadataDTO(metadata);
 
@@ -301,7 +303,7 @@ public class AgentController {
 		List<Symbol> symbols;
 		if (type != null && !type.isEmpty()) {
 			try {
-				com.mcp.entity.SymbolType symbolType = com.mcp.entity.SymbolType.valueOf(type.toUpperCase());
+				SymbolType symbolType = SymbolType.valueOf(type.toUpperCase());
 				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCaseAndType(projectId, query,
 						symbolType);
 			} catch (IllegalArgumentException e) {
@@ -376,7 +378,7 @@ public class AgentController {
 		trackAccess(projectId, "SUGGEST_COMPACT", query, null);
 		List<ContentSearchResult> fullResults = luceneIndexService.searchContent(projectId, query, limit);
 		return fullResults.stream().map(r -> Map.of("path", r.filePath(), "score", (Object) r.score()))
-				.collect(Collectors.toList());
+				.toList();
 	}
 
 	/**

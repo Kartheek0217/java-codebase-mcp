@@ -69,7 +69,7 @@ public class TopologyService {
 				.collect(Collectors.groupingBy(Symbol::getName, Collectors.counting()));
 
 		List<Map.Entry<String, Long>> topSymbols = symbolFrequency.entrySet().stream()
-				.sorted(Map.Entry.<String, Long>comparingByValue().reversed()).limit(20).collect(Collectors.toList());
+				.sorted(Map.Entry.<String, Long>comparingByValue().reversed()).limit(20).toList();
 
 		Map<String, Object> topology = new HashMap<>();
 		topology.put("projectId", projectId);

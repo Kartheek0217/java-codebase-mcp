@@ -4,6 +4,10 @@ import com.mcp.entity.Project;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
+import com.mcp.entity.Symbol;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -78,9 +82,9 @@ public class UIHelperController {
 	 */
 	@GetMapping("/symbols/{id}")
 	@Operation(summary = "Get symbol details by ID")
-	public com.mcp.entity.Symbol getSymbolById(@org.springframework.web.bind.annotation.PathVariable Long id) {
+	public Symbol getSymbolById(@PathVariable Long id) {
 		return symbolRepository.findById(id)
-				.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-						org.springframework.http.HttpStatus.NOT_FOUND));
+				.orElseThrow(() -> new ResponseStatusException(
+						HttpStatus.NOT_FOUND));
 	}
 }
