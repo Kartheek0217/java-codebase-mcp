@@ -11,6 +11,8 @@ import { initAgent } from './features/agent/agent.js';
 import { initSkills, fetchSkills } from './features/skills/skills.js';
 import { initGit, fetchGitStatus } from './features/git/git.js';
 import { initProjects, renderProjectsManagement } from './features/projects/projects.js';
+import { initRules, fetchRules } from './features/rules/rules.js';
+import { initTasks, fetchTasks } from './features/tasks/tasks.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     init();
@@ -99,6 +101,8 @@ async function initializeFeature(tabId) {
         case 'web': await initWeb(); break;
         case 'agent': initAgent(); break;
         case 'skills': await initSkills(); break;
+        case 'rules': await initRules(); break;
+        case 'tasks': await initTasks(); break;
         case 'git': await initGit(); break;
         case 'projects': initProjects(onProjectSwitch); break;
     }
@@ -109,6 +113,8 @@ async function refreshFeature(tabId) {
         case 'dashboard': await loadDashboardData(); break;
         case 'browser': await fetchFiles(); break;
         case 'skills': await fetchSkills(); break;
+        case 'rules': await fetchRules(); break;
+        case 'tasks': await fetchTasks(); break;
         case 'git': await fetchGitStatus(); break;
         case 'projects': renderProjectsManagement(); break;
     }

@@ -55,7 +55,37 @@ export const API = {
         getSuggestions: (projectId, query) => apiFetch(`/api/ai/suggest?projectId=${projectId}&query=${encodeURIComponent(query)}`),
         getSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`),
         learnSkill: (projectId, url) => apiFetch(`/api/ai/skills/learn?projectId=${projectId}&url=${encodeURIComponent(url)}`, { method: 'POST' }),
-        clearSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`, { method: 'DELETE' })
+        clearSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`, { method: 'DELETE' }),
+        rules: {
+            list: (projectId) => apiFetch(`/api/ai/rules?projectId=${projectId}`),
+            create: (rule) => apiFetch('/api/ai/rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(rule)
+            }),
+            update: (id, rule) => apiFetch(`/api/ai/rules/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(rule)
+            }),
+            delete: (id) => apiFetch(`/api/ai/rules/${id}`, { method: 'DELETE' }),
+            clearAll: (projectId) => apiFetch(`/api/ai/rules?projectId=${projectId}`, { method: 'DELETE' })
+        },
+        tasks: {
+            list: (projectId) => apiFetch(`/api/ai/tasks?projectId=${projectId}`),
+            create: (request) => apiFetch('/api/ai/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            }),
+            update: (id, task) => apiFetch(`/api/ai/tasks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(task)
+            }),
+            updateStep: (taskId, stepId, status) => apiFetch(`/api/ai/tasks/${taskId}/steps/${stepId}?status=${status}`, { method: 'PUT' }),
+            delete: (id) => apiFetch(`/api/ai/tasks/${id}`, { method: 'DELETE' })
+        }
     },
     web: {
         search: (projectId, q, site, limit) => apiFetch(`/api/web/search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),

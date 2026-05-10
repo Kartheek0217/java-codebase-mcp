@@ -79,3 +79,43 @@ CREATE TABLE IF NOT EXISTS crawled_page (
 CREATE INDEX IF NOT EXISTS idx_crawl_job_status ON crawl_job(status);
 CREATE INDEX IF NOT EXISTS idx_crawled_page_url ON crawled_page(url);
 CREATE INDEX IF NOT EXISTS idx_crawled_page_project ON crawled_page(project_id);
+-- Project Rules (similar to Skills but for constraints)
+CREATE TABLE IF NOT EXISTS project_rules (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    rule_value VARCHAR(1000) NOT NULL,
+    category VARCHAR(100),
+    description VARCHAR(1000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- Task Management with steps
+CREATE TABLE IF NOT EXISTS project_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    title VARCHAR(500) NOT NULL,
+    description TEXT,
+    status VARCHAR(20) DEFAULT 'TODO',
+    priority VARCHAR(20) DEFAULT 'MEDIUM',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS task_steps (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    step_number INT NOT NULL,
+    description TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'TODO',
+    completed_at TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES project_tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_rules_project ON project_rules(project_id);
+CREATE INDEX IF NOT EXISTS idx_rules_category ON project_rules(project_id, category);
+CREATE INDEX IF NOT EXISTS idx_tasks_project ON project_tasks(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_steps_task ON task_steps(task_id, step_number);
