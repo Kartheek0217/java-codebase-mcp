@@ -49,6 +49,7 @@ public class LuceneIndexService {
 
 	private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
 	private final Map<Long, SearcherManager> searcherManagers = new ConcurrentHashMap<>();
+	private final Map<Long, Long> lastAccessTimes = new ConcurrentHashMap<>();
 	private final Set<Long> pendingCommits = ConcurrentHashMap.newKeySet();
 	private final Set<Long> bulkModeProjects = ConcurrentHashMap.newKeySet();
 	private final StandardAnalyzer sharedAnalyzer = new StandardAnalyzer();
@@ -99,6 +100,7 @@ public class LuceneIndexService {
 
 				SearcherManager sm = new SearcherManager(writer, true, true, new SearcherFactory());
 				searcherManagers.put(projectId, sm);
+				lastAccessTimes.put(projectId, System.currentTimeMillis());
 				return writer;
 			} catch (IOException e) {
 				logger.error("Error creating IndexWriter for project {}", projectId, e);
@@ -114,6 +116,7 @@ public class LuceneIndexService {
 			getWriter(projectId);
 			sm = searcherManagers.get(projectId);
 		}
+		lastAccessTimes.put(projectId, System.currentTimeMillis());
 		return sm;
 	}
 
@@ -327,6 +330,30 @@ public class LuceneIndexService {
 		public boolean shouldExit() {
 			return System.currentTimeMillis() > timeoutAt;
 		}
+	}
+
+	@Scheduled(fixedDelay = 60000)
+	public void cleanupIdleIndices() {
+		long now = System.currentTimeMillis();
+		long idleThreshold = 30 * 60 * 1000; // 30 minutes
+
+		lastAccessTimes.forEach((projectId, lastAccess) -> {
+			if (now - lastAccess > idleThreshold && !bulkModeProjects.contains(projectId)) {
+				logger.info("Closing idle index for project {}", projectId);
+				try {
+					SearcherManager sm = searcherManagers.remove(projectId);
+					if (sm != null) sm.close();
+					
+					IndexWriter writer = writers.remove(projectId);
+					if (writer != null) writer.close();
+					
+					lastAccessTimes.remove(projectId);
+					pendingCommits.remove(projectId);
+				} catch (IOException e) {
+					logger.error("Error closing idle index for project {}", projectId, e);
+				}
+			}
+		});
 	}
 
 	@Scheduled(fixedDelay = 5000)

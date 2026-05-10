@@ -29,6 +29,7 @@ public class GitInfoService {
 
     private final ProjectRepository projectRepository;
     private final Map<Long, Repository> repositoryCache = new ConcurrentHashMap<>();
+    private final Map<Long, Long> lastAccessTimes = new ConcurrentHashMap<>();
 
     private String commitHash;
     private String commitMessage;
@@ -81,7 +82,7 @@ public class GitInfoService {
     }
 
     private Repository getRepository(Long projectId) throws IOException {
-        return repositoryCache.computeIfAbsent(projectId, id -> {
+        Repository repo = repositoryCache.computeIfAbsent(projectId, id -> {
             try {
                 Project project = projectRepository.findById(id)
                         .orElseThrow(() -> new RuntimeException("Project not found: " + id));
@@ -98,6 +99,25 @@ public class GitInfoService {
                 return repository;
             } catch (IOException e) {
                 throw new RuntimeException("Error opening Git repository", e);
+            }
+        });
+        lastAccessTimes.put(projectId, System.currentTimeMillis());
+        return repo;
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000)
+    public void cleanupIdleRepositories() {
+        long now = System.currentTimeMillis();
+        long idleThreshold = 30 * 60 * 1000; // 30 minutes
+
+        lastAccessTimes.forEach((projectId, lastAccess) -> {
+            if (now - lastAccess > idleThreshold) {
+                logger.info("Closing idle Git repository for project {}", projectId);
+                Repository repo = repositoryCache.remove(projectId);
+                if (repo != null) {
+                    repo.close();
+                }
+                lastAccessTimes.remove(projectId);
             }
         });
     }

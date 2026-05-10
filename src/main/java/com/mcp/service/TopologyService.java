@@ -1,29 +1,25 @@
 package com.mcp.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
-import com.mcp.entity.Project;
-import com.mcp.repository.ProjectRepository;
 import com.mcp.entity.FileMetadata;
-import com.mcp.repository.FileMetadataRepository;
-import com.mcp.repository.SymbolRepository;
+import com.mcp.entity.Project;
 import com.mcp.entity.Symbol;
+import com.mcp.repository.FileMetadataRepository;
+import com.mcp.repository.ProjectRepository;
+import com.mcp.repository.SymbolRepository;
 
 @Service
 public class TopologyService {
-	private static final Logger logger = LoggerFactory.getLogger(TopologyService.class);
 
 	private final ProjectRepository projectRepository;
 	private final FileMetadataRepository fileMetadataRepository;
@@ -54,16 +50,15 @@ public class TopologyService {
 			}
 
 			if (path.endsWith(".java")) {
-				try {
-					List<String> imports = extractImports(path);
-					dependencies.put(relativePath, imports);
+				String deps = file.getDependencies();
+				List<String> importList = (deps != null && !deps.isEmpty())
+						? Arrays.asList(deps.split(","))
+						: Collections.emptyList();
+				dependencies.put(relativePath, importList);
 
-					if (relativePath.contains("Controller") || relativePath.contains("Main")
-							|| relativePath.contains("Application")) {
-						entryPoints.add(relativePath);
-					}
-				} catch (Exception e) {
-					logger.warn("Failed to extract imports from {}: {}", path, e.getMessage());
+				if (relativePath.contains("Controller") || relativePath.contains("Main")
+						|| relativePath.contains("Application")) {
+					entryPoints.add(relativePath);
 				}
 			}
 		}
@@ -87,13 +82,4 @@ public class TopologyService {
 		return topology;
 	}
 
-	private List<String> extractImports(String filePath) throws IOException {
-		try {
-			String content = Files.readString(Paths.get(filePath));
-			CompilationUnit cu = StaticJavaParser.parse(content);
-			return cu.getImports().stream().map(ImportDeclaration::getNameAsString).collect(Collectors.toList());
-		} catch (Exception e) {
-			return Collections.emptyList();
-		}
-	}
 }

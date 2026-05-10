@@ -98,8 +98,11 @@ public class FileIndexerService {
 			logger.info("Indexing file: {}", filePath);
 
 			List<Symbol> symbols = null;
+			String dependencies = null;
 			if (filePath.toLowerCase().endsWith(".java")) {
-				symbols = extractSymbols(content, path);
+				JavaAnalysisResult javaResult = extractJavaData(content, path);
+				symbols = javaResult.symbols;
+				dependencies = javaResult.dependencies;
 			} else if (filePath.toLowerCase().endsWith(".md")) {
 				skillService.learnSkillFromMarkdown(projectId, content, filePath);
 			} else {
@@ -108,7 +111,7 @@ public class FileIndexerService {
 
 			// Update metadata and symbols in a single transaction (Reuse existing metadata
 			// object)
-			saveFileData(projectId, filePath, checksum, fileSize, now, symbols, metadata);
+			saveFileData(projectId, filePath, checksum, fileSize, now, symbols, dependencies, metadata);
 
 			// Index content in Lucene (Outside DB transaction)
 			luceneIndexService.indexFileContent(projectId, filePath, content);
@@ -120,7 +123,7 @@ public class FileIndexerService {
 
 	@Transactional
 	protected void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
-			List<Symbol> symbols, FileMetadata existingMetadata) {
+			List<Symbol> symbols, String dependencies, FileMetadata existingMetadata) {
 		// Clear existing symbols
 		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
 		symbolCache.invalidate(projectId + ":" + filePath);
@@ -148,6 +151,7 @@ public class FileIndexerService {
 		metadata.setChecksum(checksum);
 		metadata.setFileSize(fileSize);
 		metadata.setLastScanned(now);
+		metadata.setDependencies(dependencies);
 		fileMetadataRepository.save(metadata);
 	}
 
@@ -222,10 +226,19 @@ public class FileIndexerService {
 		symbols.add(s);
 	}
 
-	private List<Symbol> extractSymbols(String content, Path path) {
+	private record JavaAnalysisResult(List<Symbol> symbols, String dependencies) {}
+
+	private JavaAnalysisResult extractJavaData(String content, Path path) {
 		List<Symbol> symbols = new ArrayList<>();
+		StringBuilder dependencies = new StringBuilder();
 		try {
 			CompilationUnit cu = StaticJavaParser.parse(content);
+
+			// Extract imports
+			cu.getImports().forEach(i -> {
+				if (dependencies.length() > 0) dependencies.append(",");
+				dependencies.append(i.getNameAsString());
+			});
 
 			// Optimization: Use a single pass visitor to extract all symbols
 			cu.accept(new VoidVisitorAdapter<List<Symbol>>() {
@@ -248,12 +261,12 @@ public class FileIndexerService {
 				}
 			}, symbols);
 
-			logger.info("Extracted {} symbols from file: {}", symbols.size(), path);
+			logger.info("Extracted {} symbols and {} imports from file: {}", symbols.size(), cu.getImports().size(), path);
 		} catch (Throwable t) {
 			logger.error("StaticJavaParser failed for file: {}", path, t);
 		}
 
-		return symbols;
+		return new JavaAnalysisResult(symbols, dependencies.toString());
 	}
 
 	private Symbol createSymbol(String name, SymbolType type) {

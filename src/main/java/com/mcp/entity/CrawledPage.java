@@ -1,5 +1,7 @@
 package com.mcp.entity;
 
+import com.mcp.util.CompressionUtils;
+
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
@@ -44,7 +46,7 @@ public class CrawledPage {
 
 	@Lob
 	@Column(name = "raw_content")
-	private String rawContent;
+	private byte[] compressedContent;
 
 	@Column(name = "crawled_at")
 	private LocalDateTime crawledAt = LocalDateTime.now();
@@ -123,11 +125,19 @@ public class CrawledPage {
 	}
 
 	public String getRawContent() {
-		return rawContent;
+		try {
+			return CompressionUtils.decompress(compressedContent);
+		} catch (java.io.IOException e) {
+			return null;
+		}
 	}
 
 	public void setRawContent(String rawContent) {
-		this.rawContent = rawContent;
+		try {
+			this.compressedContent = CompressionUtils.compress(rawContent);
+		} catch (java.io.IOException e) {
+			this.compressedContent = null;
+		}
 	}
 
 	public LocalDateTime getCrawledAt() {
