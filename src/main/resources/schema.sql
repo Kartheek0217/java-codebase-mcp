@@ -134,3 +134,22 @@ CREATE TABLE IF NOT EXISTS symbol_calls (
 CREATE INDEX IF NOT EXISTS idx_symbol_calls_caller ON symbol_calls(caller_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_calls_callee ON symbol_calls(project_id, callee_name);
 CREATE INDEX IF NOT EXISTS idx_symbol_calls_file ON symbol_calls(project_id, caller_file_path);
+
+-- Browser Session tracking
+CREATE TABLE IF NOT EXISTS browser_session (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(100) NOT NULL UNIQUE,
+    project_id BIGINT,
+    browser_type VARCHAR(20) DEFAULT 'chromium',
+    headless BOOLEAN DEFAULT TRUE,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    current_url VARCHAR(2048),
+    viewport_width INT DEFAULT 1280,
+    viewport_height INT DEFAULT 720,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_active TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_browser_session_id ON browser_session(session_id);
+CREATE INDEX IF NOT EXISTS idx_browser_session_status ON browser_session(status);

@@ -1,20 +1,59 @@
-<div class="browser-layout">
-    <div class="file-list-container">
-        <input type="text" id="file-filter" placeholder="Filter files...">
-        <ul id="file-list" class="file-list"></ul>
-    </div>
-    <div class="file-viewer-container">
-        <div id="file-viewer-header" class="viewer-header">
-            <span>Select a file to view</span>
-            <button id="btn-summarize-file" class="btn-secondary btn-small hidden">Summarize File</button>
+<div class="browser-container">
+    <div class="browser-toolbar">
+        <div class="browser-controls">
+            <button id="btn-back" class="btn-icon" title="Back">⬅️</button>
+            <button id="btn-forward" class="btn-icon" title="Forward">➡️</button>
+            <button id="btn-reload" class="btn-icon" title="Reload">🔄</button>
         </div>
-        <div class="viewer-content">
-            <div class="code-editor-area">
-                <pre id="code-viewer"><code class="language-java"></code></pre>
+        <div class="browser-address-bar">
+            <input type="text" id="browser-url" placeholder="Enter URL (e.g. https://google.com)">
+            <button id="btn-navigate" class="btn-primary">Go</button>
+        </div>
+        <div class="browser-actions">
+            <button id="btn-screenshot" class="btn-secondary" title="Take Screenshot">Screenshot</button>
+            <button id="btn-manage-sessions" class="btn-secondary">Sessions</button>
+        </div>
+    </div>
+
+    <div class="browser-main">
+        <div class="browser-viewport">
+            <div id="browser-placeholder" class="viewport-placeholder">
+                <div class="placeholder-content">
+                    <h3>No Active Session</h3>
+                    <p>Create or select a browser session to start browsing.</p>
+                    <button id="btn-start-session" class="btn-primary">Start New Session</button>
+                </div>
             </div>
-            <div class="viewer-sidebar">
-                <h5>Symbols</h5>
-                <ul id="file-symbols" class="symbol-list"></ul>
+            <div id="browser-preview" class="viewport-preview hidden">
+                <img id="screenshot-display" alt="Browser Screenshot">
+            </div>
+        </div>
+
+        <div class="browser-sidebar">
+            <div class="sidebar-section">
+                <h5>Active Sessions</h5>
+                <ul id="session-list" class="session-list"></ul>
+            </div>
+            <div class="sidebar-section">
+                <h5>Page Info</h5>
+                <div id="page-info" class="page-info">
+                    <p><strong>Title:</strong> <span id="info-title">-</span></p>
+                    <p><strong>URL:</strong> <span id="info-url">-</span></p>
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h5>Quick Actions</h5>
+                <div class="quick-actions">
+                    <input type="text" id="action-selector" placeholder="Selector (e.g. #login-btn)">
+                    <div class="action-buttons-row">
+                        <button id="btn-click-selector" class="btn-small" title="Click element">Click</button>
+                        <button id="btn-fill-selector" class="btn-small" title="Fill field">Fill</button>
+                        <button id="btn-type-selector" class="btn-small" title="Type (simulate keystrokes)">Type</button>
+                        <button id="btn-select-selector" class="btn-small" title="Select dropdown option">Select</button>
+                    </div>
+                    <input type="text" id="action-value" placeholder="Value / text to type">
+                    <button id="btn-wait-selector" class="btn-small btn-full" title="Wait for selector to appear">Wait for element</button>
+                </div>
             </div>
         </div>
     </div>

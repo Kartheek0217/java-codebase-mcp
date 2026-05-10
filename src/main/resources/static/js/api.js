@@ -117,6 +117,52 @@ export const API = {
         }),
         commit: (projectId, message) => apiFetch(`/api/projects/${projectId}/git/commit?message=${encodeURIComponent(message)}`, { method: 'POST' })
     },
+    browser: {
+        createSession: (projectId, options = {}) => apiFetch('/api/browser/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, ...options })
+        }),
+        listSessions: (projectId) => apiFetch(`/api/browser/session?projectId=${projectId}`),
+        closeSession: (id) => apiFetch(`/api/browser/session/${id}`, { method: 'DELETE' }),
+        navigate: (id, url) => apiFetch(`/api/browser/session/${id}/navigate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        }),
+        screenshot: (id) => apiFetch(`/api/browser/session/${id}/screenshot`, { method: 'POST' }),
+        click: (id, selector) => apiFetch(`/api/browser/session/${id}/click`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selector })
+        }),
+        fill: (id, selector, value) => apiFetch(`/api/browser/session/${id}/fill`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selector, value })
+        }),
+        evaluate: (id, script) => apiFetch(`/api/browser/session/${id}/evaluate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ script })
+        }),
+        getContent: (id) => apiFetch(`/api/browser/session/${id}/content`),
+        type: (id, selector, text) => apiFetch(`/api/browser/session/${id}/type`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selector, text })
+        }),
+        selectOption: (id, selector, value) => apiFetch(`/api/browser/session/${id}/select`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selector, value })
+        }),
+        waitForSelector: (id, selector) => apiFetch(`/api/browser/session/${id}/wait`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selector })
+        })
+    },
     health: () => apiFetch('/health'),
     ui: {
         getProjectsSummary: () => apiFetch('/api/ui/projects-summary'),

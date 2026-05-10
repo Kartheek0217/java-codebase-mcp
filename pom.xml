@@ -131,6 +131,13 @@
 			<version>1.18.1</version>
 		</dependency>
 
+		<!-- Playwright for Headless Browser -->
+		<dependency>
+			<groupId>com.microsoft.playwright</groupId>
+			<artifactId>playwright</artifactId>
+			<version>1.59.0</version>
+		</dependency>
+
 	</dependencies>
 
 
