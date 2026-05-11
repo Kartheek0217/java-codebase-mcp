@@ -29,9 +29,12 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.RecordDeclaration;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.mcp.entity.FileMetadata;
@@ -48,10 +51,14 @@ public class FileIndexerService {
 
 	private static final Logger logger = LoggerFactory.getLogger(FileIndexerService.class);
 	private static final Pattern JS_PATTERN = Pattern.compile(
-			"(?:\\bfunction\\s+([a-zA-Z0-9_$]+))|(?:\\bclass\\s+([a-zA-Z0-9_$]+))|(?:\\b(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>)");
+			"(?:\\b(?:async\\s+)?function\\s+([a-zA-Z0-9_$]+))|" +
+					"(?:\\bclass\\s+([a-zA-Z0-9_$]+))|" +
+					"(?:\\binterface\\s+([a-zA-Z0-9_$]+))|" +
+					"(?:\\btype\\s+([a-zA-Z0-9_$]+)\\s*=)|" +
+					"(?:\\b(?:const|let|var)\\s+([a-zA-Z0-9_$]+)\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|[a-zA-Z0-9_$]+)\\s*=>)");
 	private static final Pattern JSON_PATTERN = Pattern.compile("\"([^\"]+)\"\\s*:");
 	private static final Pattern ID_PATTERN = Pattern.compile("id=[\"']([^\"']+)[\"']");
-	private static final Pattern CSS_PATTERN = Pattern.compile("(?:^|\\s)([.#][a-zA-Z0-9_-]+)(?=\\s*\\{)");
+	private static final Pattern CSS_PATTERN = Pattern.compile("(?:^|\\s|,)([.#][a-zA-Z0-9_-]+)(?=\\s*[,{])");
 
 	private final SymbolRepository symbolRepository;
 	private final FileMetadataRepository fileMetadataRepository;
@@ -59,7 +66,6 @@ public class FileIndexerService {
 	private final Cache<String, List<Symbol>> symbolCache;
 	private final SkillService skillService;
 	private final SymbolCallRepository symbolCallRepository;
-	private final JavaParser javaParser;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
 			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
@@ -70,10 +76,12 @@ public class FileIndexerService {
 		this.symbolCache = symbolCache;
 		this.skillService = skillService;
 		this.symbolCallRepository = symbolCallRepository;
+	}
 
+	private JavaParser createJavaParser() {
 		ParserConfiguration config = new ParserConfiguration();
 		config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
-		this.javaParser = new JavaParser(config);
+		return new JavaParser(config);
 	}
 
 	public LuceneIndexService getLuceneIndexService() {
@@ -216,7 +224,11 @@ public class FileIndexerService {
 				} else if (matcher.group(2) != null) {
 					addSymbol(symbols, matcher.group(2), SymbolType.CLASS);
 				} else if (matcher.group(3) != null) {
-					addSymbol(symbols, matcher.group(3), SymbolType.ARROW_FUNCTION);
+					addSymbol(symbols, matcher.group(3), SymbolType.INTERFACE);
+				} else if (matcher.group(4) != null) {
+					addSymbol(symbols, matcher.group(4), SymbolType.TYPE);
+				} else if (matcher.group(5) != null) {
+					addSymbol(symbols, matcher.group(5), SymbolType.ARROW_FUNCTION);
 				}
 			}
 		}
@@ -268,9 +280,11 @@ public class FileIndexerService {
 		List<CallInfo> calls = new ArrayList<>();
 		StringBuilder dependencies = new StringBuilder();
 		try {
+			JavaParser javaParser = createJavaParser();
 			ParseResult<CompilationUnit> parseResult = javaParser.parse(content);
 			if (!parseResult.isSuccessful()) {
-				logger.error("JavaParser failed for file: {}. Problems: {}", path, parseResult.getProblems());
+				logger.error("JavaParser failed for file: {}. Problems: {}", path,
+						parseResult.getProblems().stream().map(Object::toString).toList());
 				return new JavaAnalysisResult(new ArrayList<>(), new ArrayList<>(), "");
 			}
 			CompilationUnit cu = parseResult.getResult().get();
@@ -299,6 +313,24 @@ public class FileIndexerService {
 					symbols.add(createSymbol(currentMethod, SymbolType.METHOD));
 					super.visit(n, arg);
 					currentMethod = oldMethod;
+				}
+
+				@Override
+				public void visit(RecordDeclaration n, Object arg) {
+					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					super.visit(n, arg);
+				}
+
+				@Override
+				public void visit(EnumDeclaration n, Object arg) {
+					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					super.visit(n, arg);
+				}
+
+				@Override
+				public void visit(AnnotationDeclaration n, Object arg) {
+					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					super.visit(n, arg);
 				}
 
 				@Override
