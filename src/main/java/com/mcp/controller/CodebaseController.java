@@ -77,7 +77,7 @@ public class CodebaseController {
 	}
 
 	@GetMapping("/{projectId}/file")
-	@Operation(summary = "Get file context", description = "Retrieves the content of a file along with its symbols and metadata.")
+	@Operation(summary = "get-file-context", description = "Retrieves the content of a file along with its symbols and metadata.")
 	public ResponseEntity<Object> getFileContext(@PathVariable Long projectId, @RequestParam String filePath,
 			@RequestParam(required = false) String sessionId,
 			@RequestParam(required = false, defaultValue = "full") String format,
@@ -114,7 +114,7 @@ public class CodebaseController {
 	}
 
 	@PostMapping("/{projectId}/context/batch")
-	@Operation(summary = "Get batch file context")
+	@Operation(summary = "get-batch-context", description = "Get batch file context")
 	public Map<String, ContextDTO> getBatchContext(@PathVariable Long projectId, @RequestBody List<String> filePaths) {
 		Map<String, ContextDTO> result = new java.util.HashMap<>();
 		for (String filePath : filePaths) {
@@ -131,7 +131,7 @@ public class CodebaseController {
 	}
 
 	@GetMapping("/{projectId}/summarize")
-	@Operation(summary = "Summarize file content")
+	@Operation(summary = "summarize", description = "Summarize file content")
 	public Map<String, Object> summarize(@PathVariable Long projectId, @RequestParam String filePath)
 			throws IOException {
 		Project project = projectRepository.findById(projectId).orElseThrow();
@@ -148,14 +148,14 @@ public class CodebaseController {
 	}
 
 	@GetMapping("/{projectId}/search")
-	@Operation(summary = "Search codebase content", description = "Performs full-text search across all indexed files.")
+	@Operation(summary = "search-codebase", description = "Performs full-text search across all indexed files.")
 	public List<ContentSearchResult> search(@PathVariable Long projectId, @RequestParam String query,
 			@RequestParam(required = false, defaultValue = "10") int limit) {
 		return luceneIndexService.searchContent(projectId, query, limit);
 	}
 
 	@GetMapping("/{projectId}/symbols")
-	@Operation(summary = "Search symbols", description = "Searches for classes, methods, or fields by name.")
+	@Operation(summary = "search-symbols", description = "Searches for classes, methods, or fields by name.")
 	public List<SymbolDTO> searchSymbols(@PathVariable Long projectId, @RequestParam String query,
 			@RequestParam(required = false) String type, @RequestParam(defaultValue = "50") int limit) {
 		List<Symbol> symbols;
@@ -174,14 +174,14 @@ public class CodebaseController {
 	}
 
 	@GetMapping("/{projectId}/files")
-	@Operation(summary = "Search files", description = "Finds indexed files whose paths match the query.")
+	@Operation(summary = "search-files", description = "Finds indexed files whose paths match the query.")
 	public List<FileMetadataDTO> searchFiles(@PathVariable Long projectId, @RequestParam String query) {
 		return fileMetadataRepository.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query).stream()
 				.map(this::toMetadataDTO).toList();
 	}
 
 	@GetMapping("/{projectId}/suggest")
-	@Operation(summary = "Get code suggestions", description = "Combines symbol and content search for relevant code snippets.")
+	@Operation(summary = "suggest", description = "Combines symbol and content search for relevant code snippets.")
 	public Map<String, Object> suggest(@PathVariable Long projectId, @RequestParam String query) {
 		Map<String, Object> result = new java.util.HashMap<>();
 		result.put("symbols", searchSymbols(projectId, query, null, 10));
@@ -190,41 +190,41 @@ public class CodebaseController {
 	}
 
 	@GetMapping("/{projectId}/history")
-	@Operation(summary = "Get file access history")
+	@Operation(summary = "get-history", description = "Get file access history")
 	public java.util.Set<String> getHistory(@PathVariable Long projectId, @RequestParam String sessionId) {
 		return contextMemoryService.getSessionFiles(sessionId);
 	}
 
 	@GetMapping("/{projectId}/topology")
-	@Operation(summary = "Get project topology", description = "Returns project structure and dependencies.")
+	@Operation(summary = "get-topology", description = "Returns project structure and dependencies.")
 
 	public Map<String, Object> getTopology(@PathVariable Long projectId) {
 		return topologyService.getProjectTopology(projectId);
 	}
 
 	@PostMapping("/{projectId}/scan")
-	@Operation(summary = "Trigger directory scan")
+	@Operation(summary = "scan", description = "Trigger directory scan")
 	public Map<String, String> scan(@PathVariable Long projectId) throws IOException {
 		fileScannerService.scanProject(projectId);
 		return Map.of("status", "success");
 	}
 
 	@PostMapping("/{projectId}/reconcile")
-	@Operation(summary = "Reconcile index")
+	@Operation(summary = "reconcile", description = "Reconcile index")
 	public Map<String, String> reconcile(@PathVariable Long projectId) {
 		reconciliationService.reconcileProject(projectId);
 		return Map.of("status", "success");
 	}
 
 	@GetMapping("/symbols/{id}")
-	@Operation(summary = "Get symbol details")
+	@Operation(summary = "get-symbol", description = "Get symbol details")
 	public Symbol getSymbol(@PathVariable Long id) {
 		return symbolRepository.findById(id)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 	}
 
 	@GetMapping("/symbols/{id}/hierarchy")
-	@Operation(summary = "Get call hierarchy for a symbol")
+	@Operation(summary = "get-call-hierarchy", description = "Get call hierarchy for a symbol")
 	public Map<String, Object> getCallHierarchy(@PathVariable Long id) {
 		Symbol symbol = symbolRepository.findById(id)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));

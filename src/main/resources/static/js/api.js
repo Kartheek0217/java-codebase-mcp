@@ -89,7 +89,7 @@ export const API = {
 
     },
     web: {
-        search: (projectId, q, site, limit) => apiFetch(`/api/web/search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
+        search: (projectId, q, site, limit) => apiFetch(`/api/web-search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
         listCrawlJobs: () => apiFetch('/api/web/crawl'),
         startCrawl: (request) => apiFetch('/api/web/crawl', {
             method: 'POST',

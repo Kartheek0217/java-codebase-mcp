@@ -49,7 +49,7 @@ public class ProjectController {
 	 * @throws IOException If the root path is invalid or inaccessible
 	 */
 	@PostMapping
-	@Operation(summary = "Create a new project", description = "Initializes a new project with a unique name and root directory path. Once created, the system automatically starts background indexing of the directory.", responses = {
+	@Operation(summary = "crt-project", description = "Initializes a new project with a unique name and root directory path. Once created, the system automatically starts background indexing of the directory.", responses = {
 			@ApiResponse(responseCode = "200", description = "Project created and indexing started successfully"),
 			@ApiResponse(responseCode = "400", description = "Invalid project name or root path") })
 	public Project createProject(
@@ -65,7 +65,7 @@ public class ProjectController {
 	 * @return A list of all projects
 	 */
 	@GetMapping
-	@Operation(summary = "List all projects", description = "Returns a list of all registered projects and their configurations.")
+	@Operation(summary = "get-all-projects", description = "Returns a list of all registered projects and their configurations.")
 	public List<Project> getAllProjects(@RequestParam(required = false, defaultValue = "false") boolean summary) {
 		return projectService.getAllProjects();
 	}
@@ -76,7 +76,7 @@ public class ProjectController {
 	 * @return A list of maps containing project details and counts
 	 */
 	@GetMapping("/summary")
-	@Operation(summary = "Get projects summary", description = "Returns basic statistics for all projects.")
+	@Operation(summary = "get-projects-summ", description = "Returns basic statistics for all projects.")
 	public List<java.util.Map<String, Object>> getProjectsSummary() {
 		return projectService.getAllProjects().stream().map(p -> {
 			java.util.Map<String, Object> map = new java.util.HashMap<>();
@@ -96,7 +96,7 @@ public class ProjectController {
 	 * @return The project details
 	 */
 	@GetMapping("/{id}")
-	@Operation(summary = "Get project by ID")
+	@Operation(summary = "get-project", description = "Get project by ID")
 	public Project getProject(@PathVariable Long id) {
 		return projectService.getProject(id);
 	}
@@ -108,7 +108,7 @@ public class ProjectController {
 	 * @return A map containing file and symbol counts
 	 */
 	@GetMapping("/{id}/stats")
-	@Operation(summary = "Get project stats")
+	@Operation(summary = "get-project-stats", description = "Get project stats")
 	public java.util.Map<String, Object> getProjectStats(@PathVariable Long id) {
 		java.util.Map<String, Object> stats = new java.util.HashMap<>();
 		stats.put("projectId", id);
@@ -124,7 +124,7 @@ public class ProjectController {
 	 * @return A map containing modified, added, removed, and untracked files
 	 */
 	@GetMapping("/{id}/git-status")
-	@Operation(summary = "Get project Git status")
+	@Operation(summary = "get-project-git-status", description = "Get project Git status")
 	public java.util.Map<String, Object> getProjectGitStatus(@PathVariable Long id) {
 		return gitInfoService.getProjectStatus(id);
 	}
@@ -136,7 +136,7 @@ public class ProjectController {
 	 * @param patterns List of file paths or glob patterns to stage
 	 */
 	@PostMapping("/{id}/git/stage")
-	@Operation(summary = "Stage files")
+	@Operation(summary = "stage-files", description = "Stage files")
 	public void stageFiles(@PathVariable Long id, @RequestBody List<String> patterns) {
 		gitInfoService.stageFiles(id, patterns);
 	}
@@ -148,7 +148,7 @@ public class ProjectController {
 	 * @param patterns List of file paths or glob patterns to revert
 	 */
 	@PostMapping("/{id}/git/discard")
-	@Operation(summary = "Discard changes")
+	@Operation(summary = "discard-changes", description = "Discard changes")
 	public void discardChanges(@PathVariable Long id, @RequestBody List<String> patterns) {
 		gitInfoService.discardChanges(id, patterns);
 	}
@@ -161,7 +161,7 @@ public class ProjectController {
 	 * @return The new commit hash
 	 */
 	@PostMapping("/{id}/git/commit")
-	@Operation(summary = "Commit changes")
+	@Operation(summary = "commit", description = "Commit changes")
 	public java.util.Map<String, String> commit(@PathVariable Long id, @RequestParam String message) {
 		String hash = gitInfoService.commit(id, message);
 		return java.util.Map.of("status", "success", "commitHash", hash);
@@ -173,7 +173,7 @@ public class ProjectController {
 	 * @param id The project ID
 	 */
 	@PostMapping("/{id}/reindex")
-	@Operation(summary = "Re-index project")
+	@Operation(summary = "reindex-project", description = "Re-index project")
 	public void reindexProject(@PathVariable Long id) {
 		projectService.reindexProject(id);
 	}
@@ -184,7 +184,7 @@ public class ProjectController {
 	 * @param id The project ID to delete
 	 */
 	@DeleteMapping("/{id}")
-	@Operation(summary = "Delete a project")
+	@Operation(summary = "del-project", description = "Delete a project")
 	public void deleteProject(@PathVariable Long id) {
 		projectService.deleteProject(id);
 	}

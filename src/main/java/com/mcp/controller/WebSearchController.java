@@ -21,7 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Validated
 @RestController
-@RequestMapping("/api/web/search")
+@RequestMapping("/api/web-search")
 @Tag(name = "Web Search", description = "Endpoints for searching crawled web content")
 public class WebSearchController {
 
@@ -33,7 +33,7 @@ public class WebSearchController {
 	}
 
 	@GetMapping
-	@Operation(summary = "Search crawled web content")
+	@Operation(summary = "search", description = "Search crawled web content")
 	public List<WebSearchResultDTO> search(@RequestParam Long projectId, @RequestParam String q,
 			@RequestParam(required = false) String site, @RequestParam(defaultValue = "10") int limit,
 			@RequestParam(defaultValue = "0") int offset) {

@@ -42,7 +42,7 @@ public class WebCrawlController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Create and start a new crawl job")
+	@Operation(summary = "crt-crawl", description = "Create and start a new crawl job")
 	public ResponseEntity<CrawlJobResponseDTO> createCrawl(@Valid @RequestBody CrawlJobRequestDTO request) {
 		CrawlJob job = new CrawlJob();
 		job.setProjectId(request.projectId());
@@ -65,33 +65,33 @@ public class WebCrawlController {
 	}
 
 	@GetMapping
-	@Operation(summary = "List all crawl jobs")
+	@Operation(summary = "lst-jobs", description = "List all crawl jobs")
 	public List<CrawlJobResponseDTO> listJobs() {
 		return jobRepository.findAll().stream().map(this::toResponseDTO).toList();
 	}
 
 	@GetMapping("/{id}")
-	@Operation(summary = "Get crawl job details")
+	@Operation(summary = "get-job", description = "Get crawl job details")
 	public ResponseEntity<CrawlJobResponseDTO> getJob(@PathVariable Long id) {
 		return jobRepository.findById(id).map(job -> ResponseEntity.ok(toResponseDTO(job)))
 				.orElse(ResponseEntity.notFound().build());
 	}
 
 	@GetMapping("/{id}/pages")
-	@Operation(summary = "Get crawled pages for a job")
+	@Operation(summary = "get-pages", description = "Get crawled pages for a job")
 	public List<CrawledPage> getPages(@PathVariable Long id) {
 		return pageRepository.findByCrawlJobId(id);
 	}
 
 	@PostMapping("/{id}/stop")
-	@Operation(summary = "Cancel a running crawl job")
+	@Operation(summary = "stop-crawl", description = "Cancel a running crawl job")
 	public ResponseEntity<Void> stopCrawl(@PathVariable Long id) {
 		crawlerService.stopCrawl(id);
 		return ResponseEntity.ok().build();
 	}
 
 	@DeleteMapping("/{id}")
-	@Operation(summary = "Delete a crawl job and its results")
+	@Operation(summary = "del-job", description = "Delete a crawl job and its results")
 	public ResponseEntity<Void> deleteJob(@PathVariable Long id) {
 		jobRepository.deleteById(id);
 		return ResponseEntity.noContent().build();

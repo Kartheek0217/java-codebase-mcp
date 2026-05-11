@@ -40,7 +40,7 @@ public class DataExtractionController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Extract data from a URL using selectors")
+	@Operation(summary = "extract", description = "Extract data from a URL using selectors")
 	public CompletableFuture<ExtractionResultDTO> extract(@Valid @RequestBody ExtractionRequestDTO request) {
 		return CompletableFuture.supplyAsync(() -> {
 			try {
@@ -60,7 +60,7 @@ public class DataExtractionController {
 	}
 
 	@GetMapping("/metadata")
-	@Operation(summary = "Extract page metadata (title, description, OG tags)")
+	@Operation(summary = "extract-metadata", description = "Extract page metadata (title, description, OG tags)")
 	public CompletableFuture<ResponseEntity<Map<String, String>>> extractMetadata(@RequestParam String url) {
 		return CompletableFuture.supplyAsync(() -> {
 			try {

@@ -89,7 +89,7 @@ public class AgentController {
 
 	// Sessions
 	@PostMapping("/sessions")
-	@Operation(summary = "Start AI session")
+	@Operation(summary = "start-session", description = "Start AI session")
 	public Map<String, String> startSession(@RequestParam Long projectId) {
 		projectRepository.findById(projectId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
@@ -99,7 +99,7 @@ public class AgentController {
 	}
 
 	@GetMapping("/sessions/{sessionId}")
-	@Operation(summary = "Get session details")
+	@Operation(summary = "get-session", description = "Get session details")
 	public SessionDTO getSession(@PathVariable String sessionId) {
 		Session session = sessionStore.get(sessionId);
 		if (session == null) {
@@ -110,32 +110,32 @@ public class AgentController {
 
 	// Tasks
 	@GetMapping("/tasks")
-	@Operation(summary = "Get all tasks for project")
+	@Operation(summary = "get-tasks", description = "Get all tasks for project")
 	public List<TaskDTO> getTasks(@RequestParam Long projectId) {
 		return taskService.getTasksByProject(projectId);
 	}
 
 	@PostMapping("/tasks")
-	@Operation(summary = "Create task")
+	@Operation(summary = "crt-task", description = "Create task")
 	public TaskDTO createTask(@RequestBody CreateTaskRequest request) {
 		return taskService.createTask(request);
 	}
 
 	@PutMapping("/tasks/{id}")
-	@Operation(summary = "Update task")
+	@Operation(summary = "upd-task", description = "Update task")
 	public TaskDTO updateTask(@PathVariable Long id, @RequestBody TaskDTO taskDTO) {
 		return taskService.updateTask(id, taskDTO);
 	}
 
 	@PutMapping("/tasks/{taskId}/steps/{stepId}")
-	@Operation(summary = "Update task step status")
+	@Operation(summary = "upd-step-status", description = "Update task step status")
 	public TaskDTO updateStepStatus(@PathVariable Long taskId, @PathVariable Long stepId, @RequestParam String status) {
 		com.mcp.model.TaskStatus taskStatus = com.mcp.model.TaskStatus.valueOf(status.toUpperCase());
 		return taskService.updateStepStatus(taskId, stepId, taskStatus);
 	}
 
 	@DeleteMapping("/tasks/{id}")
-	@Operation(summary = "Delete task")
+	@Operation(summary = "del-task", description = "Delete task")
 	public void deleteTask(@PathVariable Long id) {
 		taskService.deleteTask(id);
 	}
@@ -143,45 +143,45 @@ public class AgentController {
 	// Rules
 
 	@GetMapping("/rules")
-	@Operation(summary = "Get all rules for project")
+	@Operation(summary = "get-rules", description = "Get all rules for project")
 	public List<RuleDTO> getRules(@RequestParam Long projectId) {
 		return ruleService.getRulesByProject(projectId);
 	}
 
 	@PostMapping("/rules")
-	@Operation(summary = "Create rule")
+	@Operation(summary = "crt-rule", description = "Create rule")
 	public RuleDTO createRule(@RequestBody RuleDTO ruleDTO) {
 		return ruleService.createRule(ruleDTO);
 	}
 
 	@DeleteMapping("/rules/{id}")
 
-	@Operation(summary = "Delete rule")
+	@Operation(summary = "del-rule", description = "Delete rule")
 	public void deleteRule(@PathVariable Long id) {
 		ruleService.deleteRule(id);
 	}
 
 	@DeleteMapping("/rules")
-	@Operation(summary = "Clear all rules for project")
+	@Operation(summary = "clear-rules", description = "Clear all rules for project")
 	public void clearRules(@RequestParam Long projectId) {
 		ruleService.deleteRulesByProject(projectId);
 	}
 
 	// Skills
 	@GetMapping("/skills")
-	@Operation(summary = "Get all skills for project")
+	@Operation(summary = "get-skills", description = "Get all skills for project")
 	public List<Skill> getSkills(@RequestParam Long projectId) {
 		return skillRepository.findByProjectId(projectId);
 	}
 
 	@DeleteMapping("/skills")
-	@Operation(summary = "Clear all skills for project")
+	@Operation(summary = "clear-skills", description = "Clear all skills for project")
 	public void clearSkills(@RequestParam Long projectId) {
 		skillService.deleteSkillsByProject(projectId);
 	}
 
 	@PostMapping("/skills/learn")
-	@Operation(summary = "Learn skill from URL")
+	@Operation(summary = "learn-skill", description = "Learn skill from URL")
 	public Map<String, String> learnSkill(@RequestParam Long projectId, @RequestParam String url) {
 		skillService.learnFromUrl(projectId, url);
 		return Map.of("status", "success");
@@ -189,7 +189,7 @@ public class AgentController {
 
 	@PostMapping("/skills/learn-from-file")
 
-	@Operation(summary = "Learn skill from local file")
+	@Operation(summary = "learn-skill-file", description = "Learn skill from local file")
 	public Map<String, String> learnSkillFromFile(
 			@RequestParam Long projectId,
 			@RequestParam String filePath) throws IOException {

@@ -27,7 +27,7 @@ public class SystemController {
 	}
 
 	@GetMapping("/health")
-	@Operation(summary = "Check system health")
+	@Operation(summary = "get-health", description = "Check system health")
 	public Map<String, Object> getHealth() {
 		Map<String, Object> health = new HashMap<>();
 		health.put("status", "UP");
@@ -42,7 +42,7 @@ public class SystemController {
 	}
 
 	@GetMapping("/info")
-	@Operation(summary = "Get system info")
+	@Operation(summary = "get-info", description = "Get system info")
 	public Map<String, String> getInfo() {
 		Map<String, String> info = new HashMap<>();
 		info.put("commit", gitInfoService.getCommitHash());
