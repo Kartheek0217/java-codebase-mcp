@@ -13,16 +13,19 @@ export async function loadDashboardData() {
 
     try {
         const stats = await API.projects.getStatus(state.selectedProjectId);
-        document.getElementById('stat-files').innerText = stats.totalFilesIndexed || 0;
-        document.getElementById('stat-symbols').innerText = stats.totalSymbols || 0;
+        document.getElementById('stat-files').innerText = stats.fileCount || 0;
+        document.getElementById('stat-symbols').innerText = stats.symbolCount || 0;
 
         const git = await API.projects.getGitStatus(state.selectedProjectId);
         document.getElementById('stat-branch').innerText = git.branch || 'N/A';
 
-        const history = await API.ai.getHistory(state.selectedProjectId);
-        renderHistory(history);
+        if (state.currentSessionId) {
+            const history = await API.ai.getHistory(state.selectedProjectId, state.currentSessionId);
+            renderHistory(history);
+        }
 
     } catch (error) {
+
         console.error('Error loading dashboard:', error);
     }
 }
@@ -34,14 +37,14 @@ function renderHistory(history) {
         return;
     }
 
-    list.innerHTML = history.map(item => `
-        <li class=\"activity-item\">
-            <span class=\"activity-type\">${item.type}</span>
-            <span class=\"activity-val\">${item.value}</span>
-            <span class=\"activity-time\">${new Date(item.timestamp).toLocaleTimeString()}</span>
+    list.innerHTML = history.map(path => `
+        <li class=\"activity-item\" onclick=\"viewFileContent('${path}')\" style=\"cursor: pointer;\">
+            <span class=\"activity-type\">File</span>
+            <span class=\"activity-val\">${path}</span>
         </li>
     `).join('');
 }
+
 
 async function triggerScan() {
     if (!state.selectedProjectId) return;

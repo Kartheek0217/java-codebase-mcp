@@ -33,7 +33,7 @@ async function getAgentContext() {
         if (paths.length > 1) {
             data = await API.ai.getBatchContext(state.selectedProjectId, paths);
         } else {
-            data = await API.ai.getContext(state.selectedProjectId, paths[0]);
+            data = await API.ai.getContext(state.selectedProjectId, paths[0], state.currentSessionId);
         }
         output.innerHTML = `<pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
     } catch (e) {
@@ -58,11 +58,12 @@ async function fetchSuggestions() {
     output.innerHTML = 'Analyzing...';
     try {
         const data = await API.ai.getSuggestions(state.selectedProjectId, query);
-        if (!data || data.length === 0) {
+        const suggestions = data.content || [];
+        if (suggestions.length === 0) {
             output.innerHTML = 'No suggestions found.';
             return;
         }
-        output.innerHTML = data.map(item => `
+        output.innerHTML = suggestions.map(item => `
             <div class=\"suggestion-item\">
                 <span class=\"suggestion-path\">${item.filePath} (Score: ${item.score.toFixed(2)})</span>
                 <div class=\"result-snippet\">${escapeHtml(item.matches?.[0]?.lineContent || 'No snippet available')}</div>
@@ -70,3 +71,4 @@ async function fetchSuggestions() {
         `).join('');
     } catch (e) { output.innerHTML = 'Error loading suggestions'; }
 }
+

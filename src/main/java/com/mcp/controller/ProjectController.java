@@ -28,10 +28,16 @@ public class ProjectController {
 
 	private final ProjectService projectService;
 	private final GitInfoService gitInfoService;
+	private final com.mcp.repository.FileMetadataRepository fileMetadataRepository;
+	private final com.mcp.repository.SymbolRepository symbolRepository;
 
-	public ProjectController(ProjectService projectService, GitInfoService gitInfoService) {
+	public ProjectController(ProjectService projectService, GitInfoService gitInfoService,
+			com.mcp.repository.FileMetadataRepository fileMetadataRepository,
+			com.mcp.repository.SymbolRepository symbolRepository) {
 		this.projectService = projectService;
 		this.gitInfoService = gitInfoService;
+		this.fileMetadataRepository = fileMetadataRepository;
+		this.symbolRepository = symbolRepository;
 	}
 
 	/**
@@ -59,10 +65,28 @@ public class ProjectController {
 	 * @return A list of all projects
 	 */
 	@GetMapping
-	@Operation(summary = "List all projects", description = "Returns a list of all registered projects and their configurations.", responses = {
-			@ApiResponse(responseCode = "200", description = "List of projects retrieved successfully") })
-	public List<Project> getAllProjects() {
+	@Operation(summary = "List all projects", description = "Returns a list of all registered projects and their configurations.")
+	public List<Project> getAllProjects(@RequestParam(required = false, defaultValue = "false") boolean summary) {
 		return projectService.getAllProjects();
+	}
+
+	/**
+	 * Retrieves a summary of all projects with statistics.
+	 *
+	 * @return A list of maps containing project details and counts
+	 */
+	@GetMapping("/summary")
+	@Operation(summary = "Get projects summary", description = "Returns basic statistics for all projects.")
+	public List<java.util.Map<String, Object>> getProjectsSummary() {
+		return projectService.getAllProjects().stream().map(p -> {
+			java.util.Map<String, Object> map = new java.util.HashMap<>();
+			map.put("id", p.getId());
+			map.put("name", p.getName());
+			map.put("rootPath", p.getRootPath());
+			map.put("fileCount", fileMetadataRepository.countByProjectId(p.getId()));
+			map.put("symbolCount", symbolRepository.countByProjectId(p.getId()));
+			return map;
+		}).toList();
 	}
 
 	/**
@@ -72,11 +96,25 @@ public class ProjectController {
 	 * @return The project details
 	 */
 	@GetMapping("/{id}")
-	@Operation(summary = "Get project by ID", description = "Retrieves details for a specific project by its unique numeric ID.", responses = {
-			@ApiResponse(responseCode = "200", description = "Project details retrieved successfully"),
-			@ApiResponse(responseCode = "404", description = "Project not found") })
-	public Project getProject(@Parameter(description = "Unique ID of the project") @PathVariable Long id) {
+	@Operation(summary = "Get project by ID")
+	public Project getProject(@PathVariable Long id) {
 		return projectService.getProject(id);
+	}
+
+	/**
+	 * Retrieves statistics for a specific project.
+	 *
+	 * @param id The project ID
+	 * @return A map containing file and symbol counts
+	 */
+	@GetMapping("/{id}/stats")
+	@Operation(summary = "Get project stats")
+	public java.util.Map<String, Object> getProjectStats(@PathVariable Long id) {
+		java.util.Map<String, Object> stats = new java.util.HashMap<>();
+		stats.put("projectId", id);
+		stats.put("fileCount", fileMetadataRepository.countByProjectId(id));
+		stats.put("symbolCount", symbolRepository.countByProjectId(id));
+		return stats;
 	}
 
 	/**
@@ -86,11 +124,8 @@ public class ProjectController {
 	 * @return A map containing modified, added, removed, and untracked files
 	 */
 	@GetMapping("/{id}/git-status")
-	@Operation(summary = "Get project Git status", description = "Returns the Git repository status for the specified project.", responses = {
-			@ApiResponse(responseCode = "200", description = "Git status retrieved successfully"),
-			@ApiResponse(responseCode = "404", description = "Project not found or Git repository missing") })
-	public java.util.Map<String, Object> getProjectGitStatus(
-			@Parameter(description = "Unique ID of the project") @PathVariable Long id) {
+	@Operation(summary = "Get project Git status")
+	public java.util.Map<String, Object> getProjectGitStatus(@PathVariable Long id) {
 		return gitInfoService.getProjectStatus(id);
 	}
 
@@ -101,7 +136,7 @@ public class ProjectController {
 	 * @param patterns List of file paths or glob patterns to stage
 	 */
 	@PostMapping("/{id}/git/stage")
-	@Operation(summary = "Stage files", description = "Adds files to the Git index.")
+	@Operation(summary = "Stage files")
 	public void stageFiles(@PathVariable Long id, @RequestBody List<String> patterns) {
 		gitInfoService.stageFiles(id, patterns);
 	}
@@ -113,7 +148,7 @@ public class ProjectController {
 	 * @param patterns List of file paths or glob patterns to revert
 	 */
 	@PostMapping("/{id}/git/discard")
-	@Operation(summary = "Discard changes", description = "Reverts local modifications in the specified files.")
+	@Operation(summary = "Discard changes")
 	public void discardChanges(@PathVariable Long id, @RequestBody List<String> patterns) {
 		gitInfoService.discardChanges(id, patterns);
 	}
@@ -126,10 +161,10 @@ public class ProjectController {
 	 * @return The new commit hash
 	 */
 	@PostMapping("/{id}/git/commit")
-	@Operation(summary = "Commit changes", description = "Creates a new Git commit for the specified project.")
+	@Operation(summary = "Commit changes")
 	public java.util.Map<String, String> commit(@PathVariable Long id, @RequestParam String message) {
 		String hash = gitInfoService.commit(id, message);
-		return java.util.Map.of("status", "success", "commitHash", hash, "message", "Changes committed successfully");
+		return java.util.Map.of("status", "success", "commitHash", hash);
 	}
 
 	/**
@@ -138,7 +173,7 @@ public class ProjectController {
 	 * @param id The project ID
 	 */
 	@PostMapping("/{id}/reindex")
-	@Operation(summary = "Re-index project", description = "Deletes existing indices and triggers a fresh scan and analysis of all files in the project.")
+	@Operation(summary = "Re-index project")
 	public void reindexProject(@PathVariable Long id) {
 		projectService.reindexProject(id);
 	}
@@ -149,10 +184,9 @@ public class ProjectController {
 	 * @param id The project ID to delete
 	 */
 	@DeleteMapping("/{id}")
-	@Operation(summary = "Delete a project", description = "Removes the project registration and permanently deletes all associated indexed metadata, symbols, and Lucene search indices. Does NOT delete the actual source files.", responses = {
-			@ApiResponse(responseCode = "200", description = "Project and indices deleted successfully"),
-			@ApiResponse(responseCode = "404", description = "Project not found") })
-	public void deleteProject(@Parameter(description = "Unique ID of the project to delete") @PathVariable Long id) {
+	@Operation(summary = "Delete a project")
+	public void deleteProject(@PathVariable Long id) {
 		projectService.deleteProject(id);
 	}
+
 }

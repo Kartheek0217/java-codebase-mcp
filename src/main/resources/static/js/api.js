@@ -27,65 +27,66 @@ export async function apiFetch(url, options = {}) {
 
 export const API = {
     projects: {
-        listSummary: () => apiFetch('/api/ui/projects-summary'),
+        listSummary: () => apiFetch('/api/projects/summary'),
         delete: (id) => apiFetch(`/api/projects/${id}`, { method: 'DELETE' }),
         create: (name, path) => apiFetch(`/api/projects?name=${encodeURIComponent(name)}&rootPath=${encodeURIComponent(path)}`, { method: 'POST' }),
-        getStatus: (id) => apiFetch(`/api/index/${id}/status`),
+        getStatus: (id) => apiFetch(`/api/projects/${id}/stats`),
         getGitStatus: (id) => apiFetch(`/api/projects/${id}/git-status`)
     },
     index: {
-        triggerScan: (id) => apiFetch(`/api/index/${id}/trigger-scan`, { method: 'POST' }),
-        reconcile: (id) => apiFetch(`/api/index/${id}/reconcile`, { method: 'POST' }),
-        readFile: (id, path) => apiFetch(`/api/index/${id}/files/read?filePath=${encodeURIComponent(path)}`),
-        searchContent: (id, query) => apiFetch(`/api/index/${id}/search-content?query=${encodeURIComponent(query)}`),
-        searchFiles: (id, query) => apiFetch(`/api/index/${id}/files/search?query=${encodeURIComponent(query)}`)
+        triggerScan: (id) => apiFetch(`/api/codebase/${id}/scan`, { method: 'POST' }),
+        reconcile: (id) => apiFetch(`/api/codebase/${id}/reconcile`, { method: 'POST' }),
+        readFile: (id, path) => apiFetch(`/api/codebase/${id}/file?filePath=${encodeURIComponent(path)}`),
+        searchContent: (id, query) => apiFetch(`/api/codebase/${id}/search?query=${encodeURIComponent(query)}`),
+        searchFiles: (id, query) => apiFetch(`/api/codebase/${id}/files?query=${encodeURIComponent(query)}`)
     },
     ai: {
-        getHistory: (projectId) => apiFetch(`/api/ai/history?projectId=${projectId}`),
-        getSymbols: (projectId, query) => apiFetch(`/api/ai/symbols?projectId=${projectId}&query=${encodeURIComponent(query)}`),
-        getContext: (projectId, path) => apiFetch(`/api/ai/context?projectId=${projectId}&filePath=${encodeURIComponent(path)}`),
-        getBatchContext: (projectId, paths) => apiFetch(`/api/ai/context/batch?projectId=${projectId}`, {
+        getHistory: (projectId, sessionId) => apiFetch(`/api/codebase/${projectId}/history?sessionId=${sessionId}`),
+        getSymbols: (projectId, query) => apiFetch(`/api/codebase/${projectId}/symbols?query=${encodeURIComponent(query)}`),
+        getContext: (projectId, path, sessionId) => apiFetch(`/api/codebase/${projectId}/file?filePath=${encodeURIComponent(path)}${sessionId ? '&sessionId=' + sessionId : ''}`),
+        getBatchContext: (projectId, paths) => apiFetch(`/api/codebase/${projectId}/context/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(paths)
         }),
-        summarize: (projectId, path) => apiFetch(`/api/ai/summarize?projectId=${projectId}&filePath=${encodeURIComponent(path)}`),
-        startSession: (projectId) => apiFetch(`/api/ai/session/start?projectId=${projectId}`, { method: 'POST' }),
-        getTopology: (projectId) => apiFetch(`/api/ai/topology?projectId=${projectId}`),
-        getSuggestions: (projectId, query) => apiFetch(`/api/ai/suggest?projectId=${projectId}&query=${encodeURIComponent(query)}`),
-        getSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`),
-        learnSkill: (projectId, url) => apiFetch(`/api/ai/skills/learn?projectId=${projectId}&url=${encodeURIComponent(url)}`, { method: 'POST' }),
-        clearSkills: (projectId) => apiFetch(`/api/ai/skills?projectId=${projectId}`, { method: 'DELETE' }),
+        summarize: (projectId, path) => apiFetch(`/api/codebase/${projectId}/summarize?filePath=${encodeURIComponent(path)}`),
+        startSession: (projectId) => apiFetch(`/api/agent/sessions?projectId=${projectId}`, { method: 'POST' }),
+        getTopology: (projectId) => apiFetch(`/api/codebase/${projectId}/topology`),
+        getSuggestions: (projectId, query) => apiFetch(`/api/codebase/${projectId}/suggest?query=${encodeURIComponent(query)}`),
+        getSkills: (projectId) => apiFetch(`/api/agent/skills?projectId=${projectId}`),
+        learnSkill: (projectId, url) => apiFetch(`/api/agent/skills/learn?projectId=${projectId}&url=${encodeURIComponent(url)}`, { method: 'POST' }),
+        clearSkills: (projectId) => apiFetch(`/api/agent/skills?projectId=${projectId}`, { method: 'DELETE' }),
         rules: {
-            list: (projectId) => apiFetch(`/api/ai/rules?projectId=${projectId}`),
-            create: (rule) => apiFetch('/api/ai/rules', {
+            list: (projectId) => apiFetch(`/api/agent/rules?projectId=${projectId}`),
+            create: (rule) => apiFetch('/api/agent/rules', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(rule)
             }),
-            update: (id, rule) => apiFetch(`/api/ai/rules/${id}`, {
+            update: (id, rule) => apiFetch(`/api/agent/rules/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(rule)
             }),
-            delete: (id) => apiFetch(`/api/ai/rules/${id}`, { method: 'DELETE' }),
-            clearAll: (projectId) => apiFetch(`/api/ai/rules?projectId=${projectId}`, { method: 'DELETE' })
+            delete: (id) => apiFetch(`/api/agent/rules/${id}`, { method: 'DELETE' }),
+            clearAll: (projectId) => apiFetch(`/api/agent/rules?projectId=${projectId}`, { method: 'DELETE' })
         },
         tasks: {
-            list: (projectId) => apiFetch(`/api/ai/tasks?projectId=${projectId}`),
-            create: (request) => apiFetch('/api/ai/tasks', {
+            list: (projectId) => apiFetch(`/api/agent/tasks?projectId=${projectId}`),
+            create: (request) => apiFetch('/api/agent/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request)
             }),
-            update: (id, task) => apiFetch(`/api/ai/tasks/${id}`, {
+            update: (id, task) => apiFetch(`/api/agent/tasks/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(task)
             }),
-            updateStep: (taskId, stepId, status) => apiFetch(`/api/ai/tasks/${taskId}/steps/${stepId}?status=${status}`, { method: 'PUT' }),
-            delete: (id) => apiFetch(`/api/ai/tasks/${id}`, { method: 'DELETE' })
+            updateStep: (taskId, stepId, status) => apiFetch(`/api/agent/tasks/${taskId}/steps/${stepId}?status=${status}`, { method: 'PUT' }),
+            delete: (id) => apiFetch(`/api/agent/tasks/${id}`, { method: 'DELETE' })
         }
+
     },
     web: {
         search: (projectId, q, site, limit) => apiFetch(`/api/web/search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
@@ -163,11 +164,16 @@ export const API = {
             body: JSON.stringify({ selector })
         })
     },
-    health: () => apiFetch('/health'),
+    system: {
+        health: () => apiFetch('/api/system/health'),
+        info: () => apiFetch('/api/system/info')
+    },
+    health: () => apiFetch('/api/system/health'),
     ui: {
-        getProjectsSummary: () => apiFetch('/api/ui/projects-summary'),
-        getProjectStats: (projectId) => apiFetch(`/api/ui/project-stats?projectId=${projectId}`),
-        getSymbolById: (id) => apiFetch(`/api/ui/symbols/${id}`),
-        getCallHierarchy: (id) => apiFetch(`/api/ui/symbols/${id}/hierarchy`)
+        getProjectsSummary: () => apiFetch('/api/projects/summary'),
+        getProjectStats: (projectId) => apiFetch(`/api/projects/${projectId}/stats`),
+        getSymbolById: (id) => apiFetch(`/api/codebase/symbols/${id}`),
+        getCallHierarchy: (id) => apiFetch(`/api/codebase/symbols/${id}/hierarchy`)
     }
 };
+

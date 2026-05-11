@@ -1,4 +1,6 @@
 package com.mcp.dto;
 
-public record FileMetadataDTO(String filePath, Long fileSize, String checksum) {
+import java.time.LocalDateTime;
+
+public record FileMetadataDTO(String filePath, Long fileSize, String checksum, LocalDateTime lastScanned) {
 }

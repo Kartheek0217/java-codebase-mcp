@@ -41,4 +41,9 @@ public class ContextMemoryService {
 		sessionFiles.remove(sessionId);
 		sessionFileChecksums.remove(sessionId);
 	}
+
+	public Set<String> getSessionFiles(String sessionId) {
+		return sessionFiles.getOrDefault(sessionId, java.util.Collections.emptySet());
+	}
+
 }
