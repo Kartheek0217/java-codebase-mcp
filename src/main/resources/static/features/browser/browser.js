@@ -4,6 +4,7 @@ import { showNotification } from '../../js/ui.js';
 
 let currentSessionId = null;
 let refreshInterval = null;
+let lastExtractedLocators = [];
 
 async function fetchSessions() {
     if (!state.selectedProjectId) return;
@@ -33,7 +34,7 @@ export async function initBrowser() {
     // Sessions
     document.getElementById('btn-start-session').addEventListener('click', createSession);
     document.getElementById('btn-manage-sessions').addEventListener('click', fetchSessions);
-    
+
     // Actions
     document.getElementById('btn-screenshot').addEventListener('click', takeScreenshot);
     document.getElementById('btn-reload').addEventListener('click', takeScreenshot);
@@ -42,6 +43,8 @@ export async function initBrowser() {
     document.getElementById('btn-type-selector').addEventListener('click', typeSelector);
     document.getElementById('btn-select-selector').addEventListener('click', selectSelector);
     document.getElementById('btn-wait-selector').addEventListener('click', waitForSelector);
+    document.getElementById('btn-extract-locators').addEventListener('click', extractLocators);
+    document.getElementById('btn-download-locators').addEventListener('click', downloadLocators);
 
     await fetchSessions();
 }
@@ -102,7 +105,7 @@ function selectSession(id) {
 async function updateView() {
     const placeholder = document.getElementById('browser-placeholder');
     const preview = document.getElementById('browser-preview');
-    
+
     if (currentSessionId) {
         placeholder.classList.add('hidden');
         preview.classList.remove('hidden');
@@ -201,4 +204,74 @@ async function waitForSelector() {
         showNotification('Element found!', 'success');
         setTimeout(takeScreenshot, 300);
     } catch (e) { showNotification('Element not found', 'error'); }
+}
+
+async function extractLocators() {
+    if (!currentSessionId) return;
+    const url = document.getElementById('browser-url').value;
+
+    try {
+        showNotification('Extracting locators...', 'info');
+        const data = await API.browser.extractLocators(currentSessionId, url || null);
+        lastExtractedLocators = data.locators;
+        renderLocatorResults(data.locators);
+        showNotification(`Found ${data.locators.length} locators`, 'success');
+    } catch (e) {
+        showNotification('Failed to extract locators', 'error');
+    }
+}
+
+function renderLocatorResults(locators) {
+    const section = document.getElementById('locator-results-section');
+    const container = document.getElementById('locator-results');
+
+    section.classList.remove('hidden');
+
+    if (!locators || locators.length === 0) {
+        container.innerHTML = '<div class="empty-msg">No locators found</div>';
+        return;
+    }
+
+    // Group by section
+    const grouped = locators.reduce((acc, loc) => {
+        const s = loc.section || 'General';
+        if (!acc[s]) acc[s] = [];
+        acc[s].push(loc);
+        return acc;
+    }, {});
+
+    container.innerHTML = Object.entries(grouped).map(([sectionName, items]) => `
+        <div class="locator-group">
+            <h6 class="locator-section-title">${sectionName}</h6>
+            <div class="locator-group-items">
+                ${items.map(loc => `
+                    <div class="locator-item" onclick="document.getElementById('action-selector').value = '${loc.locator}'" title="Click to use CSS selector">
+                        <div class="locator-header">
+                            <span class="locator-tag">${loc.locator}</span>
+                            <span class="locator-type">${loc.type}</span>
+                        </div>
+                        <div class="locator-label">${loc.label}</div>
+                        <div class="locator-xpath-row" onclick="event.stopPropagation(); document.getElementById('action-selector').value = '${loc.xpath}'" title="Click to use XPath">
+                             <code>${loc.xpath}</code>
+                        </div>
+                        ${loc.name ? `<div class="locator-name">name: ${loc.name}</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function downloadLocators() {
+    if (!lastExtractedLocators || lastExtractedLocators.length === 0) {
+        showNotification('No locators to download', 'warning');
+        return;
+    }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lastExtractedLocators, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `locators_${new Date().getTime()}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
 }

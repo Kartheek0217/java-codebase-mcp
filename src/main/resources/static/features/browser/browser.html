@@ -10,6 +10,7 @@
             <button id="btn-navigate" class="btn-primary">Go</button>
         </div>
         <div class="browser-actions">
+            <button id="btn-extract-locators" class="btn-secondary" title="Extract all locators from page">🔍 Extract Locators</button>
             <button id="btn-screenshot" class="btn-secondary" title="Take Screenshot">Screenshot</button>
             <button id="btn-manage-sessions" class="btn-secondary">Sessions</button>
         </div>
@@ -53,6 +54,16 @@
                     </div>
                     <input type="text" id="action-value" placeholder="Value / text to type">
                     <button id="btn-wait-selector" class="btn-small btn-full" title="Wait for selector to appear">Wait for element</button>
+                </div>
+            </div>
+
+            <div id="locator-results-section" class="sidebar-section hidden">
+                <div class="sidebar-section-header">
+                    <h5>Extracted Locators</h5>
+                    <button id="btn-download-locators" class="btn-icon-small" title="Download as JSON">📥</button>
+                </div>
+                <div id="locator-results" class="locator-results-list">
+                    <!-- Locators will be injected here -->
                 </div>
             </div>
         </div>

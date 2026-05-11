@@ -162,6 +162,11 @@ export const API = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ selector })
+        }),
+        extractLocators: (id, url) => apiFetch(`/api/browser/session/${id}/extract-locators`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
         })
     },
     system: {

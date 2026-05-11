@@ -24,7 +24,8 @@ public class BrowserController {
     private final HeadlessBrowserService browserService;
     private final BrowserSessionRepository repository;
 
-    public BrowserController(BrowserSessionManager sessionManager, HeadlessBrowserService browserService, BrowserSessionRepository repository) {
+    public BrowserController(BrowserSessionManager sessionManager, HeadlessBrowserService browserService,
+            BrowserSessionRepository repository) {
         this.sessionManager = sessionManager;
         this.browserService = browserService;
         this.repository = repository;
@@ -34,29 +35,30 @@ public class BrowserController {
     @Operation(summary = "crt-session", description = "Initializes a new headless browser context.")
     public ResponseEntity<BrowserSessionResponse> createSession(@RequestBody BrowserSessionRequest request) {
         String sessionId = sessionManager.createSession();
-        
+
         BrowserSession entity = new BrowserSession();
         entity.setSessionId(sessionId);
         entity.setProjectId(request.projectId());
         entity.setBrowserType(request.browserType() != null ? request.browserType() : "chromium");
         entity.setHeadless(request.headless() != null ? request.headless() : true);
-        if (request.viewportWidth() != null) entity.setViewportWidth(request.viewportWidth());
-        if (request.viewportHeight() != null) entity.setViewportHeight(request.viewportHeight());
-        
+        if (request.viewportWidth() != null)
+            entity.setViewportWidth(request.viewportWidth());
+        if (request.viewportHeight() != null)
+            entity.setViewportHeight(request.viewportHeight());
+
         repository.save(entity);
-        
+
         return ResponseEntity.ok(new BrowserSessionResponse(
-                sessionId, "ACTIVE", null, entity.getCreatedAt()
-        ));
+                sessionId, "ACTIVE", null, entity.getCreatedAt()));
     }
 
     @GetMapping("/session")
     @Operation(summary = "lst-sessions", description = "Returns a list of all active or historical browser sessions.")
     public ResponseEntity<List<BrowserSessionResponse>> listSessions(
             @Parameter(description = "Filter by project ID") @RequestParam(required = false) Long projectId) {
-        List<BrowserSession> entities = projectId != null ? 
-                repository.findByProjectId(projectId) : repository.findAll();
-        
+        List<BrowserSession> entities = projectId != null ? repository.findByProjectId(projectId)
+                : repository.findAll();
+
         return ResponseEntity.ok(entities.stream()
                 .map(e -> new BrowserSessionResponse(
                         e.getSessionId(), e.getStatus(), e.getCurrentUrl(), e.getCreatedAt()))
@@ -119,14 +121,16 @@ public class BrowserController {
 
     @PostMapping("/session/{sessionId}/wait")
     @Operation(summary = "wait-selector", description = "Waits until an element matching the selector appears in the DOM.")
-    public ResponseEntity<Void> waitForSelector(@PathVariable String sessionId, @RequestBody WaitForSelectorRequest request) {
+    public ResponseEntity<Void> waitForSelector(@PathVariable String sessionId,
+            @RequestBody WaitForSelectorRequest request) {
         browserService.waitForSelector(sessionId, request.selector());
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/session/{sessionId}/evaluate")
     @Operation(summary = "evaluate", description = "Runs a script within the context of the page.")
-    public ResponseEntity<EvaluateResponse> evaluate(@PathVariable String sessionId, @RequestBody EvaluateRequest request) {
+    public ResponseEntity<EvaluateResponse> evaluate(@PathVariable String sessionId,
+            @RequestBody EvaluateRequest request) {
         Object result = browserService.evaluate(sessionId, request.script());
         return ResponseEntity.ok(new EvaluateResponse(result));
     }
@@ -138,6 +142,16 @@ public class BrowserController {
         String title = browserService.getTitle(sessionId);
         String content = browserService.getContent(sessionId);
         return ResponseEntity.ok(new PageContentResponse(url, title, content));
+    }
+
+    @PostMapping("/session/{sessionId}/extract-locators")
+    @Operation(summary = "extract-locators", description = "Navigates to a page and extracts all interactive locators with their types and labels.")
+    public ResponseEntity<ExtractLocatorsResponse> extractLocators(
+            @PathVariable String sessionId,
+            @RequestBody ExtractLocatorsRequest request) {
+        List<LocatorInfo> locators = browserService.extractLocators(sessionId, request.url());
+        updateSession(sessionId, request.url());
+        return ResponseEntity.ok(new ExtractLocatorsResponse(locators));
     }
 
     private void updateSession(String sessionId, String url) {
