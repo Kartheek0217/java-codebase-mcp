@@ -34,10 +34,12 @@ import com.mcp.repository.SymbolRepository;
 import com.mcp.service.ContextMemoryService;
 import com.mcp.service.FileIndexerService;
 import com.mcp.service.FileScannerService;
+import com.mcp.service.GitInfoService;
 import com.mcp.service.LuceneIndexService;
 import com.mcp.service.ReconciliationService;
 import com.mcp.service.TopologyService;
 import com.mcp.util.CodeUtils;
+import java.util.Set;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,13 +59,15 @@ public class CodebaseController {
 	private final FileScannerService fileScannerService;
 	private final ReconciliationService reconciliationService;
 	private final com.mcp.repository.SymbolCallRepository symbolCallRepository;
+	private final GitInfoService gitInfoService;
 
 	public CodebaseController(FileIndexerService fileIndexerService, FileMetadataRepository fileMetadataRepository,
 			SymbolRepository symbolRepository, LuceneIndexService luceneIndexService,
 			ProjectRepository projectRepository, TopologyService topologyService,
 			ContextMemoryService contextMemoryService, FileScannerService fileScannerService,
 			ReconciliationService reconciliationService,
-			com.mcp.repository.SymbolCallRepository symbolCallRepository) {
+			com.mcp.repository.SymbolCallRepository symbolCallRepository,
+			GitInfoService gitInfoService) {
 		this.fileIndexerService = fileIndexerService;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.symbolRepository = symbolRepository;
@@ -74,6 +78,7 @@ public class CodebaseController {
 		this.fileScannerService = fileScannerService;
 		this.reconciliationService = reconciliationService;
 		this.symbolCallRepository = symbolCallRepository;
+		this.gitInfoService = gitInfoService;
 	}
 
 	@GetMapping("/{projectId}/file")
@@ -152,6 +157,21 @@ public class CodebaseController {
 	public List<ContentSearchResult> search(@PathVariable Long projectId, @RequestParam String query,
 			@RequestParam(required = false, defaultValue = "10") int limit) {
 		return luceneIndexService.searchContent(projectId, query, limit);
+	}
+
+	@GetMapping("/{projectId}/search/changed")
+	@Operation(summary = "search-codebase-changed", description = "Performs full-text search ONLY across files that have uncommitted changes (modified, added, or staged).")
+	public List<ContentSearchResult> searchChanged(@PathVariable Long projectId, @RequestParam String query,
+			@RequestParam(required = false, defaultValue = "10") int limit) {
+		Project project = projectRepository.findById(projectId).orElseThrow();
+		String rootPath = project.getRootPath();
+		Set<String> changedFiles = gitInfoService.getChangedFilePaths(projectId);
+
+		Set<String> absolutePaths = changedFiles.stream()
+				.map(relPath -> Paths.get(rootPath).resolve(relPath).toAbsolutePath().toString())
+				.collect(java.util.stream.Collectors.toSet());
+
+		return luceneIndexService.searchContent(projectId, query, absolutePaths, limit);
 	}
 
 	@GetMapping("/{projectId}/symbols")

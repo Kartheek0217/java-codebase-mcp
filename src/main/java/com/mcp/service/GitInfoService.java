@@ -144,6 +144,26 @@ public class GitInfoService {
         }
     }
 
+    public Set<String> getChangedFilePaths(Long projectId) {
+        try {
+            Repository repository = getRepository(projectId);
+            try (Git git = new Git(repository)) {
+                Status status = git.status().call();
+                Set<String> changedFiles = new java.util.HashSet<>();
+                changedFiles.addAll(status.getModified());
+                changedFiles.addAll(status.getAdded());
+                changedFiles.addAll(status.getRemoved());
+                changedFiles.addAll(status.getMissing());
+                changedFiles.addAll(status.getUntracked());
+                changedFiles.addAll(status.getChanged()); // staged
+                return changedFiles;
+            }
+        } catch (Exception e) {
+            logger.error("Error getting changed files for project {}: {}", projectId, e.getMessage());
+            return java.util.Set.of();
+        }
+    }
+
     public void stageFiles(Long projectId, List<String> patterns) {
         try {
             Repository repository = getRepository(projectId);

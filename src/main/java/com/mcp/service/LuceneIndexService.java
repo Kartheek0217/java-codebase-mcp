@@ -195,8 +195,17 @@ public class LuceneIndexService {
 		return searchContent(projectId, queryStr, type, null, limit, offset);
 	}
 
+	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, Set<String> filePaths, int limit) {
+		return searchContent(projectId, queryStr, null, null, filePaths, limit, 0);
+	}
+
 	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site, int limit,
 			int offset) {
+		return searchContent(projectId, queryStr, type, site, null, limit, offset);
+	}
+
+	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site,
+			Set<String> filePaths, int limit, int offset) {
 		List<ContentSearchResult> results = new ArrayList<>();
 		try {
 			SearcherManager sm = getSearcherManager(projectId);
@@ -216,16 +225,17 @@ public class LuceneIndexService {
 					query = parser.parse(QueryParser.escape(queryStr));
 				}
 
-				// Apply type filter if provided
-				if (type != null || site != null) {
+				// Apply filters if provided
+				if (type != null || site != null || (filePaths != null && !filePaths.isEmpty())) {
 					org.apache.lucene.search.BooleanQuery.Builder builder = new org.apache.lucene.search.BooleanQuery.Builder();
 					builder.add(query, org.apache.lucene.search.BooleanClause.Occur.MUST);
+					
 					if (type != null) {
 						builder.add(new org.apache.lucene.search.TermQuery(new Term("type", type)),
 								org.apache.lucene.search.BooleanClause.Occur.MUST);
 					}
+					
 					if (site != null && !site.isEmpty()) {
-						// Try exact domain match first, then fallback to wildcard on path
 						org.apache.lucene.search.BooleanQuery.Builder siteBuilder = new org.apache.lucene.search.BooleanQuery.Builder();
 						siteBuilder.add(new org.apache.lucene.search.TermQuery(new Term("domain", site)),
 								org.apache.lucene.search.BooleanClause.Occur.SHOULD);
@@ -233,6 +243,15 @@ public class LuceneIndexService {
 								org.apache.lucene.search.BooleanClause.Occur.SHOULD);
 						builder.add(siteBuilder.build(), org.apache.lucene.search.BooleanClause.Occur.MUST);
 					}
+
+					if (filePaths != null && !filePaths.isEmpty()) {
+						List<org.apache.lucene.util.BytesRef> bytesRefs = filePaths.stream()
+								.map(org.apache.lucene.util.BytesRef::new)
+								.toList();
+						builder.add(new org.apache.lucene.search.TermInSetQuery("path", bytesRefs),
+								org.apache.lucene.search.BooleanClause.Occur.MUST);
+					}
+					
 					query = builder.build();
 				}
 
