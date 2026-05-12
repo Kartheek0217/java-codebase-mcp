@@ -2,8 +2,6 @@
     <div class="web-tools-sidebar">
         <nav class="web-nav">
             <button class="web-nav-item active" data-web-tab="web-search">Web Search</button>
-            <button class="web-nav-item" data-web-tab="web-crawler">Web Crawler</button>
-            <button class="web-nav-item" data-web-tab="web-extract">Data Extraction</button>
         </nav>
     </div>
     <div class="web-tools-content">
@@ -11,7 +9,7 @@
         <div id="web-tab-web-search" class="web-pane active">
             <div class="search-container">
                 <div class="search-bar">
-                    <input type="text" id="web-search-input" placeholder="Search the web (via crawl index)...">
+                    <input type="text" id="web-search-input" placeholder="Search the web...">
                     <button id="btn-web-search" class="btn-primary">Search Web</button>
                 </div>
                 <div class="search-filters">
@@ -22,85 +20,6 @@
             <div id="web-search-results" class="results-container">
                 <div class="empty-msg">Perform a web search to see results.</div>
             </div>
-        </div>
-
-        <!-- Web Crawler -->
-        <div id="web-tab-web-crawler" class="web-pane">
-            <div class="crawler-header">
-                <h3>Crawl Management</h3>
-                <button id="btn-new-crawl" class="btn-primary">+ New Crawl</button>
-            </div>
-
-            <div class="crawler-search-bar">
-                <input type="text" id="crawl-search-input" placeholder="Search locally crawled content...">
-                <button id="btn-crawl-search" class="btn-secondary">Search Index</button>
-            </div>
-
-            <div id="crawler-search-results" class="crawler-search-results" style="margin-bottom: 20px;"></div>
-
-            <h4>Active & Historical Jobs</h4>
-            <div id="crawler-jobs-list" class="crawler-list">
-                <div class="empty-msg">Loading crawl jobs...</div>
-            </div>
-        </div>
-
-        <!-- Data Extraction -->
-        <div id="web-tab-web-extract" class="web-pane">
-            <div class="extraction-container">
-                <div class="extraction-card">
-                    <h4>Quick Metadata Fetch</h4>
-                    <div class="input-row">
-                        <input type="text" id="extract-meta-url" placeholder="https://example.com">
-                        <button id="btn-extract-meta" class="btn-secondary">Fetch Metadata</button>
-                    </div>
-                    <div id="extract-meta-output" class="result-box"></div>
-                </div>
-                <div class="extraction-card">
-                    <h4>Structured Extraction</h4>
-                    <div class="form-group">
-                        <label>URL</label>
-                        <input type="text" id="extract-data-url" placeholder="https://example.com/products">
-                    </div>
-                    <div class="form-group">
-                        <label>Selectors (JSON format)</label>
-                        <textarea id="extract-selectors"
-                            placeholder='[{"name": "title", "query": "h1"}, {"name": "price", "query": ".price"}]'
-                            style="width: 100%; min-height: 100px; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: 'JetBrains Mono', monospace;"></textarea>
-                    </div>
-                    <button id="btn-extract-data" class="btn-primary">Execute Extraction</button>
-                    <div id="extract-data-output" class="result-box"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- New Crawl Modal -->
-<div id="modal-crawl" class="modal">
-    <div class="modal-content">
-        <h3>Start New Web Crawl</h3>
-        <div class="form-group">
-            <label>Start URL</label>
-            <input type="text" id="crawl-url" placeholder="https://docs.example.com">
-        </div>
-        <div class="form-grid">
-            <div class="form-group">
-                <label>Max Depth</label>
-                <input type="number" id="crawl-depth" value="2" min="1" max="10">
-            </div>
-            <div class="form-group">
-                <label>Max Pages</label>
-                <input type="number" id="crawl-pages" value="100" min="1" max="1000">
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Include Patterns (regex, one per line)</label>
-            <textarea id="crawl-include"
-                style="width: 100%; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; padding: 10px;"></textarea>
-        </div>
-        <div class="modal-actions">
-            <button id="btn-cancel-crawl" class="btn-secondary">Cancel</button>
-            <button id="btn-start-crawl-exec" class="btn-primary">Start Crawl</button>
         </div>
     </div>
 </div>

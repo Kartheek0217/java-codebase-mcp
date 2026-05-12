@@ -29,7 +29,7 @@ src/main/java/com/mcp/
 ├── repository/             # Spring Data JPA repositories
 ├── service/                # Core logic (Indexing, Git, Playwright, Task Management)
 ├── util/                   # Common utilities (Compression, URL validation)
-└── web/                    # Web-specific components (Crawler, Search Providers)
+└── web/                    # Web-specific components (Search Providers)
 ```
 
 ## ✨ Key Features
@@ -37,7 +37,7 @@ src/main/java/com/mcp/
 - **⚡ Virtual Thread Powered:** Utilizing Java 21+ Virtual Threads for blazing-fast parallel scanning and web requests.
 - **🧠 Deep AST Analysis:** Precise symbol extraction with JavaParser, tracking Classes, Methods, Fields, and Call Hierarchies.
 - **🔍 Semantic Search:** Lucene-powered indexing with custom `CodeAnalyzer` for meaningful code search.
-- **🌐 Browser Orchestration:** Managed Playwright sessions for navigating, screenshotting, and extracting data from web pages.
+- **🌐 Browser Orchestration:** Managed Playwright sessions for navigating, screenshotting, and interacting with web pages.
 - **🔍 Web Search:** Built-in DuckDuckGo integration for real-time web research without API keys.
 - **🔄 Real-time Synchronization:** Active directory watching keeps the index in sync with filesystem changes instantly.
 - **🐙 Native Git Integration:** Full support for staging, committing, and inspecting repository state.
@@ -52,8 +52,6 @@ The application can be customized via `application.properties` or environment va
 | `mcp.browser.headless` | `true` | Run Playwright in headless mode |
 | `mcp.browser.browser-type` | `chromium` | Browser engine (`chromium`, `firefox`, `webkit`) |
 | `mcp.browser.max-sessions` | `10` | Maximum concurrent browser sessions |
-| `mcp.web.crawler.max-pages` | `10` | Default limit for web crawl jobs |
-| `mcp.web.crawler.delay-ms` | `1000` | Polite delay between crawl requests |
 | `lucene.ram.buffer-size` | `64.0` | RAM buffer size in MB for Lucene indexing |
 
 ## 📡 API Documentation
@@ -73,8 +71,6 @@ The application can be customized via `application.properties` or environment va
 | POST | `/api/browser/{id}/navigate` | Navigate to a specific URL |
 | GET | `/api/browser/{id}/screenshot` | Capture current page screenshot |
 | GET | `/api/web/search` | Perform web search via DuckDuckGo |
-| POST | `/api/web/crawl` | Start a background web crawl job |
-| GET | `/api/web/crawl/search` | Search through locally crawled web content |
 
 ### 🤖 Agent & Git
 | Method | Endpoint | Description |

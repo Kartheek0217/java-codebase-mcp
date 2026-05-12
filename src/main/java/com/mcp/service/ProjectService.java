@@ -5,8 +5,6 @@ import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.SkillRepository;
-import com.mcp.repository.CrawlJobRepository;
-import com.mcp.repository.CrawledPageRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -29,8 +27,6 @@ public class ProjectService {
     private final SymbolRepository symbolRepository;
     private final FileMetadataRepository fileMetadataRepository;
     private final SkillRepository skillRepository;
-    private final CrawlJobRepository crawlJobRepository;
-    private final CrawledPageRepository crawledPageRepository;
     private final LuceneIndexService luceneIndexService;
 
     public ProjectService(ProjectRepository projectRepository,
@@ -39,8 +35,6 @@ public class ProjectService {
             SymbolRepository symbolRepository,
             FileMetadataRepository fileMetadataRepository,
             SkillRepository skillRepository,
-            CrawlJobRepository crawlJobRepository,
-            CrawledPageRepository crawledPageRepository,
             LuceneIndexService luceneIndexService) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
@@ -48,8 +42,6 @@ public class ProjectService {
         this.symbolRepository = symbolRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.skillRepository = skillRepository;
-        this.crawlJobRepository = crawlJobRepository;
-        this.crawledPageRepository = crawledPageRepository;
         this.luceneIndexService = luceneIndexService;
     }
 
@@ -108,7 +100,7 @@ public class ProjectService {
         // 2. Clean up associated data in DB
         symbolRepository.deleteByProjectId(id);
         fileMetadataRepository.deleteByProjectId(id);
-        // We keep skills and crawl data unless specifically asked, 
+        // We keep skills and crawl data unless specifically asked,
         // but for code analysis we need symbols and file metadata gone.
 
         // 3. Delete Lucene indices
@@ -127,23 +119,21 @@ public class ProjectService {
     @Transactional
     public void deleteProject(Long id) {
         Project project = getProject(id);
-        
+
         // 1. Stop watchers
         watcherService.stopWatching(id);
-        
+
         // 2. Clean up associated data in DB
         symbolRepository.deleteByProjectId(id);
         fileMetadataRepository.deleteByProjectId(id);
         skillRepository.deleteByProjectId(id);
-        crawledPageRepository.deleteByProjectId(id);
-        crawlJobRepository.deleteByProjectId(id);
-        
+
         // 3. Delete Lucene indices
         luceneIndexService.deleteIndex(id);
-        
+
         // 4. Finally delete the project record
         projectRepository.delete(project);
-        
+
         logger.info("Project {} deleted successfully with all associated data.", id);
     }
 }

@@ -89,22 +89,7 @@ export const API = {
 
     },
     web: {
-        search: (projectId, q, site, limit) => apiFetch(`/api/web-search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
-        listCrawlJobs: () => apiFetch('/api/web/crawl'),
-        startCrawl: (request) => apiFetch('/api/web/crawl', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request)
-        }),
-        stopCrawl: (id) => apiFetch(`/api/web/crawl/${id}/stop`, { method: 'POST' }),
-        deleteCrawl: (id) => apiFetch(`/api/web/crawl/${id}`, { method: 'DELETE' }),
-        crawlSearch: (projectId, q, limit = 10, offset = 0) => apiFetch(`/api/web/crawl/search?projectId=${projectId}&q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`),
-        extractMetadata: (url) => apiFetch(`/api/web/extract/metadata?url=${encodeURIComponent(url)}`),
-        extractData: (url, selectors) => apiFetch('/api/web/extract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, selectors })
-        })
+        search: (projectId, q, site, limit) => apiFetch(`/api/web-search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`)
     },
     git: {
         stage: (projectId, paths) => apiFetch(`/api/projects/${projectId}/git/stage`, {
