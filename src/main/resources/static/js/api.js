@@ -89,7 +89,8 @@ export const API = {
 
     },
     web: {
-        search: (projectId, q, site, limit) => apiFetch(`/api/web-search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`)
+        search: (projectId, q, site, limit) => apiFetch(`/api/web-search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
+        quickExtract: (projectId, url) => apiFetch(`/api/web/extract?projectId=${projectId}&url=${encodeURIComponent(url)}`)
     },
     git: {
         stage: (projectId, paths) => apiFetch(`/api/projects/${projectId}/git/stage`, {

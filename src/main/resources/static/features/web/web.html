@@ -2,6 +2,7 @@
     <div class="web-tools-sidebar">
         <nav class="web-nav">
             <button class="web-nav-item active" data-web-tab="web-search">Web Search</button>
+            <button class="web-nav-item" data-web-tab="web-quick-extract">Quick Extract</button>
         </nav>
     </div>
     <div class="web-tools-content">
@@ -19,6 +20,53 @@
             </div>
             <div id="web-search-results" class="results-container">
                 <div class="empty-msg">Perform a web search to see results.</div>
+            </div>
+        </div>
+
+        <!-- Quick Extract -->
+        <div id="web-tab-web-quick-extract" class="web-pane">
+            <div class="search-container">
+                <div class="search-bar">
+                    <input type="text" id="direct-extract-url" placeholder="https://example.com/some-article">
+                    <button id="btn-direct-extract" class="btn-primary">Extract Data</button>
+                </div>
+                <p style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted);">
+                    Enter any URL to extract main content and metadata using a headless browser.
+                </p>
+            </div>
+            <div id="direct-extract-placeholder" class="results-container">
+                <div class="empty-msg">Enter a URL above to start extraction.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Extraction Results Modal -->
+<div id="modal-extraction" class="modal">
+    <div class="modal-content" style="max-width: 900px; width: 95%;">
+        <div class="modal-header">
+            <h3>Extraction Result</h3>
+            <button class="btn-close" id="btn-close-extraction">×</button>
+        </div>
+        <div id="extraction-loading" class="hidden" style="padding: 40px; text-align: center;">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px;">Extracting page data via Playwright...</p>
+        </div>
+        <div id="extraction-content" class="modal-body">
+            <div class="extraction-layout" style="display: flex; gap: 20px;">
+                <div class="extraction-main" style="flex: 1;">
+                    <h4 id="extraction-title"></h4>
+                    <p id="extraction-url" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;"></p>
+                    <div id="extraction-text" class="result-box"
+                        style="white-space: pre-wrap; max-height: 400px; overflow-y: auto; background: var(--bg-code); padding: 15px; border-radius: 4px; border: 1px solid var(--border);">
+                    </div>
+                </div>
+                <div class="extraction-sidebar"
+                    style="flex: 0 0 300px; border-left: 1px solid var(--border); padding-left: 20px;">
+                    <h5>Metadata</h5>
+                    <div id="extraction-meta"
+                        style="font-size: 0.8rem; line-height: 1.4; max-height: 450px; overflow-y: auto;"></div>
+                </div>
             </div>
         </div>
     </div>
