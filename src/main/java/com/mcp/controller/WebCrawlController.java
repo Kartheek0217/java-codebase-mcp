@@ -18,6 +18,9 @@ import com.mcp.entity.CrawledPage;
 import com.mcp.repository.CrawlJobRepository;
 import com.mcp.repository.CrawledPageRepository;
 import com.mcp.web.crawler.WebCrawlerService;
+import com.mcp.dto.ContentSearchResult;
+import com.mcp.service.LuceneIndexService;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,12 +36,14 @@ public class WebCrawlController {
 	private final WebCrawlerService crawlerService;
 	private final CrawlJobRepository jobRepository;
 	private final CrawledPageRepository pageRepository;
+	private final LuceneIndexService luceneIndexService;
 
 	public WebCrawlController(WebCrawlerService crawlerService, CrawlJobRepository jobRepository,
-			CrawledPageRepository pageRepository) {
+			CrawledPageRepository pageRepository, LuceneIndexService luceneIndexService) {
 		this.crawlerService = crawlerService;
 		this.jobRepository = jobRepository;
 		this.pageRepository = pageRepository;
+		this.luceneIndexService = luceneIndexService;
 	}
 
 	@PostMapping
@@ -95,6 +100,13 @@ public class WebCrawlController {
 	public ResponseEntity<Void> deleteJob(@PathVariable Long id) {
 		jobRepository.deleteById(id);
 		return ResponseEntity.noContent().build();
+	}
+
+	@GetMapping("/search")
+	@Operation(summary = "search-crawled-data", description = "Search through locally crawled web content")
+	public List<ContentSearchResult> searchCrawledData(@RequestParam Long projectId, @RequestParam String q,
+			@RequestParam(defaultValue = "10") int limit, @RequestParam(defaultValue = "0") int offset) {
+		return luceneIndexService.searchContent(projectId, q, "web", limit, offset);
 	}
 
 	private CrawlJobResponseDTO toResponseDTO(CrawlJob job) {

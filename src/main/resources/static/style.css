@@ -1916,3 +1916,56 @@ body {
     color: var(--primary);
     transform: translateY(-1px);
 }
+
+/* Web Crawler Search */
+.crawler-search-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    background: var(--bg-card);
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.crawler-search-bar input {
+    flex: 1;
+    background: white;
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+
+.crawler-search-results {
+    max-height: 400px;
+    overflow-y: auto;
+    border-radius: var(--radius);
+}
+
+.snippet-box {
+    margin-top: 12px;
+    background: #f8f9fa;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+}
+
+.snippet-line {
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+
+.snippet-line:last-child {
+    border-bottom: none;
+}
+
+.results-summary {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+}

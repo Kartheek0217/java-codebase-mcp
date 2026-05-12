@@ -4,11 +4,13 @@ A high-performance Java-based middleware designed to index local code repositori
 
 ## 🛠 Technology Stack
 
-- **Core:** Spring Boot 4.0.6, JDK 25 (Loom Virtual Threads)
-- **Indexing:** Apache Lucene 10.1.0 (High-performance full-text search)
-- **Parsing:** JavaParser 3.26.2 (Deep AST symbol extraction)
+- **Core:** Spring Boot 4.0.6, JDK 25 (Loom Virtual Threads for high-concurrency I/O)
+- **Indexing:** Apache Lucene 10.1.0 (High-performance full-text and semantic search)
+- **Parsing:** JavaParser 3.26.2 (Deep AST symbol extraction and call hierarchy analysis)
+- **Web Automation:** Microsoft Playwright (Headless browser orchestration)
+- **Web Intelligence:** Jsoup (HTML parsing and DuckDuckGo search integration)
 - **Persistence:** H2 Database (Efficient local metadata storage)
-- **Git Integration:** JGit 6.8.0 (Repository status and operations)
+- **Git Integration:** JGit 6.8.0 (Native repository status and operations)
 - **Live Sync:** Directory Watcher 0.18.0 (Real-time filesystem event tracking)
 - **API Spec:** SpringDoc OpenAPI 2.8.5 (Swagger UI & Documentation)
 - **Caching:** Caffeine Cache (Optimized retrieval for frequent queries)
@@ -18,76 +20,74 @@ A high-performance Java-based middleware designed to index local code repositori
 ```text
 src/main/java/com/mcp/
 ├── Application.java        # Main Entry Point
-├── config/                 # Configurations (Lucene, JPA, Virtual Threads, OpenAPI)
-├── controller/             # REST API Surface (Agent, Indexing, Projects, Git)
-├── dto/                    # Data Transfer Objects for API contracts
-├── entity/                 # Persistence layer (Project, FileMetadata, Symbol)
-├── health/                 # Placeholder for future health indicators
-├── model/                  # Domain business models
+├── analysis/               # Lucene Analyzers (Code-aware tokenization)
+├── config/                 # Configurations (Browser, Lucene, Virtual Threads, OpenAPI)
+├── controller/             # REST API Surface (Agent, Browser, Codebase, Git, Web)
+├── dto/                    # Data Transfer Objects (Contracts for API & Browser)
+├── entity/                 # Persistence layer (Project, FileMetadata, Symbol, BrowserSession)
+├── model/                  # Domain business models (Statuses, Enums)
 ├── repository/             # Spring Data JPA repositories
-├── scheduler/              # Placeholder for future scheduled tasks
-└── service/                # Core logic (Indexing, Scanning, Git, Watcher)
+├── service/                # Core logic (Indexing, Git, Playwright, Task Management)
+├── util/                   # Common utilities (Compression, URL validation)
+└── web/                    # Web-specific components (Crawler, Search Providers)
 ```
 
 ## ✨ Key Features
 
-- **⚡ Blazing Fast Scanning:** Parallel initial scan utilizing Java Virtual Threads for maximum I/O throughput.
-- **🧠 Deep AST Analysis:** Symbol-aware indexing with JavaParser for precise code understanding (Classes, Methods, Fields).
-- **🔍 Semantic Search:** Lucene-powered full-text and symbol search with contextual awareness.
-- **🔄 Real-time Synchronization:** Active directory watching to keep the index in sync with filesystem changes instantly.
-- **🤖 AI Agent Optimized:** Dedicated endpoints designed for LLMs to explore architecture and gather relevant code context.
-- **🐙 Native Git Integration:** Full support for staging, committing, and inspecting repository state directly via API.
+- **⚡ Virtual Thread Powered:** Utilizing Java 21+ Virtual Threads for blazing-fast parallel scanning and web requests.
+- **🧠 Deep AST Analysis:** Precise symbol extraction with JavaParser, tracking Classes, Methods, Fields, and Call Hierarchies.
+- **🔍 Semantic Search:** Lucene-powered indexing with custom `CodeAnalyzer` for meaningful code search.
+- **🌐 Browser Orchestration:** Managed Playwright sessions for navigating, screenshotting, and extracting data from web pages.
+- **🔍 Web Search:** Built-in DuckDuckGo integration for real-time web research without API keys.
+- **🔄 Real-time Synchronization:** Active directory watching keeps the index in sync with filesystem changes instantly.
+- **🐙 Native Git Integration:** Full support for staging, committing, and inspecting repository state.
+- **📋 Task & Rule Engine:** Maintain project-specific rules and track implementation tasks for AI agents.
+
+## ⚙️ Configuration Specifications
+
+The application can be customized via `application.properties` or environment variables:
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `mcp.browser.headless` | `true` | Run Playwright in headless mode |
+| `mcp.browser.browser-type` | `chromium` | Browser engine (`chromium`, `firefox`, `webkit`) |
+| `mcp.browser.max-sessions` | `10` | Maximum concurrent browser sessions |
+| `mcp.web.crawler.max-pages` | `10` | Default limit for web crawl jobs |
+| `mcp.web.crawler.delay-ms` | `1000` | Polite delay between crawl requests |
+| `lucene.ram.buffer-size` | `64.0` | RAM buffer size in MB for Lucene indexing |
 
 ## 📡 API Documentation
 
-The server exposes a comprehensive REST API. Explore the interactive documentation via Swagger UI at `/swagger-ui.html`.
-
-### 📁 Projects Management
+### 📁 Projects & Indexing
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/projects` | List all registered projects |
-| POST | `/api/projects` | Register a new project and start indexing |
-| GET | `/api/projects/{id}` | Get details of a specific project |
-| DELETE | `/api/projects/{id}` | Remove a project and its associated indices |
+| POST | `/api/projects` | Register a project and start indexing |
+| GET | `/api/index/{id}/status` | Get indexing statistics |
+| POST | `/api/index/{id}/search-content` | Full-text content search |
 
-### 🔍 Indexing & Search
+### 🌐 Browser & Web
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/index/{projectId}/status` | Get indexing statistics (file & symbol counts) |
-| POST | `/api/index/{projectId}/trigger-scan` | Manually force a directory re-scan |
-| POST | `/api/index/{projectId}/reconcile` | Perform deep sync between DB and filesystem |
-| GET | `/api/index/{projectId}/search-content` | Full-text content search via Lucene |
-| GET | `/api/index/{projectId}/files/search` | Substring search for file paths |
+| POST | `/api/browser/sessions` | Create a new Playwright session |
+| POST | `/api/browser/{id}/navigate` | Navigate to a specific URL |
+| GET | `/api/browser/{id}/screenshot` | Capture current page screenshot |
+| GET | `/api/web/search` | Perform web search via DuckDuckGo |
+| POST | `/api/web/crawl` | Start a background web crawl job |
+| GET | `/api/web/crawl/search` | Search through locally crawled web content |
 
-### 🤖 AI Agent Endpoints
+### 🤖 Agent & Git
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/ai/session/start` | Initialize a new stateful AI session |
-| GET | `/api/ai/session/{id}` | Retrieve history and state of a specific session |
-| GET | `/api/ai/context` | Get full file content with attached AST symbols |
-| GET | `/api/ai/symbols` | Global symbol search (CLASS, METHOD, FIELD) |
-| GET | `/api/ai/suggest` | Semantic snippet suggestions based on query |
-| GET | `/api/ai/history` | View recent file/query access history |
-
-### 🐙 Git Operations
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/git-info` | Get global Git metadata for the server itself |
-| GET | `/api/git-info/projects/{id}/status` | Get detailed Git status for a project |
-| POST | `/api/git-info/projects/{id}/stage` | Stage files or patterns (git add) |
-| POST | `/api/git-info/projects/{id}/commit` | Create a new commit with staged changes |
-| POST | `/api/git-info/projects/{id}/discard` | Revert changes in specific files |
-
-### ⚙️ System Status
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Check server, database, and index health |
-| GET | `/status` | Get application version, uptime, and project counts |
+| POST | `/api/ai/session/start` | Initialize stateful AI session |
+| GET | `/api/ai/symbols` | Global symbol search |
+| GET | `/api/git-info/projects/{id}/status` | Get detailed Git status |
+| POST | `/api/git-info/projects/{id}/commit` | Create a new Git commit |
 
 ## 💻 Getting Started
 
 ### Prerequisites
-- **JDK 25** (Required for Virtual Threads support)
+- **JDK 25** (Required for Loom Virtual Threads support)
 - **Maven 3.9+**
 
 ### Quick Start
@@ -100,8 +100,7 @@ The server exposes a comprehensive REST API. Explore the interactive documentati
    mvn spring-boot:run
    ```
 3. **Explore the API:**
-   Navigate to `http://localhost:8080/swagger-ui.html` to view the OpenAPI documentation.
+   Navigate to `http://localhost:8080/swagger-ui.html` for full documentation.
 
 ---
-*Note: This middleware is optimized for local development environments, focusing on high-fidelity context for LLM-driven coding tasks.*
-
+*Note: This middleware is optimized for local development environments, focusing on providing high-fidelity context for LLM-driven coding tasks.*

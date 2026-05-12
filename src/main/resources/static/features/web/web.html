@@ -27,9 +27,18 @@
         <!-- Web Crawler -->
         <div id="web-tab-web-crawler" class="web-pane">
             <div class="crawler-header">
-                <h3>Active Crawl Jobs</h3>
+                <h3>Crawl Management</h3>
                 <button id="btn-new-crawl" class="btn-primary">+ New Crawl</button>
             </div>
+
+            <div class="crawler-search-bar">
+                <input type="text" id="crawl-search-input" placeholder="Search locally crawled content...">
+                <button id="btn-crawl-search" class="btn-secondary">Search Index</button>
+            </div>
+
+            <div id="crawler-search-results" class="crawler-search-results" style="margin-bottom: 20px;"></div>
+
+            <h4>Active & Historical Jobs</h4>
             <div id="crawler-jobs-list" class="crawler-list">
                 <div class="empty-msg">Loading crawl jobs...</div>
             </div>
@@ -54,7 +63,9 @@
                     </div>
                     <div class="form-group">
                         <label>Selectors (JSON format)</label>
-                        <textarea id="extract-selectors" placeholder='[{"name": "title", "query": "h1"}, {"name": "price", "query": ".price"}]' style="width: 100%; min-height: 100px; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: 'JetBrains Mono', monospace;"></textarea>
+                        <textarea id="extract-selectors"
+                            placeholder='[{"name": "title", "query": "h1"}, {"name": "price", "query": ".price"}]'
+                            style="width: 100%; min-height: 100px; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-family: 'JetBrains Mono', monospace;"></textarea>
                     </div>
                     <button id="btn-extract-data" class="btn-primary">Execute Extraction</button>
                     <div id="extract-data-output" class="result-box"></div>
@@ -84,7 +95,8 @@
         </div>
         <div class="form-group">
             <label>Include Patterns (regex, one per line)</label>
-            <textarea id="crawl-include" style="width: 100%; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; padding: 10px;"></textarea>
+            <textarea id="crawl-include"
+                style="width: 100%; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; padding: 10px;"></textarea>
         </div>
         <div class="modal-actions">
             <button id="btn-cancel-crawl" class="btn-secondary">Cancel</button>

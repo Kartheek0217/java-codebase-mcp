@@ -21,6 +21,10 @@ export async function initWeb() {
     document.getElementById('btn-new-crawl').addEventListener('click', () => document.getElementById('modal-crawl').classList.add('active'));
     document.getElementById('btn-cancel-crawl').addEventListener('click', () => document.getElementById('modal-crawl').classList.remove('active'));
     document.getElementById('btn-start-crawl-exec').addEventListener('click', startCrawl);
+    document.getElementById('btn-crawl-search').addEventListener('click', performCrawlSearch);
+    document.getElementById('crawl-search-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performCrawlSearch();
+    });
 
     // Extraction
     document.getElementById('btn-extract-meta').addEventListener('click', fetchMetadata);
@@ -115,6 +119,43 @@ async function startCrawl() {
         showNotification('Crawl job started', 'success');
         fetchCrawlJobs();
     } catch (e) { showNotification('Failed to start crawl', 'error'); }
+}
+
+async function performCrawlSearch() {
+    const query = document.getElementById('crawl-search-input').value;
+    if (!query || !state.selectedProjectId) return;
+
+    const container = document.getElementById('crawler-search-results');
+    container.innerHTML = '<div class=\"empty-msg\">Searching crawl index...</div>';
+
+    try {
+        const data = await API.web.crawlSearch(state.selectedProjectId, query);
+        if (!data || data.length === 0) {
+            container.innerHTML = '<div class=\"empty-msg\">No results found in crawled data.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class=\"results-summary\">Found ${data.length} matches in crawled pages</div>
+            <div class=\"results-container\">
+                ${data.map(item => `
+                    <div class=\"search-result-item\">
+                        <div class=\"search-result-header\">
+                            <span class=\"result-path\">${item.filePath}</span>
+                            <span class=\"badge\">Score: ${item.score.toFixed(2)}</span>
+                        </div>
+                        <h4>${item.title || 'Untitled Page'}</h4>
+                        <div class=\"snippet-box\">
+                            ${item.matches.map(m => `<div class=\"snippet-line\">${m.lineContent}</div>`).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (e) {
+        container.innerHTML = '<div class=\"empty-msg\">Crawl search failed.</div>';
+        console.error(e);
+    }
 }
 
 window.stopCrawl = async function (id) {
