@@ -8,12 +8,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.mcp.dto.browser.LocatorInfo;
-
 import org.springframework.stereotype.Service;
 
+import com.mcp.dto.browser.LocatorInfo;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.LoadState;
 
 @Service
 public class HeadlessBrowserService {
@@ -102,10 +102,19 @@ public class HeadlessBrowserService {
 
     @SuppressWarnings("unchecked")
     public List<LocatorInfo> extractLocators(String sessionId, String url) {
-        if (url != null && !url.isEmpty()) {
-            navigate(sessionId, url);
-        }
         Page page = getOrCreatePage(sessionId);
+        if (url != null && !url.isEmpty()) {
+            page.navigate(url);
+        }
+
+        // Wait for stability
+        try {
+            page.waitForLoadState(LoadState.LOAD);
+            page.waitForLoadState(LoadState.NETWORKIDLE);
+            page.waitForTimeout(60000); // stableTime as requested by user
+        } catch (Exception e) {
+            // Log or ignore timeout errors if some resources fail to load
+        }
 
         String script = """
                 () => {
@@ -125,35 +134,60 @@ public class HeadlessBrowserService {
                         return parts.length ? '/' + parts.join('/') : null;
                     };
 
-                    const elements = document.querySelectorAll('input, select, textarea, button, a.btn, a.btn-secondary, [id^="stat-"], [id^="btn-"]');
+                    const isVisible = (el) => {
+                        if (!el) return false;
+                        const style = window.getComputedStyle(el);
+                        return style.display !== 'none' &&
+                               style.visibility !== 'hidden' &&
+                               style.opacity !== '0' &&
+                               el.offsetWidth > 0 &&
+                               el.offsetHeight > 0;
+                    };
+
+                    const getAllElements = (root = document) => {
+                        let elements = Array.from(root.querySelectorAll('*'));
+                        const all = [...elements];
+                        for (const el of elements) {
+                            if (el.shadowRoot) {
+                                all.push(...getAllElements(el.shadowRoot));
+                            }
+                        }
+                        return all;
+                    };
+
+                    const interactiveSelectors = 'input, select, textarea, button, a, [role="button"], [role="link"], [data-test], [data-testid], [data-qa], [data-cy]';
+                    const allElements = getAllElements();
+                    const elements = allElements.filter(el => {
+                        try {
+                            return el.matches && el.matches(interactiveSelectors) && isVisible(el);
+                        } catch (e) {
+                            return false;
+                        }
+                    });
+
                     return Array.from(new Set(elements)).map(el => {
                         let label = '';
-                        
+
                         // 1. Try finding explicit label
                         if (el.id) {
                             const labelEl = document.querySelector(`label[for="${el.id}"]`);
                             if (labelEl) label = labelEl.innerText.trim();
                         }
-                        
+
                         // 2. Try closest label parent
                         if (!label) {
                             const parentLabel = el.closest('label');
                             if (parentLabel) label = parentLabel.innerText.trim();
                         }
-                        
+
                         // 3. Try aria-label, placeholder, or title
                         if (!label) label = el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || '';
-                        
-                        // 4. Try innerText or sibling text (for status/buttons)
+
+                        // 4. Try innerText or sibling text
                         if (!label) {
-                            if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'H3' || el.tagName === 'SPAN') {
-                                label = el.innerText.trim();
-                                if (!label && el.nextElementSibling) {
-                                    label = el.nextElementSibling.innerText.trim();
-                                } else if (!label && el.parentElement) {
-                                     const p = el.closest('.stat-info') || el.closest('.stat-card');
-                                     if (p) label = p.innerText.replace(el.innerText, '').trim();
-                                }
+                            label = el.innerText.trim();
+                            if (!label && el.nextElementSibling) {
+                                label = el.nextElementSibling.innerText.trim();
                             }
                         }
 
@@ -163,29 +197,72 @@ public class HeadlessBrowserService {
                              label = label.replace(/[\\u2700-\\u27BF]|\\u2B50|\\uD83C[\\uDF00-\\uDFFF]|\\uD83D[\\uDC00-\\uDE4F]/g, '').trim();
                         }
 
-                        // 5. Special case for tabs
-                        if (el.hasAttribute('data-tab')) {
-                            const tabName = el.getAttribute('data-tab');
-                            if (!label || label.length < 3) label = tabName;
-                            if (!label.toLowerCase().includes('tab')) label += ' Tab';
-                        }
-                        
-                        // 6. Cleanup label (capitalize first letters)
+                        // Cleanup label
                         if (label) {
                             label = label.replace(/^btn-/, '').replace(/^stat-/, '').replace(/-/g, ' ');
                             label = label.split(/\\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
                         }
 
-                        // Locator Strategy
+                        // Locator Strategy Priority
                         let locator = '';
-                        if (el.hasAttribute('data-tab')) {
-                            locator = `${el.tagName.toLowerCase()}[data-tab="${el.getAttribute('data-tab')}"]`;
-                        } else if (el.id) {
-                            locator = `#${el.id}`;
-                        } else if (el.name) {
-                            locator = `[name="${el.name}"]`;
-                        } else {
+
+                        // 1. data-* attributes (best for stability)
+                        const dataAttr = Array.from(el.attributes).find(a =>
+                            ['data-test', 'data-testid', 'data-qa', 'data-cy'].includes(a.name) ||
+                            (a.name.startsWith('data-') && !['data-v-'].some(p => a.name.startsWith(p)))
+                        );
+
+                        if (dataAttr) {
+                            locator = `[${dataAttr.name}="${dataAttr.value}"]`;
+                        }
+
+                        // 2. Role + Name (accessible roles / ARIA)
+                        if (!locator) {
+                            const role = el.getAttribute('role') ||
+                                        (el.tagName === 'BUTTON' ? 'button' :
+                                         el.tagName === 'A' ? 'link' :
+                                         el.tagName === 'INPUT' ? (['checkbox', 'radio'].includes(el.type) ? el.type : 'textbox') :
+                                         el.tagName === 'SELECT' ? 'combobox' :
+                                         el.tagName === 'TEXTAREA' ? 'textbox' : '');
+
+                            const ariaName = (el.getAttribute('aria-label') || el.innerText.trim() || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim();
+
+                            if (role && ariaName && ariaName.length > 0 && ariaName.length < 60) {
+                                locator = `role=${role}[name="${ariaName.replace(/"/g, '\\"')}"]`;
+                            }
+                        }
+
+                        // 3. Unique Text (for buttons and links)
+                        if (!locator && (el.tagName === 'BUTTON' || el.tagName === 'A')) {
+                            const text = el.innerText.trim().replace(/\\s+/g, ' ');
+                            if (text && text.length > 0 && text.length < 40) {
+                                locator = `${el.tagName.toLowerCase()}:has-text("${text.replace(/"/g, '\\"')}")`;
+                            }
+                        }
+
+                        // 4. ID or Name (if stable looking)
+                        if (!locator) {
+                            if (el.id && !/\\d{4,}/.test(el.id) && !el.id.includes('v-')) { // avoid IDs with 4+ digits or vue-like IDs
+                                locator = `#${el.id}`;
+                            } else if (el.name) {
+                                locator = `[name="${el.name}"]`;
+                            }
+                        }
+
+                        // 5. CSS Selectors (Fallback)
+                        if (!locator) {
                             locator = el.tagName.toLowerCase();
+                            if (el.className && typeof el.className === 'string') {
+                                const classes = el.className.split(/\\s+/).filter(c => c && !c.includes(':') && !/\\d/.test(c));
+                                if (classes.length > 0) {
+                                    locator += `.${classes[0]}`;
+                                }
+                            }
+                        }
+
+                        // 6. XPath (Last Resort)
+                        if (!locator) {
+                            locator = getXPath(el);
                         }
 
                         // Section Detection

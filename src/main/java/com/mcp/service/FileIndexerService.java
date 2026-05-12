@@ -66,16 +66,18 @@ public class FileIndexerService {
 	private final Cache<String, List<Symbol>> symbolCache;
 	private final SkillService skillService;
 	private final SymbolCallRepository symbolCallRepository;
+	private final SemanticSearchService semanticSearchService;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
 			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
-			SymbolCallRepository symbolCallRepository) {
+			SymbolCallRepository symbolCallRepository, SemanticSearchService semanticSearchService) {
 		this.symbolRepository = symbolRepository;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.luceneIndexService = luceneIndexService;
 		this.symbolCache = symbolCache;
 		this.skillService = skillService;
 		this.symbolCallRepository = symbolCallRepository;
+		this.semanticSearchService = semanticSearchService;
 	}
 
 	private JavaParser createJavaParser() {
@@ -155,6 +157,11 @@ public class FileIndexerService {
 			}
 			symbolRepository.saveAll(symbols);
 			symbolCache.put(projectId + ":" + filePath, symbols);
+
+			// Generate vectors for each symbol
+			for (Symbol s : symbols) {
+				semanticSearchService.upsertSymbolVector(s);
+			}
 
 			// Save calls after symbols are persisted to resolve caller IDs
 			if (calls != null && !calls.isEmpty()) {
