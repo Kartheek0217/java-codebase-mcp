@@ -20,4 +20,4 @@ buildNumber.properties
 err.txt
 out.txt
 .settings/
-/playwright-projects/\
+/playwright-projects/
