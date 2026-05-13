@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "mcp.browser")
 public class BrowserProperties {
 
-    private boolean headless = true;
+    private boolean headless = false;
     private String browserType = "chromium";
     private int viewportWidth = 1280;
     private int viewportHeight = 720;
