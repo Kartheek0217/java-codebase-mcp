@@ -1917,6 +1917,7 @@ body {
     color: var(--primary);
     transform: translateY(-1px);
 }
+
 /* Extraction Feature */
 .result-actions {
     display: flex;
@@ -1973,6 +1974,87 @@ body {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Markdown Rendering */
+.markdown-body {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--text-main);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+
+.markdown-body h1 {
+    font-size: 1.5rem;
+}
+
+.markdown-body h2 {
+    font-size: 1.3rem;
+}
+
+.markdown-body h3 {
+    font-size: 1.1rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 20px;
+    margin-bottom: 16px;
+}
+
+.markdown-body code {
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.markdown-body pre {
+    background: #f6f8fa;
+    padding: 16px;
+    border-radius: 8px;
+    overflow: auto;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+}
+
+.markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.9rem;
+}
+
+.markdown-body blockquote {
+    border-left: 4px solid var(--primary);
+    padding-left: 16px;
+    color: var(--text-muted);
+    margin: 0 0 16px 0;
+}
+
+/* Mermaid Customization */
+.mermaid {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: center;
 }

@@ -5,6 +5,7 @@ import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.SkillRepository;
+import com.mcp.repository.SymbolCallRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -27,6 +28,8 @@ public class ProjectService {
     private final SymbolRepository symbolRepository;
     private final FileMetadataRepository fileMetadataRepository;
     private final SkillRepository skillRepository;
+    private final SymbolCallRepository symbolCallRepository;
+    private final SemanticSearchService semanticSearchService;
     private final LuceneIndexService luceneIndexService;
 
     public ProjectService(ProjectRepository projectRepository,
@@ -35,6 +38,8 @@ public class ProjectService {
             SymbolRepository symbolRepository,
             FileMetadataRepository fileMetadataRepository,
             SkillRepository skillRepository,
+            SymbolCallRepository symbolCallRepository,
+            SemanticSearchService semanticSearchService,
             LuceneIndexService luceneIndexService) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
@@ -42,6 +47,8 @@ public class ProjectService {
         this.symbolRepository = symbolRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.skillRepository = skillRepository;
+        this.symbolCallRepository = symbolCallRepository;
+        this.semanticSearchService = semanticSearchService;
         this.luceneIndexService = luceneIndexService;
     }
 
@@ -97,23 +104,28 @@ public class ProjectService {
         // 1. Stop watchers
         watcherService.stopWatching(id);
 
-        // 2. Clean up associated data in DB
+        // 2. Clean up associated data in DB (Dependent records first)
+        semanticSearchService.deleteVectorsByProject(id);
+        symbolCallRepository.deleteByProjectId(id);
         symbolRepository.deleteByProjectId(id);
         fileMetadataRepository.deleteByProjectId(id);
-        // We keep skills and crawl data unless specifically asked,
-        // but for code analysis we need symbols and file metadata gone.
 
         // 3. Delete Lucene indices
         luceneIndexService.deleteIndex(id);
 
-        // 4. Trigger new scan
-        try {
-            watcherService.startWatching(project);
-            fileScannerService.scanProject(id);
-        } catch (IOException e) {
-            logger.error("Failed to restart watcher/scan during re-indexing for project {}", id, e);
-            throw new RuntimeException("Re-indexing failed", e);
-        }
+        // 4. Register synchronization to start scan after commit
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                logger.info("Cleanup committed for project {}. Starting re-scan...", id);
+                try {
+                    watcherService.startWatching(project);
+                    fileScannerService.scanProject(id);
+                } catch (IOException e) {
+                    logger.error("Failed to restart watcher/scan during re-indexing for project {}", id, e);
+                }
+            }
+        });
     }
 
     @Transactional
@@ -123,7 +135,9 @@ public class ProjectService {
         // 1. Stop watchers
         watcherService.stopWatching(id);
 
-        // 2. Clean up associated data in DB
+        // 2. Clean up associated data in DB (Dependent records first)
+        semanticSearchService.deleteVectorsByProject(id);
+        symbolCallRepository.deleteByProjectId(id);
         symbolRepository.deleteByProjectId(id);
         fileMetadataRepository.deleteByProjectId(id);
         skillRepository.deleteByProjectId(id);

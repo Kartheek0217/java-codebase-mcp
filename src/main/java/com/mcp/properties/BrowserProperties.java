@@ -1,4 +1,4 @@
-package com.mcp.config;
+package com.mcp.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -9,9 +9,9 @@ public class BrowserProperties {
 
     private boolean headless = true;
     private String browserType = "chromium";
-    private int timeoutMs = 30000;
     private int viewportWidth = 1280;
     private int viewportHeight = 720;
+    private int timeoutMs = 120000;
     private String screenshotDir = "data/screenshots";
     private int maxSessions = 10;
 

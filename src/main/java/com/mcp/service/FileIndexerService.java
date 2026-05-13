@@ -67,6 +67,7 @@ public class FileIndexerService {
 	private final SkillService skillService;
 	private final SymbolCallRepository symbolCallRepository;
 	private final SemanticSearchService semanticSearchService;
+	private FileIndexerService self;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
 			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
@@ -78,6 +79,11 @@ public class FileIndexerService {
 		this.skillService = skillService;
 		this.symbolCallRepository = symbolCallRepository;
 		this.semanticSearchService = semanticSearchService;
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public void setSelf(@org.springframework.context.annotation.Lazy FileIndexerService self) {
+		this.self = self;
 	}
 
 	private JavaParser createJavaParser() {
@@ -129,9 +135,8 @@ public class FileIndexerService {
 				symbols = extractGeneralSymbols(content, filePath);
 			}
 
-			// Update metadata and symbols in a single transaction (Reuse existing metadata
-			// object)
-			saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
+			// Update metadata and symbols in a single transaction (Through self-proxy to enable @Transactional)
+			self.saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
 
 			// Index content in Lucene (Outside DB transaction)
 			luceneIndexService.indexFileContent(projectId, filePath, content);
@@ -142,7 +147,7 @@ public class FileIndexerService {
 	}
 
 	@Transactional
-	protected void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
+	public void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
 			List<Symbol> symbols, List<CallInfo> calls, String dependencies, FileMetadata existingMetadata) {
 		// Clear existing symbols and their calls from this file
 		semanticSearchService.deleteVectorsByFile(projectId, filePath);

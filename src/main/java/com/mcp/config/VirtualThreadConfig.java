@@ -1,8 +1,8 @@
 package com.mcp.config;
 
-import java.util.concurrent.Executors;
-import java.util.List;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.Executors;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
@@ -14,31 +14,34 @@ import org.springframework.core.task.support.TaskExecutorAdapter;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.mcp.entity.Symbol;
+import com.mcp.properties.CacheProperties;
+import com.mcp.properties.IndexingProperties;
 
 @Configuration
 public class VirtualThreadConfig {
 
 	@Bean
-	public AsyncTaskExecutor applicationTaskExecutor() {
+	public AsyncTaskExecutor applicationTaskExecutor(IndexingProperties properties) {
 		return new TaskExecutorAdapter(
-				Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("mcp-worker-", 0).factory()));
+				Executors.newFixedThreadPool(properties.getWorkerConcurrency(),
+						Thread.ofVirtual().name("mcp-worker-", 0).factory()));
 	}
 
 	@Bean
-	public CacheManager cacheManager() {
+	public CacheManager cacheManager(CacheProperties properties) {
 		CaffeineCacheManager cacheManager = new CaffeineCacheManager("topology", "symbols");
 		cacheManager.setCaffeine(Caffeine.newBuilder()
-				.maximumSize(1000)
-				.expireAfterAccess(Duration.ofMinutes(30))
+				.maximumSize(properties.getTopologyMaxSize())
+				.expireAfterAccess(Duration.ofMinutes(properties.getTopologyExpireMinutes()))
 				.recordStats());
 		return cacheManager;
 	}
 
 	@Bean
-	public Cache<String, List<Symbol>> symbolCache() {
+	public Cache<String, List<Symbol>> symbolCache(CacheProperties properties) {
 		return Caffeine.newBuilder()
-				.maximumSize(50_000)
-				.expireAfterAccess(Duration.ofMinutes(60))
+				.maximumSize(properties.getSymbolCacheMaxSize())
+				.expireAfterAccess(Duration.ofMinutes(properties.getSymbolCacheExpireMinutes()))
 				.recordStats()
 				.build();
 	}

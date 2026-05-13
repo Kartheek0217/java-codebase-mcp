@@ -48,6 +48,11 @@ public class SemanticSearchService {
         symbolVectorRepository.deleteBySymbolProjectIdAndSymbolFilePath(projectId, filePath);
     }
 
+    @Transactional
+    public void deleteVectorsByProject(Long projectId) {
+        symbolVectorRepository.deleteBySymbolProjectId(projectId);
+    }
+
     /**
      * Generates a deterministic mock vector based on the input string.
      * In a real implementation, this would call an LLM or embedding model.

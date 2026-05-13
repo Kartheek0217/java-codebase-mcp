@@ -8,8 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 
 import org.eclipse.jgit.ignore.IgnoreNode;
@@ -26,14 +25,16 @@ public class FileScannerService {
 	private static final Logger logger = LoggerFactory.getLogger(FileScannerService.class);
 	private final ProjectRepository projectRepository;
 	private final FileIndexerService fileIndexerService;
-	private final ExecutorService scanExecutor = Executors.newVirtualThreadPerTaskExecutor();
+	private final Executor applicationTaskExecutor;
 
 	private static final List<String> INDEXABLE_EXTENSIONS = List.of(".java", ".ts", ".tsx", ".vue", ".js", ".jsx",
 			".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql", ".pdf");
 
-	public FileScannerService(ProjectRepository projectRepository, FileIndexerService fileIndexerService) {
+	public FileScannerService(ProjectRepository projectRepository, FileIndexerService fileIndexerService,
+			Executor applicationTaskExecutor) {
 		this.projectRepository = projectRepository;
 		this.fileIndexerService = fileIndexerService;
+		this.applicationTaskExecutor = applicationTaskExecutor;
 	}
 
 	public void scanProject(Long projectId) throws IOException {
@@ -83,7 +84,7 @@ public class FileScannerService {
 
 					return isIndexable(path);
 				}).map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path),
-						scanExecutor)).toList();
+						applicationTaskExecutor)).toList();
 
 				logger.info("Submitted {} indexing tasks for project {}", futures.size(), project.getName());
 				CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();

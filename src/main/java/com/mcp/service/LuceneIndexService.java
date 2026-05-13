@@ -36,7 +36,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.mcp.analysis.CodeAnalyzer;
-import com.mcp.config.LuceneProperties;
+import com.mcp.properties.LuceneProperties;
 import com.mcp.dto.ContentSearchResult;
 
 import jakarta.annotation.PreDestroy;

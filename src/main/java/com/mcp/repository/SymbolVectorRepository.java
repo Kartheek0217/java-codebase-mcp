@@ -18,4 +18,6 @@ public interface SymbolVectorRepository extends JpaRepository<SymbolVector, Long
     List<SymbolVector> findNearestNeighborsL2(@Param("vector") byte[] vector, @Param("k") int k);
 
     void deleteBySymbolProjectIdAndSymbolFilePath(Long projectId, String filePath);
+
+    void deleteBySymbolProjectId(Long projectId);
 }

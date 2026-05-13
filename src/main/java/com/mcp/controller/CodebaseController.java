@@ -42,6 +42,7 @@ import com.mcp.util.CodeUtils;
 import com.mcp.service.SemanticSearchService;
 import java.util.Set;
 import com.mcp.service.CodeSummarizerService;
+import com.mcp.service.EndpointAnalysisService;
 import com.mcp.util.LlmResponseOptimizer;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -65,6 +66,7 @@ public class CodebaseController {
 	private final GitInfoService gitInfoService;
 	private final SemanticSearchService semanticSearchService;
 	private final CodeSummarizerService codeSummarizerService;
+	private final EndpointAnalysisService endpointAnalysisService;
 
 	public CodebaseController(FileIndexerService fileIndexerService, FileMetadataRepository fileMetadataRepository,
 			SymbolRepository symbolRepository, LuceneIndexService luceneIndexService,
@@ -74,7 +76,8 @@ public class CodebaseController {
 			com.mcp.repository.SymbolCallRepository symbolCallRepository,
 			GitInfoService gitInfoService,
 			SemanticSearchService semanticSearchService,
-			CodeSummarizerService codeSummarizerService) {
+			CodeSummarizerService codeSummarizerService,
+			EndpointAnalysisService endpointAnalysisService) {
 		this.fileIndexerService = fileIndexerService;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.symbolRepository = symbolRepository;
@@ -88,6 +91,7 @@ public class CodebaseController {
 		this.gitInfoService = gitInfoService;
 		this.semanticSearchService = semanticSearchService;
 		this.codeSummarizerService = codeSummarizerService;
+		this.endpointAnalysisService = endpointAnalysisService;
 	}
 
 	@GetMapping("/{projectId}/file")
@@ -128,7 +132,7 @@ public class CodebaseController {
 			return ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
 		}
 
-		ContextDTO contextDTO = new ContextDTO(filePath, finalContent, summary, format, 
+		ContextDTO contextDTO = new ContextDTO(filePath, finalContent, summary, format,
 				symbols.stream().map(this::toSymbolDTO).toList(), toMetadataDTO(metadata), null, false, false);
 
 		if ("markdown".equalsIgnoreCase(format)) {
@@ -258,6 +262,13 @@ public class CodebaseController {
 
 	public Map<String, Object> getTopology(@PathVariable Long projectId) {
 		return topologyService.getProjectTopology(projectId);
+	}
+
+	@GetMapping("/{projectId}/analyze-endpoint")
+	@Operation(summary = "analyze-endpoint", description = "Analyzes a controller endpoint by tracing implementation from controller to entity level.")
+	public com.mcp.entity.Skill analyzeEndpoint(@PathVariable Long projectId, @RequestParam String controllerName,
+			@RequestParam String methodName) throws IOException {
+		return endpointAnalysisService.analyzeEndpoint(projectId, controllerName, methodName);
 	}
 
 	@PostMapping("/{projectId}/scan")

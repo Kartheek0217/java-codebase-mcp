@@ -12,3 +12,24 @@
         <div class="empty-msg">No skills learned yet for this project.</div>
     </div>
 </div>
+
+<!-- Skill Detail Modal -->
+<div id="modal-skill-detail" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="skill-detail-title">Skill Title</h3>
+            <button class="btn-icon"
+                onclick="document.getElementById('modal-skill-detail').classList.remove('active')">✖</button>
+        </div>
+        <div class="modal-body" style="padding: 24px;">
+            <div id="skill-detail-content" class="markdown-body">
+                <!-- Content will be rendered here -->
+            </div>
+        </div>
+        <div class="modal-footer"
+            style="padding: 16px 32px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+            <button class="btn-secondary"
+                onclick="document.getElementById('modal-skill-detail').classList.remove('active')">Close</button>
+        </div>
+    </div>
+</div>
