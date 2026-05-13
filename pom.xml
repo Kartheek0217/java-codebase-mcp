@@ -162,7 +162,7 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
-					<jvmArguments>--add-modules=jdk.incubator.vector</jvmArguments>
+					<jvmArguments>--add-modules=jdk.incubator.vector -Xms512m -Xmx2g -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxGCPauseMillis=200 -Dspring.application.admin.enabled=true -Dspring.boot.project.name=java-codebase-mcp</jvmArguments>
 				</configuration>
 			</plugin>
 
