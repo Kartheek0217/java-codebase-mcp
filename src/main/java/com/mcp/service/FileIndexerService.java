@@ -145,6 +145,7 @@ public class FileIndexerService {
 	protected void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
 			List<Symbol> symbols, List<CallInfo> calls, String dependencies, FileMetadata existingMetadata) {
 		// Clear existing symbols and their calls from this file
+		semanticSearchService.deleteVectorsByFile(projectId, filePath);
 		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
 		symbolCallRepository.deleteByProjectIdAndCallerFilePath(projectId, filePath);
 		symbolCache.invalidate(projectId + ":" + filePath);
@@ -211,6 +212,7 @@ public class FileIndexerService {
 	public void deleteFileData(Long projectId, Path path) {
 		String filePath = path.toAbsolutePath().toString();
 		logger.info("Deleting data for file: {} in project {}", filePath, projectId);
+		semanticSearchService.deleteVectorsByFile(projectId, filePath);
 		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
 		fileMetadataRepository.deleteById(new FileMetadataId(projectId, filePath));
 		luceneIndexService.deleteFileContent(projectId, filePath);

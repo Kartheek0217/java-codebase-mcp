@@ -16,4 +16,6 @@ public interface SymbolVectorRepository extends JpaRepository<SymbolVector, Long
 
     @Query(value = "SELECT * FROM symbol_vectors v ORDER BY l2_similarity(v.vector, :vector) ASC LIMIT :k", nativeQuery = true)
     List<SymbolVector> findNearestNeighborsL2(@Param("vector") byte[] vector, @Param("k") int k);
+
+    void deleteBySymbolProjectIdAndSymbolFilePath(Long projectId, String filePath);
 }

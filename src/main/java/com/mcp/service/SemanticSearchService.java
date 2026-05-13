@@ -43,6 +43,11 @@ public class SemanticSearchService {
         return symbolVectorRepository.findNearestNeighbors(vectorBytes, k);
     }
 
+    @Transactional
+    public void deleteVectorsByFile(Long projectId, String filePath) {
+        symbolVectorRepository.deleteBySymbolProjectIdAndSymbolFilePath(projectId, filePath);
+    }
+
     /**
      * Generates a deterministic mock vector based on the input string.
      * In a real implementation, this would call an LLM or embedding model.

@@ -41,6 +41,8 @@ import com.mcp.service.TopologyService;
 import com.mcp.util.CodeUtils;
 import com.mcp.service.SemanticSearchService;
 import java.util.Set;
+import com.mcp.service.CodeSummarizerService;
+import com.mcp.util.LlmResponseOptimizer;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -62,6 +64,7 @@ public class CodebaseController {
 	private final com.mcp.repository.SymbolCallRepository symbolCallRepository;
 	private final GitInfoService gitInfoService;
 	private final SemanticSearchService semanticSearchService;
+	private final CodeSummarizerService codeSummarizerService;
 
 	public CodebaseController(FileIndexerService fileIndexerService, FileMetadataRepository fileMetadataRepository,
 			SymbolRepository symbolRepository, LuceneIndexService luceneIndexService,
@@ -70,7 +73,8 @@ public class CodebaseController {
 			ReconciliationService reconciliationService,
 			com.mcp.repository.SymbolCallRepository symbolCallRepository,
 			GitInfoService gitInfoService,
-			SemanticSearchService semanticSearchService) {
+			SemanticSearchService semanticSearchService,
+			CodeSummarizerService codeSummarizerService) {
 		this.fileIndexerService = fileIndexerService;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.symbolRepository = symbolRepository;
@@ -83,6 +87,7 @@ public class CodebaseController {
 		this.symbolCallRepository = symbolCallRepository;
 		this.gitInfoService = gitInfoService;
 		this.semanticSearchService = semanticSearchService;
+		this.codeSummarizerService = codeSummarizerService;
 	}
 
 	@GetMapping("/{projectId}/file")
@@ -106,14 +111,29 @@ public class CodebaseController {
 				.orElse(null);
 		List<Symbol> symbols = fileIndexerService.getSymbols(projectId, fullPath.toString());
 		String content = Files.readString(fullPath);
+		String finalContent = content;
+		String summary = null;
+
+		if ("structure".equalsIgnoreCase(format)) {
+			finalContent = codeSummarizerService.extractStructure(content);
+		} else if ("summary".equalsIgnoreCase(format)) {
+			summary = codeSummarizerService.createIntelligentSummary(content);
+			finalContent = null; // No content in summary mode
+		} else {
+			finalContent = CodeUtils.addLineNumbers(content);
+		}
 
 		String currentChecksum = metadata != null ? metadata.getChecksum() : null;
 		if (ifNoneMatch != null && currentChecksum != null && ifNoneMatch.equals("\"" + currentChecksum + "\"")) {
 			return ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
 		}
 
-		ContextDTO contextDTO = new ContextDTO(filePath, CodeUtils.addLineNumbers(content),
+		ContextDTO contextDTO = new ContextDTO(filePath, finalContent, summary, format, 
 				symbols.stream().map(this::toSymbolDTO).toList(), toMetadataDTO(metadata), null, false, false);
+
+		if ("markdown".equalsIgnoreCase(format)) {
+			return ResponseEntity.ok().eTag(currentChecksum).body(LlmResponseOptimizer.toMarkdown(contextDTO));
+		}
 
 		if (sessionId != null) {
 			contextMemoryService.recordAccess(sessionId, filePath, currentChecksum);
@@ -146,7 +166,7 @@ public class CodebaseController {
 		Project project = projectRepository.findById(projectId).orElseThrow();
 		Path fullPath = Paths.get(project.getRootPath()).resolve(filePath);
 		String content = Files.readString(fullPath);
-		String summary = content.lines().limit(20).reduce("", (a, b) -> a + b + "\n");
+		String summary = codeSummarizerService.createIntelligentSummary(content);
 		List<Symbol> symbols = fileIndexerService.getSymbols(projectId, fullPath.toString());
 
 		Map<String, Object> result = new java.util.HashMap<>();
