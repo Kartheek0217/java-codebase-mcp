@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +84,9 @@ public class FileIndexerService {
 	}
 
 	private static final ParserConfiguration JAVA_PARSER_CONFIG = new ParserConfiguration()
-			.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+			// Fix I: BLEEDING_EDGE handles JDK 25 syntax (unnamed vars, pattern matching
+			// extensions) that JAVA_21 would silently fail to parse
+			.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
 
 	private JavaParser createJavaParser() {
 		return new JavaParser(JAVA_PARSER_CONFIG);
@@ -309,7 +312,14 @@ public class FileIndexerService {
 
 				@Override
 				public void visit(ClassOrInterfaceDeclaration n, Object arg) {
-					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					Symbol s = createSymbol(n.getNameAsString(), SymbolType.CLASS);
+					// Fix E+F: capture line number and annotations for class symbols
+					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
+					s.setModifiers(n.getModifiers().stream()
+							.map(m -> m.getKeyword().asString()).collect(Collectors.joining(" ")));
+					s.setAnnotations(n.getAnnotations().stream()
+							.map(a -> "@" + a.getNameAsString()).collect(Collectors.joining(" ")));
+					symbols.add(s);
 					super.visit(n, arg);
 				}
 
@@ -317,26 +327,47 @@ public class FileIndexerService {
 				public void visit(MethodDeclaration n, Object arg) {
 					String oldMethod = currentMethod;
 					currentMethod = n.getNameAsString();
-					symbols.add(createSymbol(currentMethod, SymbolType.METHOD));
+					Symbol s = createSymbol(currentMethod, SymbolType.METHOD);
+					// Fix E+F: capture full method metadata for AI navigation
+					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
+					try {
+						s.setSignature(n.getDeclarationAsString(false, false, true));
+					} catch (Exception ignored) { /* defensive: malformed AST nodes */ }
+					s.setReturnType(n.getTypeAsString());
+					s.setModifiers(n.getModifiers().stream()
+							.map(m -> m.getKeyword().asString()).collect(Collectors.joining(" ")));
+					s.setAnnotations(n.getAnnotations().stream()
+							.map(a -> "@" + a.getNameAsString()).collect(Collectors.joining(" ")));
+					symbols.add(s);
 					super.visit(n, arg);
 					currentMethod = oldMethod;
 				}
 
 				@Override
 				public void visit(RecordDeclaration n, Object arg) {
-					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					Symbol s = createSymbol(n.getNameAsString(), SymbolType.CLASS);
+					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
+					s.setAnnotations(n.getAnnotations().stream()
+							.map(a -> "@" + a.getNameAsString()).collect(Collectors.joining(" ")));
+					symbols.add(s);
 					super.visit(n, arg);
 				}
 
 				@Override
 				public void visit(EnumDeclaration n, Object arg) {
-					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					Symbol s = createSymbol(n.getNameAsString(), SymbolType.CLASS);
+					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
+					s.setAnnotations(n.getAnnotations().stream()
+							.map(a -> "@" + a.getNameAsString()).collect(Collectors.joining(" ")));
+					symbols.add(s);
 					super.visit(n, arg);
 				}
 
 				@Override
 				public void visit(AnnotationDeclaration n, Object arg) {
-					symbols.add(createSymbol(n.getNameAsString(), SymbolType.CLASS));
+					Symbol s = createSymbol(n.getNameAsString(), SymbolType.CLASS);
+					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
+					symbols.add(s);
 					super.visit(n, arg);
 				}
 
@@ -350,7 +381,18 @@ public class FileIndexerService {
 
 				@Override
 				public void visit(FieldDeclaration n, Object arg) {
-					n.getVariables().forEach(v -> symbols.add(createSymbol(v.getNameAsString(), SymbolType.FIELD)));
+					String mods = n.getModifiers().stream()
+							.map(m -> m.getKeyword().asString()).collect(Collectors.joining(" "));
+					String annots = n.getAnnotations().stream()
+							.map(a -> "@" + a.getNameAsString()).collect(Collectors.joining(" "));
+					n.getVariables().forEach(v -> {
+						Symbol s = createSymbol(v.getNameAsString(), SymbolType.FIELD);
+						n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
+						s.setReturnType(n.getElementType().asString());
+						s.setModifiers(mods);
+						s.setAnnotations(annots);
+						symbols.add(s);
+					});
 					super.visit(n, arg);
 				}
 			}, null);

@@ -6,9 +6,9 @@
                 "-y",
                 "@ivotoby/openapi-mcp-server",
                 "--openapi-spec",
-                "http://localhost:8080/v3/api-docs",
+                "http://localhost:9696/v3/api-docs",
                 "--api-base-url",
-                "http://localhost:8080"
+                "http://localhost:9696"
             ]
         }
     }

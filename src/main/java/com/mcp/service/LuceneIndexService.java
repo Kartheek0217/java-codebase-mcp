@@ -89,6 +89,11 @@ public class LuceneIndexService {
 				if (writer.hasUncommittedChanges()) {
 					logger.debug("Performing scheduled commit for project {}", projectId);
 					writer.commit();
+					// Fix H: refresh SearcherManager so searches see the newly-committed data
+					SearcherManager sm = searcherManagers.get(projectId);
+					if (sm != null) {
+						sm.maybeRefresh();
+					}
 				}
 			} catch (IOException e) {
 				logger.error("Error during scheduled commit for project {}", projectId, e);

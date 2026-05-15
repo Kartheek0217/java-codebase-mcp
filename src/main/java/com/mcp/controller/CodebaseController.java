@@ -4,8 +4,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
+import org.springframework.data.domain.PageRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -94,6 +101,9 @@ public class CodebaseController {
 		this.endpointAnalysisService = endpointAnalysisService;
 	}
 
+	// Fix J: VT-backed executor for parallel batch context fetches
+	private static final Executor BATCH_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+
 	@GetMapping("/{projectId}/file")
 	@Operation(summary = "get-file-context", description = "Retrieves the content of a file along with its symbols and metadata.")
 	public ResponseEntity<Object> getFileContext(@PathVariable Long projectId, @RequestParam String filePath,
@@ -111,6 +121,12 @@ public class CodebaseController {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);
 		}
 
+		// Fix A: auto-downgrade to structure for large files (>200 KB) to prevent massive token payloads
+		long fileBytes = Files.size(fullPath);
+		if (fileBytes > 200_000 && "full".equalsIgnoreCase(format)) {
+			format = "structure";
+		}
+
 		FileMetadata metadata = fileMetadataRepository.findById(new FileMetadataId(projectId, fullPath.toString()))
 				.orElse(null);
 		List<Symbol> symbols = fileIndexerService.getSymbols(projectId, fullPath.toString());
@@ -119,7 +135,9 @@ public class CodebaseController {
 		String summary = null;
 
 		if ("structure".equalsIgnoreCase(format)) {
-			finalContent = codeSummarizerService.extractStructure(content);
+			// Fix B: strip Java import blocks — high noise, zero AI signal
+			String structureContent = codeSummarizerService.extractStructure(content);
+			finalContent = stripJavaImports(structureContent);
 		} else if ("summary".equalsIgnoreCase(format)) {
 			summary = codeSummarizerService.createIntelligentSummary(content);
 			finalContent = null; // No content in summary mode
@@ -148,17 +166,30 @@ public class CodebaseController {
 
 	@PostMapping("/{projectId}/context/batch")
 	@Operation(summary = "get-batch-context", description = "Get batch file context")
-	public Map<String, ContextDTO> getBatchContext(@PathVariable Long projectId, @RequestBody List<String> filePaths) {
-		Map<String, ContextDTO> result = new java.util.HashMap<>();
-		for (String filePath : filePaths) {
-			try {
-				ResponseEntity<Object> response = getFileContext(projectId, filePath, null, "compact", null);
-				if (response.getStatusCode() == HttpStatus.OK) {
-					result.put(filePath, (ContextDTO) response.getBody());
-				}
-			} catch (Exception e) {
-				// Skip failed files
+	public Map<String, Object> getBatchContext(@PathVariable Long projectId, @RequestBody List<String> filePaths) {
+		// Fix J: fetch all files in parallel using Virtual Threads; abort whole batch on first error
+		List<CompletableFuture<Map.Entry<String, Object>>> futures = filePaths.stream()
+				.map(fp -> CompletableFuture.supplyAsync(() -> {
+					try {
+						ResponseEntity<Object> response = getFileContext(projectId, fp, null, "full", null);
+						return Map.entry(fp, response.getBody() != null ? response.getBody() : "");
+					} catch (IOException e) {
+						throw new CompletionException("Failed to read file: " + fp, e);
+					}
+				}, BATCH_EXECUTOR))
+				.toList();
+
+		Map<String, Object> result = new LinkedHashMap<>();
+		try {
+			for (CompletableFuture<Map.Entry<String, Object>> f : futures) {
+				Map.Entry<String, Object> entry = f.join();
+				result.put(entry.getKey(), entry.getValue());
 			}
+		} catch (CompletionException ex) {
+			// Abort: cancel all remaining futures and surface the error
+			futures.forEach(f -> f.cancel(true));
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+					"Batch aborted: " + ex.getCause().getMessage());
 		}
 		return result;
 	}
@@ -206,19 +237,24 @@ public class CodebaseController {
 	@Operation(summary = "search-symbols", description = "Searches for classes, methods, or fields by name.")
 	public List<SymbolDTO> searchSymbols(@PathVariable Long projectId, @RequestParam String query,
 			@RequestParam(required = false) String type, @RequestParam(defaultValue = "50") int limit) {
+		// Fix L: push limit to DB via Pageable — no more loading all rows then stream-limiting
+		PageRequest pageRequest = PageRequest.of(0, limit);
+		Project project = projectRepository.findById(projectId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
+		String rootPath = project.getRootPath();
 		List<Symbol> symbols;
 		if (type != null && !type.isEmpty()) {
 			try {
 				SymbolType symbolType = SymbolType.valueOf(type.toUpperCase());
 				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCaseAndType(projectId, query,
-						symbolType);
+						symbolType, pageRequest);
 			} catch (IllegalArgumentException e) {
-				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query);
+				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query, pageRequest);
 			}
 		} else {
-			symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query);
+			symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query, pageRequest);
 		}
-		return symbols.stream().limit(limit).map(this::toSymbolDTO).toList();
+		return symbols.stream().map(s -> toSymbolDTO(s, rootPath)).toList();
 	}
 
 	@GetMapping("/{projectId}/files")
@@ -308,8 +344,33 @@ public class CodebaseController {
 		return result;
 	}
 
+	/**
+	 * Fix G: Relativize filePath against project rootPath before exposing it in the DTO.
+	 * Absolute paths waste tokens and leak machine-specific directory layout to AI tools.
+	 */
+	private SymbolDTO toSymbolDTO(Symbol symbol, String rootPath) {
+		String relativePath = symbol.getFilePath();
+		if (rootPath != null && relativePath != null && relativePath.startsWith(rootPath)) {
+			try {
+				relativePath = Paths.get(rootPath).relativize(Paths.get(relativePath)).toString();
+			} catch (Exception ignored) { /* keep absolute if relativize fails */ }
+		}
+		return new SymbolDTO(
+				symbol.getId(),
+				symbol.getName(),
+				symbol.getType(),
+				relativePath,
+				symbol.getLineNumber(),
+				symbol.getSignature(),
+				symbol.getReturnType(),
+				symbol.getModifiers(),
+				symbol.getAnnotations()
+		);
+	}
+
+	// Legacy overload used by getFileContext (which already has the full path context)
 	private SymbolDTO toSymbolDTO(Symbol symbol) {
-		return new SymbolDTO(symbol.getId(), symbol.getName(), symbol.getType(), symbol.getFilePath());
+		return toSymbolDTO(symbol, null);
 	}
 
 	private FileMetadataDTO toMetadataDTO(FileMetadata metadata) {
@@ -317,5 +378,17 @@ public class CodebaseController {
 			return null;
 		return new FileMetadataDTO(metadata.getFilePath(), metadata.getFileSize(), metadata.getChecksum(),
 				metadata.getLastScanned());
+	}
+
+	/**
+	 * Fix B: Strips Java import statements from content.
+	 * Imports are high-noise for AI tools (they see "import org.springframework..." 30 times)
+	 * and contain zero signal about actual logic.
+	 */
+	private static String stripJavaImports(String content) {
+		if (content == null) return null;
+		return content.lines()
+				.filter(line -> !line.stripLeading().startsWith("import "))
+				.collect(java.util.stream.Collectors.joining("\n"));
 	}
 }

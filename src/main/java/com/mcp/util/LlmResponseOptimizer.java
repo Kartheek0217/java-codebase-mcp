@@ -45,6 +45,7 @@ public class LlmResponseOptimizer {
         return sb.toString();
     }
 
+    // Fix C: expanded language map — covers all common extensions in the codebase
     private static String getLanguage(String path) {
         if (path == null)
             return "";
@@ -52,12 +53,36 @@ public class LlmResponseOptimizer {
             return "java";
         if (path.endsWith(".py"))
             return "python";
-        if (path.endsWith(".js"))
+        if (path.endsWith(".js") || path.endsWith(".cjs") || path.endsWith(".mjs"))
             return "javascript";
         if (path.endsWith(".ts"))
             return "typescript";
-        if (path.endsWith(".md"))
+        if (path.endsWith(".tsx"))
+            return "tsx";
+        if (path.endsWith(".vue"))
+            return "vue";
+        if (path.endsWith(".css") || path.endsWith(".scss") || path.endsWith(".sass"))
+            return "css";
+        if (path.endsWith(".yaml") || path.endsWith(".yml"))
+            return "yaml";
+        if (path.endsWith(".sql"))
+            return "sql";
+        if (path.endsWith(".properties"))
+            return "properties";
+        if (path.endsWith(".xml"))
+            return "xml";
+        if (path.endsWith(".sh") || path.endsWith(".bash"))
+            return "bash";
+        if (path.endsWith(".toml"))
+            return "toml";
+        if (path.endsWith(".json"))
+            return "json";
+        if (path.endsWith(".md") || path.endsWith(".mdx"))
             return "markdown";
+        if (path.endsWith(".kt"))
+            return "kotlin";
+        if (path.endsWith(".go"))
+            return "go";
         return "";
     }
 }

@@ -6,20 +6,26 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.Project;
-import com.mcp.entity.Symbol;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
 
 @Service
 public class TopologyService {
+
+	// Fix O: import prefixes that add zero signal for AI tools
+	private static final Set<String> NOISE_IMPORT_PREFIXES = Set.of(
+			"java.", "javax.", "jakarta.", "org.springframework.", "com.fasterxml.",
+			"org.hibernate.", "org.slf4j.", "org.apache.", "io.swagger.");
 
 	private final ProjectRepository projectRepository;
 	private final FileMetadataRepository fileMetadataRepository;
@@ -54,7 +60,15 @@ public class TopologyService {
 				List<String> importList = (deps != null && !deps.isEmpty())
 						? Arrays.asList(deps.split(","))
 						: Collections.emptyList();
-				dependencies.put(relativePath, importList);
+
+				// Fix O: filter JDK/Spring/framework imports — they are noise for AI tools
+				List<String> filteredImports = importList.stream()
+						.filter(imp -> NOISE_IMPORT_PREFIXES.stream().noneMatch(imp::startsWith))
+						.collect(Collectors.toList());
+
+				if (!filteredImports.isEmpty()) {
+					dependencies.put(relativePath, filteredImports);
+				}
 
 				if (relativePath.contains("Controller") || relativePath.contains("Main")
 						|| relativePath.contains("Application")) {
@@ -63,13 +77,14 @@ public class TopologyService {
 			}
 		}
 
-		// Top symbols by frequency
-		List<Symbol> allSymbols = symbolRepository.findByProjectId(projectId);
-		Map<String, Long> symbolFrequency = allSymbols.stream()
-				.collect(Collectors.groupingBy(Symbol::getName, Collectors.counting()));
-
-		List<Map.Entry<String, Long>> topSymbols = symbolFrequency.entrySet().stream()
-				.sorted(Map.Entry.<String, Long>comparingByValue().reversed()).limit(20).toList();
+		// Fix K: aggregate top symbols in DB with GROUP BY instead of loading all symbols into JVM heap
+		List<Object[]> topSymbolRows = symbolRepository.findTopSymbolNames(projectId, PageRequest.of(0, 20));
+		List<Map<String, Object>> topSymbols = topSymbolRows.stream().map(row -> {
+			Map<String, Object> entry = new HashMap<>();
+			entry.put("name", row[0]);
+			entry.put("count", row[1]);
+			return entry;
+		}).collect(Collectors.toList());
 
 		Map<String, Object> topology = new HashMap<>();
 		topology.put("projectId", projectId);

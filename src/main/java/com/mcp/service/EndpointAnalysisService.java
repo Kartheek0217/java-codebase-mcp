@@ -3,10 +3,16 @@ package com.mcp.service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,7 +54,7 @@ public class EndpointAnalysisService {
 
         // Find the controller method symbol
         List<Symbol> controllerSymbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,
-                methodName);
+                methodName, Pageable.unpaged());
         Symbol entrySymbol = controllerSymbols.stream()
                 .filter(s -> s.getFilePath().contains(controllerName))
                 .findFirst()
@@ -124,7 +130,7 @@ public class EndpointAnalysisService {
         for (SymbolCall call : calls) {
             // Find callee symbols by name in the same project
             List<Symbol> callees = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,
-                    call.getCalleeName());
+                    call.getCalleeName(), Pageable.unpaged());
             for (Symbol callee : callees) {
                 // Heuristic: only trace callees that are part of the project's source (not
                 // JDK/libraries)

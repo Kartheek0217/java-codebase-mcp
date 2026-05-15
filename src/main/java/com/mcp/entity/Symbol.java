@@ -21,6 +21,22 @@ public class Symbol {
 	private String filePath;
 	private LocalDateTime lastModified;
 
+	// Fix E: Rich metadata fields — critical for AI tools to navigate without re-reading whole files
+	private Integer lineNumber;
+
+	@Column(length = 1024)
+	private String signature;     // e.g. "public ResponseEntity<ContextDTO> getFileContext(Long, String, ...)"
+
+	@Column(length = 256)
+	private String returnType;    // e.g. "ResponseEntity<ContextDTO>"
+
+	@Column(length = 128)
+	private String modifiers;     // e.g. "public static final"
+
+	// Fix F: Annotation metadata — captures @RestController, @Service, @GetMapping, etc.
+	@Column(length = 512)
+	private String annotations;   // e.g. "@GetMapping @Cacheable @Transactional"
+
 	// Getters and Setters
 	public Long getId() {
 		return id;
@@ -68,5 +84,45 @@ public class Symbol {
 
 	public void setLastModified(LocalDateTime lastModified) {
 		this.lastModified = lastModified;
+	}
+
+	public Integer getLineNumber() {
+		return lineNumber;
+	}
+
+	public void setLineNumber(Integer lineNumber) {
+		this.lineNumber = lineNumber;
+	}
+
+	public String getSignature() {
+		return signature;
+	}
+
+	public void setSignature(String signature) {
+		this.signature = signature;
+	}
+
+	public String getReturnType() {
+		return returnType;
+	}
+
+	public void setReturnType(String returnType) {
+		this.returnType = returnType;
+	}
+
+	public String getModifiers() {
+		return modifiers;
+	}
+
+	public void setModifiers(String modifiers) {
+		this.modifiers = modifiers;
+	}
+
+	public String getAnnotations() {
+		return annotations;
+	}
+
+	public void setAnnotations(String annotations) {
+		this.annotations = annotations;
 	}
 }
