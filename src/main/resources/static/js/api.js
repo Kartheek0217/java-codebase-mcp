@@ -50,47 +50,43 @@ export const API = {
             body: JSON.stringify(paths)
         }),
         summarize: (projectId, path) => apiFetch(`/api/codebase/${projectId}/summarize?filePath=${encodeURIComponent(path)}`),
-        startSession: (projectId) => apiFetch(`/api/agent/sessions?projectId=${projectId}`, { method: 'POST' }),
+        startSession: (projectId) => apiFetch(`/api/mcp/sessions?projectId=${projectId}`, { method: 'POST' }),
         getTopology: (projectId) => apiFetch(`/api/codebase/${projectId}/topology`),
         getSuggestions: (projectId, query) => apiFetch(`/api/codebase/${projectId}/suggest?query=${encodeURIComponent(query)}`),
-        getSkills: (projectId) => apiFetch(`/api/agent/skills?projectId=${projectId}`),
-        learnSkill: (projectId, url) => apiFetch(`/api/agent/skills/learn?projectId=${projectId}&url=${encodeURIComponent(url)}`, { method: 'POST' }),
-        clearSkills: (projectId) => apiFetch(`/api/agent/skills?projectId=${projectId}`, { method: 'DELETE' }),
+        getSkills: (projectId) => apiFetch(`/api/mcp/skills?projectId=${projectId}`),
+        learnSkill: (projectId, url) => apiFetch(`/api/mcp/skills/learn?projectId=${projectId}&url=${encodeURIComponent(url)}`, { method: 'POST' }),
+        clearSkills: (projectId) => apiFetch(`/api/mcp/skills?projectId=${projectId}`, { method: 'DELETE' }),
         rules: {
-            list: (projectId) => apiFetch(`/api/agent/rules?projectId=${projectId}`),
-            create: (rule) => apiFetch('/api/agent/rules', {
+            list: (projectId) => apiFetch(`/api/mcp/rules?projectId=${projectId}`),
+            create: (rule) => apiFetch('/api/mcp/rules', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(rule)
             }),
-            update: (id, rule) => apiFetch(`/api/agent/rules/${id}`, {
+            update: (id, rule) => apiFetch(`/api/mcp/rules/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(rule)
             }),
-            delete: (id) => apiFetch(`/api/agent/rules/${id}`, { method: 'DELETE' }),
-            clearAll: (projectId) => apiFetch(`/api/agent/rules?projectId=${projectId}`, { method: 'DELETE' })
+            delete: (id) => apiFetch(`/api/mcp/rules/${id}`, { method: 'DELETE' }),
+            clearAll: (projectId) => apiFetch(`/api/mcp/rules?projectId=${projectId}`, { method: 'DELETE' })
         },
         tasks: {
-            list: (projectId) => apiFetch(`/api/agent/tasks?projectId=${projectId}`),
-            create: (request) => apiFetch('/api/agent/tasks', {
+            list: (projectId) => apiFetch(`/api/mcp/tasks?projectId=${projectId}`),
+            create: (request) => apiFetch('/api/mcp/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request)
             }),
-            update: (id, task) => apiFetch(`/api/agent/tasks/${id}`, {
+            update: (id, task) => apiFetch(`/api/mcp/tasks/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(task)
             }),
-            updateStep: (taskId, stepId, status) => apiFetch(`/api/agent/tasks/${taskId}/steps/${stepId}?status=${status}`, { method: 'PUT' }),
-            delete: (id) => apiFetch(`/api/agent/tasks/${id}`, { method: 'DELETE' })
+            updateStep: (taskId, stepId, status) => apiFetch(`/api/mcp/tasks/${taskId}/steps/${stepId}?status=${status}`, { method: 'PUT' }),
+            delete: (id) => apiFetch(`/api/mcp/tasks/${id}`, { method: 'DELETE' })
         }
 
-    },
-    web: {
-        search: (projectId, q, site, limit) => apiFetch(`/api/web-search?projectId=${projectId}&q=${encodeURIComponent(q)}&site=${encodeURIComponent(site)}&limit=${limit}`),
-        quickExtract: (projectId, url) => apiFetch(`/api/web/extract?projectId=${projectId}&url=${encodeURIComponent(url)}`)
     },
     git: {
         stage: (projectId, paths) => apiFetch(`/api/projects/${projectId}/git/stage`, {

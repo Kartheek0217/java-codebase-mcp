@@ -10,6 +10,9 @@ public class LlmResponseOptimizer {
      * This is often more token-efficient for LLMs than raw JSON.
      */
     public static String toMarkdown(ContextDTO dto) {
+        if (dto == null) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("## File: ").append(dto.path()).append("\n");
 

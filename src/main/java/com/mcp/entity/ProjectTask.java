@@ -18,7 +18,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class ProjectTask {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "project_task_seq")
+    @SequenceGenerator(name = "project_task_seq", sequenceName = "project_task_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne

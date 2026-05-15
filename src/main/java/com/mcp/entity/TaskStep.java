@@ -10,7 +10,8 @@ import java.util.Objects;
 public class TaskStep {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "task_step_seq")
+    @SequenceGenerator(name = "task_step_seq", sequenceName = "task_step_seq", allocationSize = 50)
     private Long id;
 
     @ManyToOne

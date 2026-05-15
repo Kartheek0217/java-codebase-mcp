@@ -16,9 +16,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -66,19 +63,18 @@ public class FileIndexerService {
 	private final Cache<String, List<Symbol>> symbolCache;
 	private final SkillService skillService;
 	private final SymbolCallRepository symbolCallRepository;
-	private final SemanticSearchService semanticSearchService;
+
 	private FileIndexerService self;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
 			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
-			SymbolCallRepository symbolCallRepository, SemanticSearchService semanticSearchService) {
+			SymbolCallRepository symbolCallRepository) {
 		this.symbolRepository = symbolRepository;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.luceneIndexService = luceneIndexService;
 		this.symbolCache = symbolCache;
 		this.skillService = skillService;
 		this.symbolCallRepository = symbolCallRepository;
-		this.semanticSearchService = semanticSearchService;
 	}
 
 	@org.springframework.beans.factory.annotation.Autowired
@@ -86,10 +82,11 @@ public class FileIndexerService {
 		this.self = self;
 	}
 
+	private static final ParserConfiguration JAVA_PARSER_CONFIG = new ParserConfiguration()
+			.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+
 	private JavaParser createJavaParser() {
-		ParserConfiguration config = new ParserConfiguration();
-		config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
-		return new JavaParser(config);
+		return new JavaParser(JAVA_PARSER_CONFIG);
 	}
 
 	public LuceneIndexService getLuceneIndexService() {
@@ -135,7 +132,8 @@ public class FileIndexerService {
 				symbols = extractGeneralSymbols(content, filePath);
 			}
 
-			// Update metadata and symbols in a single transaction (Through self-proxy to enable @Transactional)
+			// Update metadata and symbols in a single transaction (Through self-proxy to
+			// enable @Transactional)
 			self.saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
 
 			// Index content in Lucene (Outside DB transaction)
@@ -150,7 +148,7 @@ public class FileIndexerService {
 	public void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
 			List<Symbol> symbols, List<CallInfo> calls, String dependencies, FileMetadata existingMetadata) {
 		// Clear existing symbols and their calls from this file
-		semanticSearchService.deleteVectorsByFile(projectId, filePath);
+
 		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
 		symbolCallRepository.deleteByProjectIdAndCallerFilePath(projectId, filePath);
 		symbolCache.invalidate(projectId + ":" + filePath);
@@ -163,11 +161,6 @@ public class FileIndexerService {
 			}
 			symbolRepository.saveAll(symbols);
 			symbolCache.put(projectId + ":" + filePath, symbols);
-
-			// Generate vectors for each symbol
-			for (Symbol s : symbols) {
-				semanticSearchService.upsertSymbolVector(s);
-			}
 
 			// Save calls after symbols are persisted to resolve caller IDs
 			if (calls != null && !calls.isEmpty()) {
@@ -217,7 +210,7 @@ public class FileIndexerService {
 	public void deleteFileData(Long projectId, Path path) {
 		String filePath = path.toAbsolutePath().toString();
 		logger.info("Deleting data for file: {} in project {}", filePath, projectId);
-		semanticSearchService.deleteVectorsByFile(projectId, filePath);
+
 		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
 		fileMetadataRepository.deleteById(new FileMetadataId(projectId, filePath));
 		luceneIndexService.deleteFileContent(projectId, filePath);
@@ -381,30 +374,15 @@ public class FileIndexerService {
 		return s;
 	}
 
-	private String extractPdfText(Path path) {
-		try (PDDocument document = Loader.loadPDF(path.toFile())) {
-			PDFTextStripper stripper = new PDFTextStripper();
-			return stripper.getText(document);
-		} catch (IOException e) {
-			logger.error("Failed to extract text from PDF: {}", path, e);
-			return "";
-		}
-	}
-
 	private record ReadResult(String content, String checksum, long fileSize) {
 	}
 
 	private ReadResult readFileAndChecksum(Path path) throws IOException, NoSuchAlgorithmException {
-		String filePath = path.toString().toLowerCase();
-		if (filePath.endsWith(".pdf")) {
-			return new ReadResult(extractPdfText(path), computeChecksum(path), Files.size(path));
-		}
-
 		MessageDigest digest = MessageDigest.getInstance("SHA-256");
 		// Optimization: Pre-calculate the result size to avoid unnecessary growth of
 		// ByteArrayOutputStream
 		long size = Files.size(path);
-		int initialSize = size > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) size;
+		int initialSize = (size > 0 && size <= Integer.MAX_VALUE) ? (int) size : 8192;
 
 		try (InputStream is = Files.newInputStream(path);
 				DigestInputStream dis = new DigestInputStream(new BufferedInputStream(is), digest);
@@ -417,33 +395,10 @@ public class FileIndexerService {
 			}
 
 			byte[] hash = digest.digest();
-			String checksum = bytesToHex(hash);
+			String checksum = java.util.HexFormat.of().formatHex(hash);
 			String content = bos.toString(StandardCharsets.UTF_8);
 
 			return new ReadResult(content, checksum, bos.size());
 		}
-	}
-
-	private String bytesToHex(byte[] hash) {
-		StringBuilder hexString = new StringBuilder();
-		for (byte b : hash) {
-			hexString.append(String.format("%02x", b));
-		}
-		return hexString.toString();
-	}
-
-	private String computeChecksum(Path path) throws IOException, NoSuchAlgorithmException {
-		MessageDigest digest = MessageDigest.getInstance("SHA-256");
-		try (InputStream is = Files.newInputStream(path); DigestInputStream dis = new DigestInputStream(is, digest)) {
-			byte[] buffer = new byte[8192];
-			while (dis.read(buffer) != -1) {
-			}
-		}
-		byte[] hash = digest.digest();
-		StringBuilder hexString = new StringBuilder();
-		for (byte b : hash) {
-			hexString.append(String.format("%02x", b));
-		}
-		return hexString.toString();
 	}
 }

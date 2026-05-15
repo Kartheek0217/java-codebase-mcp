@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
 public class Symbol {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "symbol_seq")
+	@SequenceGenerator(name = "symbol_seq", sequenceName = "symbol_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(name = "project_id", nullable = false)

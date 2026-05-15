@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,20 +24,10 @@ public class SkillService {
 	private static final Logger logger = LoggerFactory.getLogger(SkillService.class);
 	private final SkillRepository skillRepository;
 	private final ProjectRepository projectRepository;
-	private final RestTemplate restTemplate = new RestTemplate();
 
 	public SkillService(SkillRepository skillRepository, ProjectRepository projectRepository) {
 		this.skillRepository = skillRepository;
 		this.projectRepository = projectRepository;
-	}
-
-	@Transactional
-	public void learnFromUrl(Long projectId, String url) {
-		logger.info("Learning skill from URL: {}", url);
-		String content = restTemplate.getForObject(url, String.class);
-		if (content != null) {
-			learnSkillFromMarkdown(projectId, content, url);
-		}
 	}
 
 	@Transactional

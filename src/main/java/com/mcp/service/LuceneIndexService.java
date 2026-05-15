@@ -32,12 +32,11 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.mcp.analysis.CodeAnalyzer;
-import com.mcp.properties.LuceneProperties;
 import com.mcp.dto.ContentSearchResult;
+import com.mcp.properties.LuceneProperties;
 
 import jakarta.annotation.PreDestroy;
 
@@ -50,8 +49,6 @@ public class LuceneIndexService {
 
 	private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
 	private final Map<Long, SearcherManager> searcherManagers = new ConcurrentHashMap<>();
-	private final Map<Long, Long> lastAccessTimes = new ConcurrentHashMap<>();
-	private final Set<Long> pendingCommits = ConcurrentHashMap.newKeySet();
 	private final Set<Long> bulkModeProjects = ConcurrentHashMap.newKeySet();
 	private final Analyzer sharedAnalyzer = new CodeAnalyzer();
 
@@ -85,6 +82,20 @@ public class LuceneIndexService {
 		}
 	}
 
+	@org.springframework.scheduling.annotation.Scheduled(fixedDelay = 5000)
+	public void scheduleCommits() {
+		writers.forEach((projectId, writer) -> {
+			try {
+				if (writer.hasUncommittedChanges()) {
+					logger.debug("Performing scheduled commit for project {}", projectId);
+					writer.commit();
+				}
+			} catch (IOException e) {
+				logger.error("Error during scheduled commit for project {}", projectId, e);
+			}
+		});
+	}
+
 	private IndexWriter getWriter(Long projectId) throws IOException {
 		return writers.computeIfAbsent(projectId, k -> {
 			try {
@@ -101,7 +112,6 @@ public class LuceneIndexService {
 
 				SearcherManager sm = new SearcherManager(writer, true, true, new SearcherFactory());
 				searcherManagers.put(projectId, sm);
-				lastAccessTimes.put(projectId, System.currentTimeMillis());
 				return writer;
 			} catch (IOException e) {
 				logger.error("Error creating IndexWriter for project {}", projectId, e);
@@ -117,7 +127,6 @@ public class LuceneIndexService {
 			getWriter(projectId);
 			sm = searcherManagers.get(projectId);
 		}
-		lastAccessTimes.put(projectId, System.currentTimeMillis());
 		return sm;
 	}
 
@@ -153,13 +162,12 @@ public class LuceneIndexService {
 			}
 
 			writer.updateDocument(new Term("path", filePath), doc);
-			pendingCommits.add(projectId);
 
-			if (!bulkModeProjects.contains(projectId)) {
-				SearcherManager sm = searcherManagers.get(projectId);
-				if (sm != null) {
-					sm.maybeRefresh();
-				}
+			// Use Near-Real-Time (NRT) refresh instead of full commit for better
+			// performance
+			SearcherManager sm = searcherManagers.get(projectId);
+			if (sm != null) {
+				sm.maybeRefresh();
 			}
 		} catch (IOException e) {
 			logger.error("Error indexing {} content for file: {}", type, filePath, e);
@@ -171,7 +179,6 @@ public class LuceneIndexService {
 			IndexWriter writer = writers.get(projectId);
 			if (writer != null) {
 				writer.deleteDocuments(new Term("path", filePath));
-				pendingCommits.add(projectId);
 				SearcherManager sm = searcherManagers.get(projectId);
 				if (sm != null) {
 					sm.maybeRefresh();
@@ -229,12 +236,12 @@ public class LuceneIndexService {
 				if (type != null || site != null || (filePaths != null && !filePaths.isEmpty())) {
 					org.apache.lucene.search.BooleanQuery.Builder builder = new org.apache.lucene.search.BooleanQuery.Builder();
 					builder.add(query, org.apache.lucene.search.BooleanClause.Occur.MUST);
-					
+
 					if (type != null) {
 						builder.add(new org.apache.lucene.search.TermQuery(new Term("type", type)),
 								org.apache.lucene.search.BooleanClause.Occur.MUST);
 					}
-					
+
 					if (site != null && !site.isEmpty()) {
 						org.apache.lucene.search.BooleanQuery.Builder siteBuilder = new org.apache.lucene.search.BooleanQuery.Builder();
 						siteBuilder.add(new org.apache.lucene.search.TermQuery(new Term("domain", site)),
@@ -251,14 +258,12 @@ public class LuceneIndexService {
 						builder.add(new org.apache.lucene.search.TermInSetQuery("path", bytesRefs),
 								org.apache.lucene.search.BooleanClause.Occur.MUST);
 					}
-					
+
 					query = builder.build();
 				}
 
 				searcher.setTimeout(new IndexSearcherTimeout(SEARCH_TIMEOUT_MS));
 
-				// Use searchAfter for efficient pagination, or just skip if small enough
-				// For simplicity here, we'll search up to limit + offset and return the sublist
 				TopDocs topDocs = searcher.search(query, limit + offset);
 
 				if (topDocs.scoreDocs.length > offset) {
@@ -266,16 +271,16 @@ public class LuceneIndexService {
 					String[] snippets = highlighter.highlight("content", query, topDocs, 5);
 
 					StoredFields storedFields = searcher.storedFields();
-					Map<String, String> fileContentCache = new java.util.HashMap<>();
 					for (int i = offset; i < topDocs.scoreDocs.length; i++) {
 						ScoreDoc scoreDoc = topDocs.scoreDocs[i];
 						Document doc = storedFields.document(scoreDoc.doc);
 						String filePath = doc.get("path");
 						String title = doc.get("title");
+						String content = doc.get("content");
 						String snippet = (snippets != null && i < snippets.length) ? snippets[i] : "";
 
 						if (snippet != null && !snippet.isEmpty()) {
-							List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet, filePath, fileContentCache);
+							List<ContentSearchResult.ContentMatch> matches = parseSnippets(snippet, content);
 							results.add(new ContentSearchResult(filePath, title, scoreDoc.score, matches));
 						}
 					}
@@ -306,22 +311,12 @@ public class LuceneIndexService {
 		}
 	}
 
-	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet, String filePath, Map<String, String> cache) {
+	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet, String fileContent) {
 		List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
-		String fileContent = cache.computeIfAbsent(filePath, path -> {
-			try {
-				return Files.readString(Paths.get(path));
-			} catch (Exception e) {
-				logger.warn("Could not read file {} for line number lookup", path);
-				return "";
-			}
-		});
-
 		if (fileContent != null && fileContent.isEmpty()) {
 			fileContent = null;
 		}
 
-		// UnifiedHighlighter by default uses ... as a separator between passages
 		String[] passages = snippet.split("(?i)<b>...</b>|\\.\\.\\.");
 
 		for (String passage : passages) {
@@ -356,55 +351,6 @@ public class LuceneIndexService {
 		@Override
 		public boolean shouldExit() {
 			return System.currentTimeMillis() > timeoutAt;
-		}
-	}
-
-	@Scheduled(fixedDelay = 60000)
-	public void cleanupIdleIndices() {
-		long now = System.currentTimeMillis();
-		long idleThreshold = 30 * 60 * 1000; // 30 minutes
-
-		lastAccessTimes.forEach((projectId, lastAccess) -> {
-			if (now - lastAccess > idleThreshold && !bulkModeProjects.contains(projectId)) {
-				logger.info("Closing idle index for project {}", projectId);
-				try {
-					SearcherManager sm = searcherManagers.remove(projectId);
-					if (sm != null) sm.close();
-					
-					IndexWriter writer = writers.remove(projectId);
-					if (writer != null) writer.close();
-					
-					lastAccessTimes.remove(projectId);
-					pendingCommits.remove(projectId);
-				} catch (IOException e) {
-					logger.error("Error closing idle index for project {}", projectId, e);
-				}
-			}
-		});
-	}
-
-	@Scheduled(fixedDelay = 5000)
-	public void scheduledCommit() {
-		if (pendingCommits.isEmpty())
-			return;
-
-		logger.debug("Running scheduled commit for {} projects", pendingCommits.size());
-		java.util.Iterator<Long> iterator = pendingCommits.iterator();
-		while (iterator.hasNext()) {
-			Long projectId = iterator.next();
-			IndexWriter writer = writers.get(projectId);
-			if (writer != null) {
-				try {
-					writer.commit();
-					SearcherManager sm = searcherManagers.get(projectId);
-					if (sm != null) {
-						sm.maybeRefresh();
-					}
-				} catch (IOException e) {
-					logger.error("Error during scheduled commit for project {}", projectId, e);
-				}
-			}
-			iterator.remove();
 		}
 	}
 

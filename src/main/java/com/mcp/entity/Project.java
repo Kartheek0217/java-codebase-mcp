@@ -8,7 +8,8 @@ import java.util.Objects;
 public class Project {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "project_seq")
+	@SequenceGenerator(name = "project_seq", sequenceName = "project_seq", allocationSize = 50)
 	private Long id;
 
 	@Column(nullable = false)
@@ -16,6 +17,10 @@ public class Project {
 
 	@Column(name = "root_path", nullable = false)
 	private String rootPath;
+
+	@Enumerated(EnumType.STRING)
+	@Column(length = 20)
+	private com.mcp.model.ProjectStatus status = com.mcp.model.ProjectStatus.INITIALIZING;
 
 	public Project() {
 	}
@@ -47,6 +52,14 @@ public class Project {
 
 	public void setRootPath(String rootPath) {
 		this.rootPath = rootPath;
+	}
+
+	public com.mcp.model.ProjectStatus getStatus() {
+		return status;
+	}
+
+	public void setStatus(com.mcp.model.ProjectStatus status) {
+		this.status = status;
 	}
 
 	@Override

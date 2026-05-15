@@ -15,16 +15,13 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.mcp.entity.Symbol;
 import com.mcp.properties.CacheProperties;
-import com.mcp.properties.IndexingProperties;
 
 @Configuration
 public class VirtualThreadConfig {
 
 	@Bean
-	public AsyncTaskExecutor applicationTaskExecutor(IndexingProperties properties) {
-		return new TaskExecutorAdapter(
-				Executors.newFixedThreadPool(properties.getWorkerConcurrency(),
-						Thread.ofVirtual().name("mcp-worker-", 0).factory()));
+	public AsyncTaskExecutor applicationTaskExecutor() {
+		return new TaskExecutorAdapter(Executors.newVirtualThreadPerTaskExecutor());
 	}
 
 	@Bean

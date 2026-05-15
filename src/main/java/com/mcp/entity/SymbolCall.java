@@ -7,7 +7,8 @@ import jakarta.persistence.*;
 public class SymbolCall {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "symbol_call_seq")
+    @SequenceGenerator(name = "symbol_call_seq", sequenceName = "symbol_call_seq", allocationSize = 50)
     private Long id;
 
     @Column(name = "project_id", nullable = false)

@@ -18,7 +18,6 @@
 		<java.version>25</java.version>
 		<javaparser.version>3.26.2</javaparser.version>
 		<lucene.version>10.1.0</lucene.version>
-		<pdfbox.version>3.0.4</pdfbox.version>
 	</properties>
 	<dependencies>
 
@@ -73,24 +72,18 @@
 			<version>${lucene.version}</version>
 		</dependency>
 
-		<!-- Directory Watcher -->
-		<dependency>
-			<groupId>io.methvin</groupId>
-			<artifactId>directory-watcher</artifactId>
-			<version>0.18.0</version>
-		</dependency>
-
 		<!-- Swagger/OpenAPI -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.8.5</version>
 		</dependency>
+
+		<!-- Caffeine Cache -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
 		</dependency>
-		<!-- Caffeine Cache -->
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
 			<artifactId>caffeine</artifactId>
@@ -103,17 +96,11 @@
 			<version>6.8.0.202311291450-r</version>
 		</dependency>
 
+		<!-- Config Processor -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-configuration-processor</artifactId>
 			<optional>true</optional>
-		</dependency>
-
-		<!-- PDFBox for PDF parsing -->
-		<dependency>
-			<groupId>org.apache.pdfbox</groupId>
-			<artifactId>pdfbox</artifactId>
-			<version>${pdfbox.version}</version>
 		</dependency>
 
 		<!-- Jsoup HTML Parser -->
@@ -129,14 +116,6 @@
 			<artifactId>playwright</artifactId>
 			<version>1.59.0</version>
 		</dependency>
-
-		<!-- H2 Vector Support -->
-		<dependency>
-			<groupId>io.github.benayat</groupId>
-			<artifactId>in-memory-h2vector-spring-boot-starter</artifactId>
-			<version>0.0.4</version>
-		</dependency>
-
 	</dependencies>
 
 	<build>

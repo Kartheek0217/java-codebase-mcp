@@ -39,10 +39,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.PostConstruct;
 
 @RestController
-@RequestMapping("/api/agent")
-@Tag(name = "Agent", description = "Endpoints for agentic task management, rules, and skills.")
-public class AgentController {
-
+@RequestMapping("/api/mcp")
+@Tag(name = "MCP", description = "Endpoints for agentic task management, rules, and skills.")
+public class McpController {
 
 	private final TaskService taskService;
 	private final ProjectRuleService ruleService;
@@ -61,7 +60,7 @@ public class AgentController {
 
 	private final ScheduledExecutorService sessionCleanup = Executors.newSingleThreadScheduledExecutor();
 
-	public AgentController(TaskService taskService, ProjectRuleService ruleService, SkillService skillService,
+	public McpController(TaskService taskService, ProjectRuleService ruleService, SkillService skillService,
 			SkillRepository skillRepository, ProjectRepository projectRepository,
 			ContextMemoryService contextMemoryService) {
 		this.taskService = taskService;
@@ -71,7 +70,6 @@ public class AgentController {
 		this.projectRepository = projectRepository;
 		this.contextMemoryService = contextMemoryService;
 	}
-
 
 	@PostConstruct
 	public void init() {
@@ -141,7 +139,6 @@ public class AgentController {
 	}
 
 	// Rules
-
 	@GetMapping("/rules")
 	@Operation(summary = "get-rules", description = "Get all rules for project")
 	public List<RuleDTO> getRules(@RequestParam Long projectId) {
@@ -180,15 +177,7 @@ public class AgentController {
 		skillService.deleteSkillsByProject(projectId);
 	}
 
-	@PostMapping("/skills/learn")
-	@Operation(summary = "learn-skill", description = "Learn skill from URL")
-	public Map<String, String> learnSkill(@RequestParam Long projectId, @RequestParam String url) {
-		skillService.learnFromUrl(projectId, url);
-		return Map.of("status", "success");
-	}
-
 	@PostMapping("/skills/learn-from-file")
-
 	@Operation(summary = "learn-skill-file", description = "Learn skill from local file")
 	public Map<String, String> learnSkillFromFile(
 			@RequestParam Long projectId,

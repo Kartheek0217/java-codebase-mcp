@@ -1,118 +1,88 @@
 # 🚀 Java Codebase MCP Middleware
 
-A high-performance Java-based middleware designed to index local code repositories and provide structured metadata, AST-extracted symbols, and semantic search capabilities for AI agents through the Model Context Protocol (MCP).
+A high-fidelity, high-performance Java-based middleware designed to index local code repositories and provide structured metadata, AST-extracted symbols, and semantic search capabilities for AI agents through the Model Context Protocol (MCP).
 
 ## 🛠 Technology Stack
 
-- **Core:** Spring Boot 4.0.6, **JDK 25** (Utilizing Loom Virtual Threads for high-concurrency I/O)
-- **Indexing:** **Apache Lucene 10.1.0** (High-performance full-text and semantic search)
+- **Core:** Spring Boot 4.0.6, **JDK 25** (Utilizing Loom Virtual Threads for extreme-concurrency I/O)
+- **Indexing:** **Apache Lucene 10.1.0** (High-performance full-text search with Near-Real-Time updates)
 - **Parsing:** **JavaParser 3.26.2** (Deep AST symbol extraction and call hierarchy analysis)
-- **Web Automation:** **Microsoft Playwright** (Headless browser orchestration and data extraction)
-- **Web Intelligence:** **Jsoup** (HTML parsing and DuckDuckGo search integration)
-- **Persistence:** **H2 Database** with Vector Similarity support (Efficient local metadata and embedding storage)
+- **Web Automation:** **Microsoft Playwright 1.59.0** (Headless browser orchestration and data extraction)
+- **Web Intelligence:** **Jsoup 1.18.1** (HTML parsing and structural analysis)
+- **Persistence:** **H2 Database** (Efficient local metadata storage with JDBC batching)
 - **Git Integration:** **JGit 6.8.0** (Native repository status and operations)
-- **Live Sync:** **Directory Watcher 0.18.0** (Real-time filesystem event tracking)
-- **API Spec:** **SpringDoc OpenAPI 2.8.5** (Swagger UI & Documentation)
-- **Caching:** **Caffeine Cache** (Optimized retrieval for frequent queries)
+- **API Spec:** **SpringDoc OpenAPI 2.8.5** (Swagger UI & Interactive Documentation)
+- **Caching:** **Caffeine Cache** (Optimized retrieval for frequent queries and topology maps)
 
 ## 📂 Project Structure
 
 ```text
 src/main/java/com/mcp/
-├── Application.java        # Main Entry Point
-├── analysis/               # Lucene Analyzers (Code-aware tokenization & analysis)
-├── config/                 # Configurations (Browser, Lucene, Virtual Threads, OpenAPI)
-├── controller/             # REST API Surface (Agent, Browser, Codebase, Git, Web, Vector)
-├── dto/                    # Data Transfer Objects (Contracts for API & Browser)
-├── entity/                 # Persistence layer (Project, FileMetadata, Symbol, SymbolVector, BrowserSession)
-├── model/                  # Domain business models (Statuses, Enums, FileEvents)
-├── repository/             # Spring Data JPA repositories (JPA + Native Vector Queries)
-├── service/                # Core logic (Indexing, Git, Playwright, Task Management, Semantic Search)
-├── util/                   # Common utilities (Compression, URL validation, Code utils)
-└── web/                    # Web-specific components (Search Providers like DuckDuckGo)
+├── Application.java        # Spring Boot Entry Point
+├── analysis/               # Lucene Analyzers (Code-aware tokenization)
+├── config/                 # Configurations (Virtual Threads, Lucene, Browser, Exception Handling)
+├── controller/             # REST API Surface (System, Codebase, Project, Browser, Mcp)
+├── dto/                    # Data Transfer Objects (API Contracts & Models)
+├── entity/                 # Persistence layer (Project, FileMetadata, Symbol, Task, Rule, Skill)
+├── model/                  # Domain business models (Status, Priority, Enums)
+├── properties/             # Configuration Properties (Type-safe property mapping)
+├── repository/             # Spring Data JPA repositories
+├── service/                # Core logic (Indexing, Git, Playwright, Tasks, AI Skills, Topology)
+├── util/                   # Common utilities (CodeUtils, LLM Response Optimizer)
+└── web/                    # Web-related components and filtering
 ```
 
 ## ✨ Key Features
 
-- **⚡ Virtual Thread Powered:** Utilizing Java 21+ Virtual Threads (Project Loom) for blazing-fast parallel scanning, indexing, and web requests.
-- **🧠 Deep AST Analysis:** Precise symbol extraction with JavaParser, tracking Classes, Methods, Fields, and complex Call Hierarchies.
-- **🔍 Semantic & Vector Search:** 
-    - Lucene-powered full-text search with custom `CodeAnalyzer`.
-    - **H2 Vector Similarity**: Native vector search for finding nearest code symbols based on embeddings.
-- **🌐 Browser Orchestration:** Managed Playwright sessions for navigating, screenshotting, and interacting with web pages in real-time.
-- **📡 Quick Web Extraction:** On-demand data extraction from any URL using headless browser sessions.
-- **🔍 Native Web Search:** Built-in DuckDuckGo integration for real-time web research without requiring external API keys.
-- **🔄 Real-time Synchronization:** Active directory watching keeps the index in sync with filesystem changes instantly.
-- **🐙 Integrated Git Operations:** Full support for staging, committing, and inspecting repository state via JGit.
-- **📋 AI Agent Engine:** Maintain project-specific rules, manage agent skills, and track implementation tasks.
+- **🚀 High-Performance Persistence:** Optimized for high-throughput metadata storage with JDBC batching and sequence-based ID generation.
+- **⚡ Loom-Powered Concurrency:** Utilizing Java 25 Virtual Threads to handle thousands of parallel file indexing tasks without the overhead of traditional thread pools.
+- **🧠 Intelligent AST Extraction:** Precise extraction of Classes, Methods, Fields, and Interfaces with full Call Hierarchy tracking via JavaParser.
+- **🔍 Near-Real-Time Content Search:** Lucene-powered full-text search with an optimized `SearcherManager` for immediate searchability of changes.
+- **🔄 Bulk Indexing Mode:** High-speed initial project scanning with deferred commits and optimized RAM buffers.
+- **🌐 Advanced Browser Orchestration:** Managed Playwright sessions with automatic idle cleanup and resource limit enforcement.
+- **🐙 Integrated Git Workflows:** Inspect repository status, stage files, and commit changes directly through the MCP interface.
+- **📋 Task & Rule Engine:** Maintain project-specific implementation plans, nested task steps, and AI agent rules.
+- **📉 LLM Context Optimization:** Built-in compression and filtering of codebase context to maximize token efficiency for LLMs.
 
-## ⚙️ Configuration Specifications
+## 🚀 Performance & Tuning
 
-Customizable via `application.properties` or environment variables:
+The system is engineered for low-latency and high-throughput operation:
+
+- **JDBC Batching**: Leverages `SEQUENCE` based ID generation to enable Hibernate batch inserts, significantly reducing round-trips to the H2 database during heavy indexing.
+- **JVM Optimizations:** Pre-configured for low-latency GC, string deduplication, and optimized for Virtual Thread workloads.
+- **Zero-Copy Checksumming**: Uses `DigestInputStream` to hash files in a single pass while reading.
+- **Incremental Indexing**: Only changed files are re-indexed based on SHA-256 checksums.
+- **Smart Exclusions**: Automatically skips `node_modules`, `target`, `build`, `.git`, and other common generated folders.
+
+### ⚙️ Performance Tuning (application.properties)
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `mcp.browser.headless` | `true` | Run Playwright in headless mode |
-| `mcp.browser.browser-type` | `chromium` | Browser engine (`chromium`, `firefox`, `webkit`) |
+| `spring.jpa.properties.hibernate.jdbc.batch_size` | `50` | Batch size for SQL inserts/updates |
+| `mcp.indexing.concurrency` | `20` | Max concurrent files to index |
+| `lucene.ram.buffer-size` | `128.0` | RAM buffer size (MB) for indexing |
 | `mcp.browser.max-sessions` | `10` | Maximum concurrent browser sessions |
-| `lucene.ram.buffer-size` | `64.0` | RAM buffer size in MB for Lucene indexing |
-| `lucene.index.path` | `index` | Path to store Lucene indexes |
 
-## 📡 API Documentation
+## 📡 API Endpoints (Summary)
 
-### 📁 Projects & Indexing
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects` | List all registered projects |
-| POST | `/api/projects` | Register a project and start indexing |
-| DELETE | `/api/projects/{id}` | Remove a project and its index |
-| GET | `/api/projects/{id}/stats` | Get indexing statistics and symbol counts |
-| GET | `/api/projects/{id}/topology` | Retrieve project structure and dependencies |
-
-### 🔍 Code & Vector Search
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/index/{id}/search-content` | Full-text content search via Lucene |
-| GET | `/api/ai/symbols` | Global symbol search by name |
-| POST | `/api/vectors/seed` | Seed symbols with vectors for testing |
-| GET | `/api/vectors/search` | Perform k-NN similarity search for symbols |
-
-### 🌐 Browser & Web
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/browser/sessions` | Create a new Playwright session |
-| POST | `/api/browser/{id}/navigate` | Navigate to a specific URL |
-| GET | `/api/browser/{id}/content` | Get current page HTML and metadata |
-| GET | `/api/browser/{id}/screenshot` | Capture current page screenshot |
-| GET | `/api/web/search` | Perform web search via DuckDuckGo |
-| GET | `/api/web/extract` | Extract structured data from a URL |
-
-### 🤖 Agent & Git
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/ai/session/start` | Initialize stateful AI session |
-| GET | `/api/git-info/projects/{id}/status` | Get detailed Git status |
-| POST | `/api/git-info/projects/{id}/commit` | Create a new Git commit |
-| GET | `/api/ai/tasks` | List all tasks for a project |
-| POST | `/api/ai/tasks` | Create a new implementation task |
+| Category | Description |
+|----------|-------------|
+| **System** | Health, Info, System Statistics |
+| **Projects** | Registration, Scanning, Topology, Stats |
+| **Codebase** | Search, Symbols, Summarization, Endpoint Analysis |
+| **Browser** | Navigation, Content Extraction, Screenshots, Interactions |
+| **Agent** | Task Management, Step Updates, Skill Learning, Rules |
 
 ## 💻 Getting Started
 
 ### Prerequisites
-- **JDK 25** (Required for Virtual Threads and latest language features)
-- **Maven 3.9+**
+- **JDK 25** (Required for Virtual Threads)
+- **Maven 4.0+**
 
-### Quick Start
-1. **Build the project:**
-   ```bash
-   mvn clean package
-   ```
-2. **Run the application:**
-   ```bash
-   mvn spring-boot:run
-   ```
-3. **Explore the API:**
-   Navigate to `http://localhost:9696/swagger-ui.html` for full interactive documentation.
+### Installation & Run
+1. **Build:** `mvn clean package`
+2. **Run:** `mvn spring-boot:run`
+3. **Docs:** Visit `http://localhost:9696/swagger-ui.html`
 
 ---
-*Note: This middleware is optimized for local development environments, providing high-fidelity context for LLM-driven coding workflows.*
+*Developed for the Advanced Agentic Coding ecosystem.*

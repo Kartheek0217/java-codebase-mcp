@@ -105,7 +105,6 @@ public class GitInfoService {
         return repo;
     }
 
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000)
     public void cleanupIdleRepositories() {
         long now = System.currentTimeMillis();
         long idleThreshold = 30 * 60 * 1000; // 30 minutes

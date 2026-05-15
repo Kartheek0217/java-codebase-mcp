@@ -39,7 +39,7 @@ import com.mcp.service.LuceneIndexService;
 import com.mcp.service.ReconciliationService;
 import com.mcp.service.TopologyService;
 import com.mcp.util.CodeUtils;
-import com.mcp.service.SemanticSearchService;
+
 import java.util.Set;
 import com.mcp.service.CodeSummarizerService;
 import com.mcp.service.EndpointAnalysisService;
@@ -64,7 +64,7 @@ public class CodebaseController {
 	private final ReconciliationService reconciliationService;
 	private final com.mcp.repository.SymbolCallRepository symbolCallRepository;
 	private final GitInfoService gitInfoService;
-	private final SemanticSearchService semanticSearchService;
+
 	private final CodeSummarizerService codeSummarizerService;
 	private final EndpointAnalysisService endpointAnalysisService;
 
@@ -75,7 +75,7 @@ public class CodebaseController {
 			ReconciliationService reconciliationService,
 			com.mcp.repository.SymbolCallRepository symbolCallRepository,
 			GitInfoService gitInfoService,
-			SemanticSearchService semanticSearchService,
+
 			CodeSummarizerService codeSummarizerService,
 			EndpointAnalysisService endpointAnalysisService) {
 		this.fileIndexerService = fileIndexerService;
@@ -89,7 +89,7 @@ public class CodebaseController {
 		this.reconciliationService = reconciliationService;
 		this.symbolCallRepository = symbolCallRepository;
 		this.gitInfoService = gitInfoService;
-		this.semanticSearchService = semanticSearchService;
+
 		this.codeSummarizerService = codeSummarizerService;
 		this.endpointAnalysisService = endpointAnalysisService;
 	}
@@ -234,22 +234,11 @@ public class CodebaseController {
 		Map<String, Object> result = new java.util.HashMap<>();
 		result.put("symbols", searchSymbols(projectId, query, null, 10));
 		result.put("content", search(projectId, query, 10));
-		result.put("semantic", searchSemantic(projectId, query, 10));
+
 		return result;
 	}
 
-	@GetMapping("/{projectId}/search/semantic")
-	@Operation(summary = "search-codebase-semantic", description = "Performs semantic search using vector similarity.")
-	public List<Map<String, Object>> searchSemantic(@PathVariable Long projectId, @RequestParam String query,
-			@RequestParam(required = false, defaultValue = "10") int limit) {
-		return semanticSearchService.searchSemantic(query, limit).stream()
-				.map(sv -> {
-					Map<String, Object> map = new java.util.HashMap<>();
-					map.put("symbol", toSymbolDTO(sv.getSymbol()));
-					map.put("content", sv.getContent());
-					return map;
-				}).toList();
-	}
+
 
 	@GetMapping("/{projectId}/history")
 	@Operation(summary = "get-history", description = "Get file access history")
