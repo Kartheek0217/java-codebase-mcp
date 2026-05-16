@@ -172,7 +172,9 @@ public class LuceneIndexService {
 			// performance
 			SearcherManager sm = searcherManagers.get(projectId);
 			if (sm != null) {
-				sm.maybeRefresh();
+				if (!bulkModeProjects.contains(projectId)) {
+					sm.maybeRefresh();
+				}
 			}
 		} catch (IOException e) {
 			logger.error("Error indexing {} content for file: {}", type, filePath, e);

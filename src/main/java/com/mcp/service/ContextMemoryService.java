@@ -16,7 +16,8 @@ public class ContextMemoryService {
 
 	// Fix P: Replace unbounded ConcurrentHashMap with Caffeine caches.
 	// 1-hour TTL (expireAfterAccess) + 1000 max sessions prevents memory leaks
-	// in long-running deployments. Sessions are ephemeral — lost on restart is acceptable.
+	// in long-running deployments. Sessions are ephemeral — lost on restart is
+	// acceptable.
 	private final Cache<String, Set<String>> sessionFiles = Caffeine.newBuilder()
 			.expireAfterAccess(1, TimeUnit.HOURS)
 			.maximumSize(1000)

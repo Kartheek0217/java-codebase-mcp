@@ -121,7 +121,8 @@ public class CodebaseController {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);
 		}
 
-		// Fix A: auto-downgrade to structure for large files (>200 KB) to prevent massive token payloads
+		// Fix A: auto-downgrade to structure for large files (>200 KB) to prevent
+		// massive token payloads
 		long fileBytes = Files.size(fullPath);
 		if (fileBytes > 200_000 && "full".equalsIgnoreCase(format)) {
 			format = "structure";
@@ -141,8 +142,10 @@ public class CodebaseController {
 		} else if ("summary".equalsIgnoreCase(format)) {
 			summary = codeSummarizerService.createIntelligentSummary(content);
 			finalContent = null; // No content in summary mode
-		} else {
+		} else if ("numbered".equalsIgnoreCase(format)) {
 			finalContent = CodeUtils.addLineNumbers(content);
+		} else {
+			finalContent = content;
 		}
 
 		String currentChecksum = metadata != null ? metadata.getChecksum() : null;
@@ -167,7 +170,8 @@ public class CodebaseController {
 	@PostMapping("/{projectId}/context/batch")
 	@Operation(summary = "get-batch-context", description = "Get batch file context")
 	public Map<String, Object> getBatchContext(@PathVariable Long projectId, @RequestBody List<String> filePaths) {
-		// Fix J: fetch all files in parallel using Virtual Threads; abort whole batch on first error
+		// Fix J: fetch all files in parallel using Virtual Threads; abort whole batch
+		// on first error
 		List<CompletableFuture<Map.Entry<String, Object>>> futures = filePaths.stream()
 				.map(fp -> CompletableFuture.supplyAsync(() -> {
 					try {
@@ -237,7 +241,8 @@ public class CodebaseController {
 	@Operation(summary = "search-symbols", description = "Searches for classes, methods, or fields by name.")
 	public List<SymbolDTO> searchSymbols(@PathVariable Long projectId, @RequestParam String query,
 			@RequestParam(required = false) String type, @RequestParam(defaultValue = "50") int limit) {
-		// Fix L: push limit to DB via Pageable — no more loading all rows then stream-limiting
+		// Fix L: push limit to DB via Pageable — no more loading all rows then
+		// stream-limiting
 		PageRequest pageRequest = PageRequest.of(0, limit);
 		Project project = projectRepository.findById(projectId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
@@ -273,8 +278,6 @@ public class CodebaseController {
 
 		return result;
 	}
-
-
 
 	@GetMapping("/{projectId}/history")
 	@Operation(summary = "get-history", description = "Get file access history")
@@ -345,15 +348,18 @@ public class CodebaseController {
 	}
 
 	/**
-	 * Fix G: Relativize filePath against project rootPath before exposing it in the DTO.
-	 * Absolute paths waste tokens and leak machine-specific directory layout to AI tools.
+	 * Fix G: Relativize filePath against project rootPath before exposing it in the
+	 * DTO.
+	 * Absolute paths waste tokens and leak machine-specific directory layout to AI
+	 * tools.
 	 */
 	private SymbolDTO toSymbolDTO(Symbol symbol, String rootPath) {
 		String relativePath = symbol.getFilePath();
 		if (rootPath != null && relativePath != null && relativePath.startsWith(rootPath)) {
 			try {
 				relativePath = Paths.get(rootPath).relativize(Paths.get(relativePath)).toString();
-			} catch (Exception ignored) { /* keep absolute if relativize fails */ }
+			} catch (Exception ignored) {
+				/* keep absolute if relativize fails */ }
 		}
 		return new SymbolDTO(
 				symbol.getId(),
@@ -364,11 +370,11 @@ public class CodebaseController {
 				symbol.getSignature(),
 				symbol.getReturnType(),
 				symbol.getModifiers(),
-				symbol.getAnnotations()
-		);
+				symbol.getAnnotations());
 	}
 
-	// Legacy overload used by getFileContext (which already has the full path context)
+	// Legacy overload used by getFileContext (which already has the full path
+	// context)
 	private SymbolDTO toSymbolDTO(Symbol symbol) {
 		return toSymbolDTO(symbol, null);
 	}
@@ -382,11 +388,13 @@ public class CodebaseController {
 
 	/**
 	 * Fix B: Strips Java import statements from content.
-	 * Imports are high-noise for AI tools (they see "import org.springframework..." 30 times)
+	 * Imports are high-noise for AI tools (they see "import org.springframework..."
+	 * 30 times)
 	 * and contain zero signal about actual logic.
 	 */
 	private static String stripJavaImports(String content) {
-		if (content == null) return null;
+		if (content == null)
+			return null;
 		return content.lines()
 				.filter(line -> !line.stripLeading().startsWith("import "))
 				.collect(java.util.stream.Collectors.joining("\n"));

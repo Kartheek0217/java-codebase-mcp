@@ -104,6 +104,12 @@ public class FileIndexerService {
 		logger.debug("indexFile called for project {} and path {}", projectId, path);
 		try {
 			String filePath = path.toAbsolutePath().toString();
+			long currentFileSize = Files.size(path);
+			if (currentFileSize > 500_000) {
+				logger.warn("Skipping file {} as its size ({} bytes) exceeds the 500KB limit.", path, currentFileSize);
+				return;
+			}
+
 			FileMetadataId id = new FileMetadataId(projectId, filePath);
 			FileMetadata metadata = fileMetadataRepository.findById(id).orElse(null);
 
@@ -332,7 +338,8 @@ public class FileIndexerService {
 					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
 					try {
 						s.setSignature(n.getDeclarationAsString(false, false, true));
-					} catch (Exception ignored) { /* defensive: malformed AST nodes */ }
+					} catch (Exception ignored) {
+						/* defensive: malformed AST nodes */ }
 					s.setReturnType(n.getTypeAsString());
 					s.setModifiers(n.getModifiers().stream()
 							.map(m -> m.getKeyword().asString()).collect(Collectors.joining(" ")));

@@ -84,7 +84,8 @@ public class BrowserSessionManager {
     }
 
     /**
-     * Enforces the max-sessions limit by closing the oldest session when the cap is reached.
+     * Enforces the max-sessions limit by closing the oldest session when the cap is
+     * reached.
      */
     private void enforceSessionLimit() {
         int max = properties.getMaxSessions();
@@ -108,7 +109,7 @@ public class BrowserSessionManager {
         lastActivity.entrySet().stream()
                 .filter(e -> e.getValue().isBefore(cutoff))
                 .map(Map.Entry::getKey)
-                .toList()           // snapshot to avoid ConcurrentModificationException
+                .toList() // snapshot to avoid ConcurrentModificationException
                 .forEach(id -> {
                     closeSession(id);
                 });

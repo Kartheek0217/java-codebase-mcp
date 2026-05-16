@@ -77,7 +77,8 @@ public class TopologyService {
 			}
 		}
 
-		// Fix K: aggregate top symbols in DB with GROUP BY instead of loading all symbols into JVM heap
+		// Fix K: aggregate top symbols in DB with GROUP BY instead of loading all
+		// symbols into JVM heap
 		List<Object[]> topSymbolRows = symbolRepository.findTopSymbolNames(projectId, PageRequest.of(0, 20));
 		List<Map<String, Object>> topSymbols = topSymbolRows.stream().map(row -> {
 			Map<String, Object> entry = new HashMap<>();
