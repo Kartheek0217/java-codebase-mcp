@@ -137,13 +137,22 @@ public class FileIndexerService {
 				dependencies = javaResult.dependencies;
 			} else if (filePath.toLowerCase().endsWith(".md")) {
 				skillService.learnSkillFromMarkdown(projectId, content, filePath);
+				// Persist metadata so checksum is stored and the file is not re-processed on
+				// every scan (symbols/calls are null — skills are stored separately)
 			} else {
 				symbols = extractGeneralSymbols(content, filePath);
 			}
 
-			// Update metadata and symbols in a single transaction (Through self-proxy to
-			// enable @Transactional)
-			self.saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
+			// Update metadata and symbols in a single transaction. Use self-proxy when
+			// available to enable @Transactional; fall back to direct call during early
+			// startup before the proxy is wired (self may be null at that point).
+			FileIndexerService proxy = self;
+			if (proxy == null) {
+				logger.warn("Self-proxy not yet wired for {}; saveFileData runs without @Transactional — no rollback on failure",
+						filePath);
+				proxy = this;
+			}
+			proxy.saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
 
 			// Index content in Lucene (Outside DB transaction)
 			luceneIndexService.indexFileContent(projectId, filePath, content);
@@ -171,7 +180,10 @@ public class FileIndexerService {
 			symbolRepository.saveAll(symbols);
 			symbolCache.put(projectId + ":" + filePath, symbols);
 
-			// Save calls after symbols are persisted to resolve caller IDs
+			// Save calls after symbols are persisted to resolve caller IDs.
+			// Known limitation: callerName matches by method name only — overloaded methods
+			// in the same file share a callerName so edges may be attributed to the first
+			// overload found. Acceptable simplification for call-graph navigation.
 			if (calls != null && !calls.isEmpty()) {
 				List<SymbolCall> symbolCalls = new ArrayList<>();
 				for (CallInfo ci : calls) {
@@ -338,8 +350,11 @@ public class FileIndexerService {
 					n.getBegin().ifPresent(pos -> s.setLineNumber(pos.line));
 					try {
 						s.setSignature(n.getDeclarationAsString(false, false, true));
-					} catch (Exception ignored) {
-						/* defensive: malformed AST nodes */ }
+					} catch (Exception e) {
+						// Defensive: some malformed AST nodes fail declaration serialisation
+						logger.trace("Could not get declaration string for method {} in {}: {}",
+								n.getNameAsString(), path, e.getMessage());
+					}
 					s.setReturnType(n.getTypeAsString());
 					s.setModifiers(n.getModifiers().stream()
 							.map(m -> m.getKeyword().asString()).collect(Collectors.joining(" ")));

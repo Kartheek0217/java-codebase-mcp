@@ -53,7 +53,9 @@ public class BrowserSessionManager {
         }
     }
 
-    public String createSession() {
+    // Synchronized: enforceSessionLimit() check + ensurePlaywrightInitialized() +
+    // session creation must be atomic to prevent TOCTOU races under concurrent calls.
+    public synchronized String createSession() {
         enforceSessionLimit();
         ensurePlaywrightInitialized();
         String sessionId = UUID.randomUUID().toString();
@@ -79,8 +81,9 @@ public class BrowserSessionManager {
         }
     }
 
+    /** Returns a read-only snapshot of active sessions. Callers must not mutate it. */
     public Map<String, BrowserContext> getActiveSessions() {
-        return sessions;
+        return Map.copyOf(sessions);
     }
 
     /**

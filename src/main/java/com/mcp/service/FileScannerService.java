@@ -18,13 +18,14 @@ import org.springframework.stereotype.Service;
 
 import com.mcp.entity.Project;
 import com.mcp.repository.ProjectRepository;
+import com.mcp.repository.ProjectTaskRepository;
 
 @Service
 public class FileScannerService {
 
 	private static final Logger logger = LoggerFactory.getLogger(FileScannerService.class);
 	private final ProjectRepository projectRepository;
-	private final com.mcp.repository.ProjectTaskRepository projectTaskRepository;
+	private final ProjectTaskRepository projectTaskRepository;
 	private final FileIndexerService fileIndexerService;
 	private final Executor applicationTaskExecutor;
 
@@ -32,7 +33,7 @@ public class FileScannerService {
 			".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql");
 
 	public FileScannerService(ProjectRepository projectRepository,
-			com.mcp.repository.ProjectTaskRepository projectTaskRepository,
+			ProjectTaskRepository projectTaskRepository,
 			FileIndexerService fileIndexerService,
 			Executor applicationTaskExecutor) {
 		this.projectRepository = projectRepository;
@@ -41,38 +42,47 @@ public class FileScannerService {
 		this.applicationTaskExecutor = applicationTaskExecutor;
 	}
 
+	// Runs asynchronously on the applicationTaskExecutor so that HTTP request
+	// threads are never blocked waiting for potentially long-running scans.
+	// The outer task and inner per-file tasks both use applicationTaskExecutor.
+	// This is safe because it is backed by newVirtualThreadPerTaskExecutor()
+	// (unbounded virtual threads) — the outer task blocking on .join() cannot
+	// starve inner tasks since carrier threads are never held by blocked virtuals.
 	public void scanChangedFiles(Long projectId, java.util.Set<String> changedPaths) {
-		Project project = projectRepository.findById(projectId).orElseThrow();
-		Path root = Paths.get(project.getRootPath()).toAbsolutePath();
-		logger.info("Starting partial scan for {} changed files in project {}", changedPaths.size(), project.getName());
+		CompletableFuture.runAsync(() -> {
+			Project project = projectRepository.findById(projectId).orElseThrow();
+			Path root = Paths.get(project.getRootPath()).toAbsolutePath();
+			logger.info("Starting partial scan for {} changed files in project {}", changedPaths.size(),
+					project.getName());
 
-		project.setStatus(com.mcp.model.ProjectStatus.INDEXING);
-		projectRepository.save(project);
-
-		try {
-			List<CompletableFuture<Void>> futures = changedPaths.stream().map(relPath -> {
-				Path fullPath = root.resolve(relPath).toAbsolutePath();
-				return CompletableFuture.runAsync(() -> {
-					if (Files.exists(fullPath)) {
-						if (isIndexable(fullPath)) {
-							fileIndexerService.indexFile(projectId, fullPath);
-						}
-					} else {
-						// File was deleted
-						fileIndexerService.deleteFileData(projectId, fullPath);
-					}
-				}, applicationTaskExecutor);
-			}).toList();
-
-			CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-			project.setStatus(com.mcp.model.ProjectStatus.COMPLETED);
-			logger.info("Partial scan for project {} completed.", project.getName());
-		} catch (Exception e) {
-			logger.error("Partial scan failed for project {}", projectId, e);
-			project.setStatus(com.mcp.model.ProjectStatus.FAILED);
-		} finally {
+			project.setStatus(com.mcp.model.ProjectStatus.INDEXING);
 			projectRepository.save(project);
-		}
+
+			try {
+				List<CompletableFuture<Void>> futures = changedPaths.stream().map(relPath -> {
+					Path fullPath = root.resolve(relPath).toAbsolutePath();
+					return CompletableFuture.runAsync(() -> {
+						if (Files.exists(fullPath)) {
+							if (isIndexable(fullPath)) {
+								fileIndexerService.indexFile(projectId, fullPath);
+							}
+						} else {
+							// File was deleted
+							fileIndexerService.deleteFileData(projectId, fullPath);
+						}
+					}, applicationTaskExecutor);
+				}).toList();
+
+				CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+				project.setStatus(com.mcp.model.ProjectStatus.COMPLETED);
+				logger.info("Partial scan for project {} completed.", project.getName());
+			} catch (Exception e) {
+				logger.error("Partial scan failed for project {}", projectId, e);
+				project.setStatus(com.mcp.model.ProjectStatus.FAILED);
+			} finally {
+				projectRepository.save(project);
+			}
+		}, applicationTaskExecutor);
 	}
 
 	public void scanProject(Long projectId) throws IOException {
@@ -136,12 +146,19 @@ public class FileScannerService {
 						return false;
 					}
 
-					// Default fallback filters for common large/generated directories
-					if (relativePath.contains("node_modules/") || relativePath.contains("target/")
-							|| relativePath.contains("dist/") || relativePath.contains("build/")
-							|| relativePath.contains("bin/") || relativePath.contains("logs/")
-							|| relativePath.contains(".idea/") || relativePath.contains(".vscode/")
-							|| relativePath.contains(".gradle/") || relativePath.contains(".settings/")) {
+					// Default fallback filters for common large/generated directories.
+					// Use path-segment-safe check (starts-with segment boundary) to avoid
+					// false positives like src/main/my-target/ matching "target/".
+					if (hasPathSegment(relativePath, "node_modules")
+							|| hasPathSegment(relativePath, "target")
+							|| hasPathSegment(relativePath, "dist")
+							|| hasPathSegment(relativePath, "build")
+							|| hasPathSegment(relativePath, "bin")
+							|| hasPathSegment(relativePath, "logs")
+							|| hasPathSegment(relativePath, ".idea")
+							|| hasPathSegment(relativePath, ".vscode")
+							|| hasPathSegment(relativePath, ".gradle")
+							|| hasPathSegment(relativePath, ".settings")) {
 						return false;
 					}
 
@@ -177,5 +194,19 @@ public class FileScannerService {
 	private boolean isIndexable(Path path) {
 		String filename = path.toString().toLowerCase();
 		return INDEXABLE_EXTENSIONS.stream().anyMatch(ext -> filename.endsWith(ext));
+	}
+
+	/**
+	 * Returns true if {@code relativePath} contains {@code segment} as an exact
+	 * path component (i.e., bounded by '/' on both sides, or at the start/end).
+	 * Prevents substring false-positives such as "my-target/" matching "target".
+	 */
+	private static boolean hasPathSegment(String relativePath, String segment) {
+		// Normalise to forward slashes (already done by caller, but be defensive)
+		String path = relativePath.replace('\\', '/');
+		return path.equals(segment)
+				|| path.startsWith(segment + "/")
+				|| path.contains("/" + segment + "/")
+				|| path.endsWith("/" + segment);
 	}
 }

@@ -11,6 +11,7 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -31,10 +32,11 @@ public class GitInfoService {
     private final Map<Long, Repository> repositoryCache = new ConcurrentHashMap<>();
     private final Map<Long, Long> lastAccessTimes = new ConcurrentHashMap<>();
 
-    private String commitHash;
-    private String commitMessage;
-    private String branchName;
-    private boolean gitAvailable = false;
+    // volatile: written once in @PostConstruct, read from any thread thereafter
+    private volatile String commitHash;
+    private volatile String commitMessage;
+    private volatile String branchName;
+    private volatile boolean gitAvailable = false;
 
     public GitInfoService(ProjectRepository projectRepository) {
         this.projectRepository = projectRepository;
@@ -42,30 +44,33 @@ public class GitInfoService {
 
     @PostConstruct
     public void init() {
+        // Use try-with-resources so the global Repository is closed after we've
+        // read the startup info — it is not cached, unlike per-project repositories.
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
-            Repository repository = builder
+            try (Repository repository = builder
                     .readEnvironment()
                     .findGitDir(new File("."))
-                    .build();
+                    .build()) {
 
-            if (repository == null || !repository.getDirectory().exists()) {
-                logger.warn("Global Git directory not found");
-                return;
-            }
-
-            ObjectId head = repository.resolve("HEAD");
-            if (head != null) {
-                commitHash = head.getName().substring(0, Math.min(8, head.getName().length()));
-
-                try (Git git = new Git(repository)) {
-                    commitMessage = git.log().setMaxCount(1).call().iterator().next().getFullMessage().trim();
+                if (repository == null || !repository.getDirectory().exists()) {
+                    logger.warn("Global Git directory not found");
+                    return;
                 }
 
-                branchName = repository.getBranch();
-                gitAvailable = true;
+                ObjectId head = repository.resolve("HEAD");
+                if (head != null) {
+                    commitHash = head.getName().substring(0, Math.min(8, head.getName().length()));
 
-                logger.info("Global Git info loaded: commit={}, branch={}", commitHash, branchName);
+                    try (Git git = new Git(repository)) {
+                        commitMessage = git.log().setMaxCount(1).call().iterator().next().getFullMessage().trim();
+                    }
+
+                    branchName = repository.getBranch();
+                    gitAvailable = true;
+
+                    logger.info("Global Git info loaded: commit={}, branch={}", commitHash, branchName);
+                }
             }
         } catch (Exception e) {
             logger.warn("Could not retrieve global Git information: {}", e.getMessage());
@@ -82,10 +87,23 @@ public class GitInfoService {
     }
 
     private Repository getRepository(Long projectId) throws IOException {
-        Repository repo = repositoryCache.computeIfAbsent(projectId, id -> {
+        // Avoid computeIfAbsent with a blocking IO lambda — ConcurrentHashMap docs warn
+        // this can deadlock when the lambda itself blocks on map operations.
+        Repository existing = repositoryCache.get(projectId);
+        if (existing != null) {
+            lastAccessTimes.put(projectId, System.currentTimeMillis());
+            return existing;
+        }
+        synchronized (this) {
+            // Double-check inside lock
+            existing = repositoryCache.get(projectId);
+            if (existing != null) {
+                lastAccessTimes.put(projectId, System.currentTimeMillis());
+                return existing;
+            }
             try {
-                Project project = projectRepository.findById(id)
-                        .orElseThrow(() -> new RuntimeException("Project not found: " + id));
+                Project project = projectRepository.findById(projectId)
+                        .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
 
                 FileRepositoryBuilder builder = new FileRepositoryBuilder();
                 Repository repository = builder
@@ -96,15 +114,16 @@ public class GitInfoService {
                 if (repository == null || !repository.getDirectory().exists()) {
                     throw new RuntimeException("Git repository not found for project: " + project.getName());
                 }
+                repositoryCache.put(projectId, repository);
+                lastAccessTimes.put(projectId, System.currentTimeMillis());
                 return repository;
             } catch (IOException e) {
-                throw new RuntimeException("Error opening Git repository", e);
+                throw new IOException("Error opening Git repository for project " + projectId, e);
             }
-        });
-        lastAccessTimes.put(projectId, System.currentTimeMillis());
-        return repo;
+        }
     }
 
+    @Scheduled(fixedDelay = 1_800_000) // Run every 30 minutes
     public void cleanupIdleRepositories() {
         long now = System.currentTimeMillis();
         long idleThreshold = 30 * 60 * 1000; // 30 minutes
@@ -112,6 +131,10 @@ public class GitInfoService {
         lastAccessTimes.forEach((projectId, lastAccess) -> {
             if (now - lastAccess > idleThreshold) {
                 logger.info("Closing idle Git repository for project {}", projectId);
+                // Note: repositoryCache.remove + repo.close() are not atomic.
+                // A concurrent getRepository call could re-add an entry between
+                // the remove and close; that new entry would be a fresh handle and
+                // is not affected. The closed handle here is simply discarded.
                 Repository repo = repositoryCache.remove(projectId);
                 if (repo != null) {
                     repo.close();

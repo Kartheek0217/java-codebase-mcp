@@ -44,7 +44,10 @@ import jakarta.annotation.PreDestroy;
 public class LuceneIndexService {
 
 	private static final Logger logger = LoggerFactory.getLogger(LuceneIndexService.class);
-	private static final String BASE_INDEX_DIR = "data/indices";
+	// Resolve to absolute path at class-load time so the index location is stable
+	// regardless of which directory the JVM is launched from.
+	private static final String BASE_INDEX_DIR =
+			Paths.get(System.getProperty("user.dir"), "data", "indices").toAbsolutePath().toString();
 	private static final long SEARCH_TIMEOUT_MS = 2000;
 
 	private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
@@ -102,7 +105,20 @@ public class LuceneIndexService {
 	}
 
 	private IndexWriter getWriter(Long projectId) throws IOException {
-		return writers.computeIfAbsent(projectId, k -> {
+		// Avoid computeIfAbsent with a blocking IO lambda — ConcurrentHashMap docs warn
+		// this can deadlock when the mapping function performs blocking operations.
+		IndexWriter existing = writers.get(projectId);
+		if (existing != null) {
+			return existing;
+		}
+		// synchronized(this) is coarse-grained (serialises all projects' first write),
+		// but writer creation is a one-time-per-project event so contention is negligible.
+		synchronized (this) {
+			// Double-check inside the lock
+			existing = writers.get(projectId);
+			if (existing != null) {
+				return existing;
+			}
 			try {
 				Path indexPath = Paths.get(BASE_INDEX_DIR, String.valueOf(projectId));
 				if (!Files.exists(indexPath)) {
@@ -117,12 +133,13 @@ public class LuceneIndexService {
 
 				SearcherManager sm = new SearcherManager(writer, true, true, new SearcherFactory());
 				searcherManagers.put(projectId, sm);
+				writers.put(projectId, writer);
 				return writer;
 			} catch (IOException e) {
 				logger.error("Error creating IndexWriter for project {}", projectId, e);
-				throw new RuntimeException(e);
+				throw e;
 			}
-		});
+		}
 	}
 
 	private SearcherManager getSearcherManager(Long projectId) throws IOException {
@@ -320,6 +337,8 @@ public class LuceneIndexService {
 
 	private List<ContentSearchResult.ContentMatch> parseSnippets(String snippet, String fileContent) {
 		List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
+		// Fixed: was `fileContent.isEmpty()` which nulled out valid content and caused
+		// line numbers to always return 0. Now correctly preserves non-empty content.
 		if (fileContent != null && fileContent.isEmpty()) {
 			fileContent = null;
 		}
