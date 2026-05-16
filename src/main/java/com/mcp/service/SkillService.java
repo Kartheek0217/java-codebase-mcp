@@ -48,7 +48,7 @@ public class SkillService {
 	public void loadBuiltInSkills() {
 		logger.info("Loading global built-in caveman skills...");
 		try {
-			Resource[] resources = resourcePatternResolver.getResources("classpath*:skills/**/SKILL.md");
+			Resource[] resources = resourcePatternResolver.getResources("classpath*:skills/caveman/**/SKILL.md");
 			for (Resource resource : resources) {
 				try (InputStream is = resource.getInputStream()) {
 					String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);

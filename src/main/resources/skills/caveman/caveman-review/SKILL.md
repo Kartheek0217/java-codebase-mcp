@@ -52,4 +52,8 @@ Drop terse mode for: security findings (CVE-class bugs need full explanation + r
 
 ## Boundaries
 
-Reviews only — does not write the code fix, does not approve/request-changes, does not run linters. Output the comment(s) ready to paste into the PR. "stop caveman-review" or "normal mode": revert to verbose review style.
+You can use the project's REST API endpoints to perform actions if requested by the user:
+- `GET /api/codebase/{projectId}/search/changed` to fetch uncommitted changes for review
+- `POST /api/tasks` to create tasks from the review findings
+
+Otherwise, reviews only — does not write the code fix, does not approve/request-changes, does not run linters. Output the comment(s) ready to paste into the PR. "stop caveman-review" or "normal mode": revert to verbose review style.
