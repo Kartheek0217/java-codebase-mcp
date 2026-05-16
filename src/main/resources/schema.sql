@@ -26,13 +26,14 @@ CREATE TABLE IF NOT EXISTS file_metadata (
 
 CREATE TABLE IF NOT EXISTS skills (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    project_id BIGINT NOT NULL,
+    project_id BIGINT,
     name VARCHAR(255) NOT NULL,
     description VARCHAR(1000),
     content TEXT,
     source VARCHAR(1024),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
+ALTER TABLE skills ALTER COLUMN project_id DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_file_metadata_file_size ON file_metadata(file_size);
 CREATE INDEX IF NOT EXISTS idx_file_metadata_project_path ON file_metadata(project_id, file_path);

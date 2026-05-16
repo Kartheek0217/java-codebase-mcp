@@ -14,6 +14,10 @@ public interface SkillRepository extends JpaRepository<Skill, Long> {
 
 	Optional<Skill> findByProjectIdAndName(Long projectId, String name);
 
+	List<Skill> findByProjectIdIsNull();
+
+	Optional<Skill> findByProjectIdIsNullAndName(String name);
+
 	@org.springframework.data.jpa.repository.Modifying
 	@org.springframework.transaction.annotation.Transactional
 	void deleteByProjectId(Long projectId);

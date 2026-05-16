@@ -166,9 +166,16 @@ public class McpController {
 
 	// Skills
 	@GetMapping("/skills")
-	@Operation(summary = "get-skills", description = "Get all skills for project")
-	public List<Skill> getSkills(@RequestParam Long projectId) {
-		return skillRepository.findByProjectId(projectId);
+	@Operation(summary = "get-skills", description = "Get all skills (global built-in skills + project skills if projectId is provided)")
+	public List<Skill> getSkills(@RequestParam(required = false) Long projectId) {
+		List<Skill> globalSkills = skillRepository.findByProjectIdIsNull();
+		if (projectId == null) {
+			return globalSkills;
+		}
+		List<Skill> projectSkills = skillRepository.findByProjectId(projectId);
+		List<Skill> allSkills = new java.util.ArrayList<>(globalSkills);
+		allSkills.addAll(projectSkills);
+		return allSkills;
 	}
 
 	@DeleteMapping("/skills")
@@ -184,6 +191,15 @@ public class McpController {
 			@RequestParam String filePath) throws IOException {
 		skillService.learnFromFile(projectId, filePath);
 		return Map.of("status", "success", "message", "Skill learned from file: " + filePath);
+	}
+
+	@PostMapping("/skills/learn")
+	@Operation(summary = "learn-skill", description = "Learn skill from URL or local file")
+	public Map<String, String> learnSkill(
+			@RequestParam Long projectId,
+			@RequestParam String url) throws IOException {
+		skillService.learnFromUrl(projectId, url);
+		return Map.of("status", "success", "message", "Skill learned from: " + url);
 	}
 
 	private static class Session {
