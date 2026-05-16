@@ -1,8 +1,12 @@
 package com.mcp.controller;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.entity.Project;
 import com.mcp.service.GitInfoService;
@@ -28,16 +33,10 @@ public class ProjectController {
 
 	private final ProjectService projectService;
 	private final GitInfoService gitInfoService;
-	private final com.mcp.repository.FileMetadataRepository fileMetadataRepository;
-	private final com.mcp.repository.SymbolRepository symbolRepository;
 
-	public ProjectController(ProjectService projectService, GitInfoService gitInfoService,
-			com.mcp.repository.FileMetadataRepository fileMetadataRepository,
-			com.mcp.repository.SymbolRepository symbolRepository) {
+	public ProjectController(ProjectService projectService, GitInfoService gitInfoService) {
 		this.projectService = projectService;
 		this.gitInfoService = gitInfoService;
-		this.fileMetadataRepository = fileMetadataRepository;
-		this.symbolRepository = symbolRepository;
 	}
 
 	/**
@@ -56,6 +55,17 @@ public class ProjectController {
 			@Parameter(description = "Human-readable name for the project") @RequestParam String name,
 			@Parameter(description = "Absolute path to the project's root directory on the local filesystem") @RequestParam String rootPath)
 			throws IOException {
+		// Validate rootPath before creating project
+		Path path = Path.of(rootPath);
+		if (!Files.exists(path)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path does not exist: " + rootPath);
+		}
+		if (!Files.isDirectory(path)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not a directory: " + rootPath);
+		}
+		if (!Files.isReadable(path)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not readable: " + rootPath);
+		}
 		return projectService.createProject(name, rootPath);
 	}
 
@@ -77,16 +87,8 @@ public class ProjectController {
 	 */
 	@GetMapping("/summary")
 	@Operation(summary = "get-projects-summ", description = "Returns basic statistics for all projects.")
-	public List<java.util.Map<String, Object>> getProjectsSummary() {
-		return projectService.getAllProjects().stream().map(p -> {
-			java.util.Map<String, Object> map = new java.util.HashMap<>();
-			map.put("id", p.getId());
-			map.put("name", p.getName());
-			map.put("rootPath", p.getRootPath());
-			map.put("fileCount", fileMetadataRepository.countByProjectId(p.getId()));
-			map.put("symbolCount", symbolRepository.countByProjectId(p.getId()));
-			return map;
-		}).toList();
+	public List<Map<String, Object>> getProjectsSummary() {
+		return projectService.getAllProjectSummaries();
 	}
 
 	/**
@@ -109,12 +111,8 @@ public class ProjectController {
 	 */
 	@GetMapping("/{id}/stats")
 	@Operation(summary = "get-project-stats", description = "Get project stats")
-	public java.util.Map<String, Object> getProjectStats(@PathVariable Long id) {
-		java.util.Map<String, Object> stats = new java.util.HashMap<>();
-		stats.put("projectId", id);
-		stats.put("fileCount", fileMetadataRepository.countByProjectId(id));
-		stats.put("symbolCount", symbolRepository.countByProjectId(id));
-		return stats;
+	public Map<String, Object> getProjectStats(@PathVariable Long id) {
+		return projectService.getProjectStats(id);
 	}
 
 	/**

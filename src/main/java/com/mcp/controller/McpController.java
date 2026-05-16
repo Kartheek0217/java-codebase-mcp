@@ -6,11 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,7 +34,6 @@ import com.mcp.service.TaskService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.annotation.PostConstruct;
 
 @RestController
 @RequestMapping("/api/mcp")
@@ -58,8 +55,6 @@ public class McpController {
 				}
 			});
 
-	private final ScheduledExecutorService sessionCleanup = Executors.newSingleThreadScheduledExecutor();
-
 	public McpController(TaskService taskService, ProjectRuleService ruleService, SkillService skillService,
 			SkillRepository skillRepository, ProjectRepository projectRepository,
 			ContextMemoryService contextMemoryService) {
@@ -71,18 +66,20 @@ public class McpController {
 		this.contextMemoryService = contextMemoryService;
 	}
 
-	@PostConstruct
-	public void init() {
-		sessionCleanup.scheduleWithFixedDelay(() -> {
-			long now = System.currentTimeMillis();
-			sessionStore.entrySet().removeIf(e -> {
-				boolean expired = (now - e.getValue().createdAt) > 3600000L;
-				if (expired) {
-					contextMemoryService.clearSession(e.getKey());
-				}
-				return expired;
-			});
-		}, 1, 1, TimeUnit.HOURS);
+	/**
+	 * Cleans up sessions older than 1 hour. Runs every hour via Spring scheduler.
+	 * Replaces the raw ScheduledExecutorService + @PostConstruct pattern.
+	 */
+	@Scheduled(fixedDelay = 3_600_000)
+	public void cleanupExpiredSessions() {
+		long now = System.currentTimeMillis();
+		sessionStore.entrySet().removeIf(e -> {
+			boolean expired = (now - e.getValue().createdAt()) > 3_600_000L;
+			if (expired) {
+				contextMemoryService.clearSession(e.getKey());
+			}
+			return expired;
+		});
 	}
 
 	// Sessions
@@ -103,7 +100,7 @@ public class McpController {
 		if (session == null) {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found");
 		}
-		return new SessionDTO(session.sessionId, session.projectId, session.createdAt, Collections.emptyList());
+		return new SessionDTO(session.sessionId(), session.projectId(), session.createdAt(), Collections.emptyList());
 	}
 
 	// Tasks
@@ -202,15 +199,13 @@ public class McpController {
 		return Map.of("status", "success", "message", "Skill learned from: " + url);
 	}
 
-	private static class Session {
-		final String sessionId;
-		final Long projectId;
-		final long createdAt;
-
+	/**
+	 * Compact record replacing the previous 13-line boilerplate inner class.
+	 * {@code createdAt} is epoch millis captured at construction time.
+	 */
+	private record Session(String sessionId, Long projectId, long createdAt) {
 		Session(String sessionId, Long projectId) {
-			this.sessionId = sessionId;
-			this.projectId = projectId;
-			this.createdAt = System.currentTimeMillis();
+			this(sessionId, projectId, System.currentTimeMillis());
 		}
 	}
 }

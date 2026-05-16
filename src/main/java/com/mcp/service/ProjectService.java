@@ -1,7 +1,10 @@
 package com.mcp.service;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +81,12 @@ public class ProjectService {
                     } catch (IOException e) {
                         logger.error("Failed to start scan for new project {}", savedProject.getId(), e);
                     }
+                })
+                .orTimeout(10, TimeUnit.MINUTES)
+                .exceptionally(ex -> {
+                    logger.error("Async scan timed out or failed for project {}: {}",
+                            savedProject.getId(), ex.getMessage());
+                    return null;
                 });
             }
         });
@@ -93,7 +102,7 @@ public class ProjectService {
         return projectRepository.findById(id).orElseThrow(() -> new RuntimeException("Project not found"));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public void reindexProject(Long id) {
         Project project = getProject(id);
         logger.info("Triggering manual Git-based re-index for project: {}", project.getName());
@@ -104,13 +113,46 @@ public class ProjectService {
             return;
         }
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                logger.info("Starting partial scan for project {} based on Git changes...", id);
-                fileScannerService.scanChangedFiles(id, changedFiles);
-            }
+        // Run async without transaction — no DB writes needed
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            logger.info("Starting partial scan for project {} based on Git changes...", id);
+            fileScannerService.scanChangedFiles(id, changedFiles);
+        })
+        .orTimeout(10, TimeUnit.MINUTES)
+        .exceptionally(ex -> {
+            logger.error("Async re-index timed out or failed for project {}: {}", id, ex.getMessage());
+            return null;
         });
+    }
+
+    /**
+     * Returns file and symbol counts for a single project.
+     * Centralises repository access that was previously leaked into ProjectController.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getProjectStats(Long id) {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("projectId", id);
+        stats.put("fileCount", fileMetadataRepository.countByProjectId(id));
+        stats.put("symbolCount", symbolRepository.countByProjectId(id));
+        return stats;
+    }
+
+    /**
+     * Returns a summary list of all projects including file and symbol counts.
+     * Centralises repository access that was previously leaked into ProjectController.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAllProjectSummaries() {
+        return projectRepository.findAll().stream().map(p -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", p.getId());
+            map.put("name", p.getName());
+            map.put("rootPath", p.getRootPath());
+            map.put("fileCount", fileMetadataRepository.countByProjectId(p.getId()));
+            map.put("symbolCount", symbolRepository.countByProjectId(p.getId()));
+            return map;
+        }).toList();
     }
 
     @Transactional

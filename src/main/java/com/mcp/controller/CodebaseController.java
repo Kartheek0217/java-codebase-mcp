@@ -51,6 +51,7 @@ import java.util.Set;
 import com.mcp.service.CodeSummarizerService;
 import com.mcp.service.EndpointAnalysisService;
 import com.mcp.util.LlmResponseOptimizer;
+import com.mcp.properties.CodebaseProperties;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -74,6 +75,7 @@ public class CodebaseController {
 
 	private final CodeSummarizerService codeSummarizerService;
 	private final EndpointAnalysisService endpointAnalysisService;
+	private final CodebaseProperties codebaseProperties;
 
 	public CodebaseController(FileIndexerService fileIndexerService, FileMetadataRepository fileMetadataRepository,
 			SymbolRepository symbolRepository, LuceneIndexService luceneIndexService,
@@ -82,9 +84,9 @@ public class CodebaseController {
 			ReconciliationService reconciliationService,
 			com.mcp.repository.SymbolCallRepository symbolCallRepository,
 			GitInfoService gitInfoService,
-
 			CodeSummarizerService codeSummarizerService,
-			EndpointAnalysisService endpointAnalysisService) {
+			EndpointAnalysisService endpointAnalysisService,
+			CodebaseProperties codebaseProperties) {
 		this.fileIndexerService = fileIndexerService;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.symbolRepository = symbolRepository;
@@ -96,9 +98,9 @@ public class CodebaseController {
 		this.reconciliationService = reconciliationService;
 		this.symbolCallRepository = symbolCallRepository;
 		this.gitInfoService = gitInfoService;
-
 		this.codeSummarizerService = codeSummarizerService;
 		this.endpointAnalysisService = endpointAnalysisService;
+		this.codebaseProperties = codebaseProperties;
 	}
 
 	// Fix J: VT-backed executor for parallel batch context fetches
@@ -121,10 +123,11 @@ public class CodebaseController {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);
 		}
 
-		// Fix A: auto-downgrade to structure for large files (>200 KB) to prevent
-		// massive token payloads
+		// Fix A: auto-downgrade to structure for large files to prevent massive token
+		// payloads
 		long fileBytes = Files.size(fullPath);
-		if (fileBytes > 200_000 && "full".equalsIgnoreCase(format)) {
+		long maxBytes = (long) codebaseProperties.getMaxFileSizeKb() * 1024;
+		if (fileBytes > maxBytes && "full".equalsIgnoreCase(format)) {
 			format = "structure";
 		}
 
@@ -138,7 +141,7 @@ public class CodebaseController {
 		if ("structure".equalsIgnoreCase(format)) {
 			// Fix B: strip Java import blocks — high noise, zero AI signal
 			String structureContent = codeSummarizerService.extractStructure(content);
-			finalContent = stripJavaImports(structureContent);
+			finalContent = com.mcp.util.CodeUtils.stripJavaImports(structureContent);
 		} else if ("summary".equalsIgnoreCase(format)) {
 			summary = codeSummarizerService.createIntelligentSummary(content);
 			finalContent = null; // No content in summary mode
@@ -154,7 +157,7 @@ public class CodebaseController {
 		}
 
 		ContextDTO contextDTO = new ContextDTO(filePath, finalContent, summary, format,
-				symbols.stream().map(this::toSymbolDTO).toList(), toMetadataDTO(metadata), null, false, false);
+				symbols.stream().map(s -> toSymbolDTO(s, null)).toList(), toMetadataDTO(metadata), null, false, false);
 
 		if ("markdown".equalsIgnoreCase(format)) {
 			return ResponseEntity.ok().eTag(currentChecksum).body(LlmResponseOptimizer.toMarkdown(contextDTO));
@@ -211,7 +214,7 @@ public class CodebaseController {
 		Map<String, Object> result = new java.util.HashMap<>();
 		result.put("filePath", filePath);
 		result.put("summary", summary);
-		result.put("symbols", symbols.stream().map(this::toSymbolDTO).toList());
+		result.put("symbols", symbols.stream().map(s -> toSymbolDTO(s, null)).toList());
 		return result;
 	}
 
@@ -264,9 +267,11 @@ public class CodebaseController {
 
 	@GetMapping("/{projectId}/files")
 	@Operation(summary = "search-files", description = "Finds indexed files whose paths match the query.")
-	public List<FileMetadataDTO> searchFiles(@PathVariable Long projectId, @RequestParam String query) {
-		return fileMetadataRepository.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query).stream()
-				.map(this::toMetadataDTO).toList();
+	public List<FileMetadataDTO> searchFiles(@PathVariable Long projectId, @RequestParam String query,
+			@RequestParam(defaultValue = "100") int limit) {
+		PageRequest pageRequest = PageRequest.of(0, limit);
+		return fileMetadataRepository.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query, pageRequest)
+				.stream().map(this::toMetadataDTO).toList();
 	}
 
 	@GetMapping("/{projectId}/suggest")
@@ -352,6 +357,7 @@ public class CodebaseController {
 	 * DTO.
 	 * Absolute paths waste tokens and leak machine-specific directory layout to AI
 	 * tools.
+	 * Pass {@code null} for rootPath to skip relativization.
 	 */
 	private SymbolDTO toSymbolDTO(Symbol symbol, String rootPath) {
 		String relativePath = symbol.getFilePath();
@@ -373,12 +379,6 @@ public class CodebaseController {
 				symbol.getAnnotations());
 	}
 
-	// Legacy overload used by getFileContext (which already has the full path
-	// context)
-	private SymbolDTO toSymbolDTO(Symbol symbol) {
-		return toSymbolDTO(symbol, null);
-	}
-
 	private FileMetadataDTO toMetadataDTO(FileMetadata metadata) {
 		if (metadata == null)
 			return null;
@@ -386,17 +386,4 @@ public class CodebaseController {
 				metadata.getLastScanned());
 	}
 
-	/**
-	 * Fix B: Strips Java import statements from content.
-	 * Imports are high-noise for AI tools (they see "import org.springframework..."
-	 * 30 times)
-	 * and contain zero signal about actual logic.
-	 */
-	private static String stripJavaImports(String content) {
-		if (content == null)
-			return null;
-		return content.lines()
-				.filter(line -> !line.stripLeading().startsWith("import "))
-				.collect(java.util.stream.Collectors.joining("\n"));
-	}
 }

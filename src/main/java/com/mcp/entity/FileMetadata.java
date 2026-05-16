@@ -19,6 +19,7 @@ public class FileMetadata {
 	private String checksum;
 	private Long fileSize;
 	private LocalDateTime lastScanned;
+	@Lob
 	@Column(columnDefinition = "TEXT")
 	private String dependencies;
 
@@ -30,6 +31,7 @@ public class FileMetadata {
 	public void setDependencies(String dependencies) {
 		this.dependencies = dependencies;
 	}
+
 	public Long getProjectId() {
 		return projectId;
 	}

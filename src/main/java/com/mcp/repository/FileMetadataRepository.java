@@ -15,6 +15,9 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, File
 
 	List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query);
 
+	List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query,
+			org.springframework.data.domain.Pageable pageable);
+
 	@Modifying
 	@Transactional
 	void deleteByProjectId(Long projectId);
