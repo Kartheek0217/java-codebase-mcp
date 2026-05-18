@@ -60,7 +60,7 @@ public class SkillService {
 							source = "built-in:" + uri.substring(idx);
 						}
 					} catch (Exception ex) {
-						// Fallback to filename
+						logger.debug("URI parsing failed for resource: {}, falling back to filename", resource.getFilename(), ex);
 					}
 					learnGlobalSkillFromMarkdown(content, source);
 				} catch (Exception e) {
