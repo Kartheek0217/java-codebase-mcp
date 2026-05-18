@@ -46,9 +46,9 @@ public class SkillService {
 	@EventListener(ApplicationReadyEvent.class)
 	@Transactional
 	public void loadBuiltInSkills() {
-		logger.info("Loading global built-in caveman skills...");
+		logger.info("Loading global built-in jcb skills...");
 		try {
-			Resource[] resources = resourcePatternResolver.getResources("classpath*:skills/caveman/**/SKILL.md");
+			Resource[] resources = resourcePatternResolver.getResources("classpath*:skills/jcb/**/SKILL.md");
 			for (Resource resource : resources) {
 				try (InputStream is = resource.getInputStream()) {
 					String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
