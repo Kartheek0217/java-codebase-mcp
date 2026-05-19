@@ -1,3 +1,9 @@
+---
+name: java-performance
+description: >
+  High-performance JVM profiling, sargability, string builders, avoiding N+1 queries, and concurrency bulkheads.
+---
+
 # Java Performance Architecture & Profiling Guide
 
 This guide establishes battle-tested principles for production profiling, eliminating database bottlenecks, and optimizing execution throughput across high-traffic enterprise Java applications.

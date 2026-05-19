@@ -1,3 +1,9 @@
+---
+name: sql-performance
+description: >
+  Structural relational database query optimization, covering indexes, composite key ordering, and sargability rules.
+---
+
 # Enterprise SQL Architecture & Optimization Guide
 
 This guide establishes rigorous standards for relational database query performance: mastering structural SQL optimization, avoiding index invalidation traps, enforcing sargable WHERE predicates, and designing high-efficiency composite indexes.

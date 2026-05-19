@@ -1,3 +1,9 @@
+---
+name: spring-boot-architecture
+description: >
+  Enterprise Spring Boot architecture: decoupled event publishing, @TransactionalEventListener boundaries, and request defense pipelines.
+---
+
 # Spring Boot Enterprise Architecture Guide
 
 This guide establishes strict architectural standards for Spring Boot applications: designing decoupled event-driven workflows and structuring robust two-tier request defense pipelines with Filters and Interceptors.

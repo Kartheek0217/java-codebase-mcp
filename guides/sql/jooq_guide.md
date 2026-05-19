@@ -1,3 +1,9 @@
+---
+name: sql-jooq
+description: >
+  Using compile-time safe database queries, hybrid CQRS patterns, and direct record-to-DTO projection with jOOQ.
+---
+
 # jOOQ & Compile-Time Safe Persistence Architecture Guide
 
 This guide establishes production standards for SQL-first persistence: leveraging jOOQ for compile-time verified database querying, high-speed direct DTO projections, and designing hybrid CQRS persistence architectures.

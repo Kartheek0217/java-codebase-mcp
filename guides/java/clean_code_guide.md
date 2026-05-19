@@ -1,3 +1,9 @@
+---
+name: java-clean-code
+description: >
+  Refactoring branching logic, guard clauses, functional command maps, rule engines, Enum pointer equality, and switch expressions.
+---
+
 # Java Clean Code & Branching Architecture Guide
 
 Senior engineers actively avoid deeply nested `if-else` chains because procedural branching logic becomes unreadable, untestable, and impossible to safely extend without introducing regressions.

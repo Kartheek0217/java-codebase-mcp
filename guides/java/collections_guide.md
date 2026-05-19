@@ -1,3 +1,9 @@
+---
+name: java-collections
+description: >
+  Selecting, pre-sizing, and executing high-performance Java collections under low-latency and high-concurrency constraints.
+---
+
 # Java Collections Architecture & Optimization Guide
 
 This guide establishes strict performance invariants and architectural patterns for selecting, sizing, and operating high-performance Java collection structures across enterprise workloads.

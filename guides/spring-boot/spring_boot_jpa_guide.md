@@ -1,3 +1,9 @@
+---
+name: spring-boot-jpa
+description: >
+  JPA/Hibernate best practices: preserving JDBC batching via SEQUENCE IDs and implementing constant-time O(1) keyset pagination.
+---
+
 # Spring Boot JPA & Persistence Architecture Guide
 
 This guide establishes standards for Spring Data JPA persistence: optimizing primary key generation for high-speed JDBC batching and implementing constant-time $O(1)$ keyset cursor pagination over massive datasets.

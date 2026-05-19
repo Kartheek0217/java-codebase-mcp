@@ -1,3 +1,9 @@
+---
+name: spring-boot-concurrency
+description: >
+  Project Loom Virtual Threads, avoiding carrier thread pinning, and non-blocking WebClient pool configuration.
+---
+
 # Spring Boot Concurrency & Virtual Threads Guide
 
 This guide establishes standards for concurrent execution in Spring Boot 3+: leveraging Project Loom virtual threads for massive concurrency, preventing thread pinning traps, and configuring asynchronous WebClient architectures.

@@ -131,11 +131,20 @@ public class ProjectController {
 	 * Stages specific files or patterns in the project's Git repository.
 	 *
 	 * @param id       The project ID
-	 * @param patterns List of file paths or glob patterns to stage
+	 * @param requestBody The request body (either direct list or object with body field)
 	 */
 	@PostMapping("/{id}/git/stage")
 	@Operation(summary = "stage-files", description = "Stage files")
-	public void stageFiles(@PathVariable Long id, @RequestBody List<String> patterns) {
+	@SuppressWarnings("unchecked")
+	public void stageFiles(@PathVariable Long id, @RequestBody Object requestBody) {
+		List<String> patterns;
+		if (requestBody instanceof List) {
+			patterns = (List<String>) requestBody;
+		} else if (requestBody instanceof Map) {
+			patterns = (List<String>) ((Map<?, ?>) requestBody).get("body");
+		} else {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request body");
+		}
 		gitInfoService.stageFiles(id, patterns);
 	}
 
@@ -143,11 +152,20 @@ public class ProjectController {
 	 * Discards local changes for specific files in the project's Git repository.
 	 *
 	 * @param id       The project ID
-	 * @param patterns List of file paths or glob patterns to revert
+	 * @param requestBody The request body (either direct list or object with body field)
 	 */
 	@PostMapping("/{id}/git/discard")
 	@Operation(summary = "discard-changes", description = "Discard changes")
-	public void discardChanges(@PathVariable Long id, @RequestBody List<String> patterns) {
+	@SuppressWarnings("unchecked")
+	public void discardChanges(@PathVariable Long id, @RequestBody Object requestBody) {
+		List<String> patterns;
+		if (requestBody instanceof List) {
+			patterns = (List<String>) requestBody;
+		} else if (requestBody instanceof Map) {
+			patterns = (List<String>) ((Map<?, ?>) requestBody).get("body");
+		} else {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request body");
+		}
 		gitInfoService.discardChanges(id, patterns);
 	}
 
