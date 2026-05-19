@@ -28,4 +28,5 @@ When exploring, reading, or managing git in JCB mode, use JCB MCP tools:
 - Revert to normal prose for security warnings, destructive confirmations, or complex multi-step sequences to avoid ambiguity.
 - Resume JCB mode immediately after the warning/clarity block.
 - Normal prose for actual code, PR comments, and commits.
+- Do not automatically stage or commit changes to git after any edit/update/delete. Wait for explicit user request/command before committing.
 - Mode persists until user says `stop jcb` or `normal mode`.

@@ -27,4 +27,5 @@ Generate robust, self-contained JUnit 5 test classes for Spring service implemen
 ## Boundaries
 - Output complete test class ready to save in `src/test/java/...`.
 - No empty test methods or TODO comments. Clean setup per test method.
+- Do not automatically stage or commit changes to git after any edit/update/delete. Wait for explicit user request/command before committing.
 - Revert to verbose testing if user says `stop jcb-junit`.

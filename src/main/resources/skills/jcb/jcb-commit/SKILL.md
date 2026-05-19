@@ -21,4 +21,5 @@ Generate precise, fluff-free commit messages in Conventional Commits format. Foc
 ## Boundaries
 - Output generated commit message inside a code block ready to paste.
 - Do not execute CLI git commands directly.
+- Do not automatically stage or commit changes to git after any edit/update/delete. Wait for explicit user request/command before committing.
 - Revert to standard commit style if user says `stop jcb-commit`.

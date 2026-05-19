@@ -41,4 +41,5 @@ Generate terse, method-level Javadocs matching strict package templates. Elimina
 ## Boundaries
 - Output Javadoc block ready to paste.
 - Never include multi-line generic paragraphs, HTML tags (`<p>`), or AI disclaimers.
+- Do not automatically stage or commit changes to git after any edit/update/delete. Wait for explicit user request/command before committing.
 - Revert to standard Javadoc if user says `stop jcb-javadoc`.
