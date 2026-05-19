@@ -1,33 +1,34 @@
-# jcb
+# JCB Skills Registry
 
-Talk like smart jcb. Same brain, fewer tokens.
+This directory contains global built-in skills for the JCB MCP server, segregated by project type.
 
-## What it does
+## Directory Structure
 
-Compress every model response to jcb-style prose. Drops articles, filler, pleasantries, and hedging. Keeps every technical detail, code block, error string, and symbol exact. Cuts ~65-75% of output tokens with full accuracy preserved. Mode persists for the whole session until changed or stopped.
+- **[global](./global/)**: General-purpose jcb modes, reviews, commits, testing, and javadoc generation.
+  - `jcb/`: Core JCB terse communication mode.
+  - `jcb-commit/`: Ultra-compressed git commit message generator.
+  - `jcb-javadoc/`: Strict template method-level Javadoc generator.
+  - `jcb-junit/`: Spring Service JUnit test generator with full branch coverage.
+  - `jcb-review/`: Java/Spring Boot code quality, concurrency, and security reviewer.
+- **[java](./java/)**: Pure Java language-level architecture and style guides.
+  - `java-clean-code/`: Naming, syntax, and exception handling guidelines.
+  - `java-collections/`: Java Collections Framework usage and performance guide.
+  - `java-memory-gc/`: Memory management, leak prevention, and JVM GC optimization.
+  - `java-performance/`: Loop optimization, object reuse, and concurrency practices.
+  - `java-streams/`: Functional programming style and Stream API best practices.
+- **[spring-boot](./spring-boot/)**: Spring Boot framework-specific rules.
+  - `spring-boot-architecture/`: Multi-layered controller-service-repository patterns and events.
+  - `spring-boot-concurrency/`: `@Async`, virtual threads, scheduler, and lock management.
+  - `spring-boot-jpa/`: Hibernate/JPA fetch strategies, transactions, and caching.
+  - `spring-boot-performance/`: Boot time optimization, connection pooling, and JVM tuning.
+  - `spring-boot-security/`: Authentication, authorization, cors, and secure headers.
+  - `spring-boot-utilities/`: Jackson, logging, caching, and validation helpers.
+- **[sql](./sql/)**: SQL database access and query optimizations.
+  - `sql-jooq/`: Safe DSL building, code generation, and query building guide.
+  - `sql-performance/`: Indexing, query tuning, pagination, and bulk operations.
+- **[typescript](./typescript/)**: Frontend/Node/TypeScript rules.
+  - `ts-architecture/`: Directory layout, type safety, naming, and dependency patterns.
 
-Operates in full compression mode by default: drops articles, fragments OK, short synonyms.
+## Auto-Scanning
 
-Auto-clarity rule: jcb drops to normal prose for security warnings, irreversible-action confirmations, multi-step sequences where fragment ambiguity risks misread, and when user repeats a question. Resumes after the clear part.
-
-## How to invoke
-
-```
-/jcb              # enable mode (default full)
-stop jcb          # back to normal prose
-```
-
-## Example output
-
-Question: "Why does my React component re-render?"
-
-Normal prose:
-> Your component re-renders because you create a new object reference each render. Wrapping it in `useMemo` will fix the issue.
-
-Jcb (full):
-> New object ref each render. Inline object prop = new ref = re-render. Wrap in `useMemo`.
-
-## See also
-
-- [`SKILL.md`](./SKILL.md) — full LLM-facing instructions
-- [Jcb README](../../README.md) — repo overview, install, benchmarks
+All skills are recursively scanned and registered at system startup from the `classpath*:skills/jcb/**/SKILL.md` pattern.
