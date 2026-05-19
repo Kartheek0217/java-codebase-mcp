@@ -130,8 +130,10 @@ public class ProjectController {
 	/**
 	 * Stages specific files or patterns in the project's Git repository.
 	 *
-	 * @param id       The project ID
-	 * @param requestBody The request body (either direct list or object with body field)
+	 * @param id          The project ID
+	 * @param requestBody The request body (either direct list or object with body
+	 *                    field)
+	 */
 	@PostMapping("/{id}/git/stage")
 	@Operation(summary = "stage-files", description = "Stage files")
 	public void stageFiles(@PathVariable Long id, @RequestBody Object requestBody) {
@@ -142,8 +144,9 @@ public class ProjectController {
 	/**
 	 * Discards local changes for specific files in the project's Git repository.
 	 *
-	 * @param id       The project ID
-	 * @param requestBody The request body (either direct list or object with body field)
+	 * @param id          The project ID
+	 * @param requestBody The request body (either direct list or object with body
+	 *                    field)
 	 */
 	@PostMapping("/{id}/git/discard")
 	@Operation(summary = "discard-changes", description = "Discard changes")
@@ -162,7 +165,8 @@ public class ProjectController {
 				return (List<String>) bodyVal;
 			}
 		}
-		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request body: expected a list of file patterns or an object with a 'body' list property");
+		throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+				"Invalid request body: expected a list of file patterns or an object with a 'body' list property");
 	}
 
 	/**
