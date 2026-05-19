@@ -31,4 +31,4 @@ This directory contains global built-in skills for the JCB MCP server, segregate
 
 ## Auto-Scanning
 
-All skills are recursively scanned and registered at system startup from the `classpath*:skills/jcb/**/SKILL.md` pattern.
+All skills are recursively scanned and registered at system startup from the `classpath*:skills/**/SKILL.md` pattern.
