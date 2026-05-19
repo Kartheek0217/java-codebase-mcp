@@ -76,7 +76,7 @@ public class ProjectController {
 	 */
 	@GetMapping
 	@Operation(summary = "get-all-projects", description = "Returns a list of all registered projects and their configurations.")
-	public List<Project> getAllProjects(@RequestParam(required = false, defaultValue = "false") boolean summary) {
+	public List<Project> getAllProjects() {
 		return projectService.getAllProjects();
 	}
 
@@ -132,19 +132,10 @@ public class ProjectController {
 	 *
 	 * @param id       The project ID
 	 * @param requestBody The request body (either direct list or object with body field)
-	 */
 	@PostMapping("/{id}/git/stage")
 	@Operation(summary = "stage-files", description = "Stage files")
-	@SuppressWarnings("unchecked")
 	public void stageFiles(@PathVariable Long id, @RequestBody Object requestBody) {
-		List<String> patterns;
-		if (requestBody instanceof List) {
-			patterns = (List<String>) requestBody;
-		} else if (requestBody instanceof Map) {
-			patterns = (List<String>) ((Map<?, ?>) requestBody).get("body");
-		} else {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request body");
-		}
+		List<String> patterns = parsePatterns(requestBody);
 		gitInfoService.stageFiles(id, patterns);
 	}
 
@@ -156,17 +147,22 @@ public class ProjectController {
 	 */
 	@PostMapping("/{id}/git/discard")
 	@Operation(summary = "discard-changes", description = "Discard changes")
-	@SuppressWarnings("unchecked")
 	public void discardChanges(@PathVariable Long id, @RequestBody Object requestBody) {
-		List<String> patterns;
-		if (requestBody instanceof List) {
-			patterns = (List<String>) requestBody;
-		} else if (requestBody instanceof Map) {
-			patterns = (List<String>) ((Map<?, ?>) requestBody).get("body");
-		} else {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request body");
-		}
+		List<String> patterns = parsePatterns(requestBody);
 		gitInfoService.discardChanges(id, patterns);
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<String> parsePatterns(Object requestBody) {
+		if (requestBody instanceof List) {
+			return (List<String>) requestBody;
+		} else if (requestBody instanceof Map) {
+			Object bodyVal = ((Map<?, ?>) requestBody).get("body");
+			if (bodyVal instanceof List) {
+				return (List<String>) bodyVal;
+			}
+		}
+		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request body: expected a list of file patterns or an object with a 'body' list property");
 	}
 
 	/**

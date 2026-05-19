@@ -128,7 +128,11 @@ public class GitInfoService {
         long now = System.currentTimeMillis();
         long idleThreshold = 30 * 60 * 1000; // 30 minutes
 
-        lastAccessTimes.forEach((projectId, lastAccess) -> {
+        var iterator = lastAccessTimes.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            Long projectId = entry.getKey();
+            Long lastAccess = entry.getValue();
             if (now - lastAccess > idleThreshold) {
                 logger.info("Closing idle Git repository for project {}", projectId);
                 // Note: repositoryCache.remove + repo.close() are not atomic.
@@ -139,9 +143,9 @@ public class GitInfoService {
                 if (repo != null) {
                     repo.close();
                 }
-                lastAccessTimes.remove(projectId);
+                iterator.remove();
             }
-        });
+        }
     }
 
     public Map<String, Object> getProjectStatus(Long projectId) {

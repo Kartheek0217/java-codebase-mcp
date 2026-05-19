@@ -73,13 +73,15 @@ public class McpController {
 	@Scheduled(fixedDelay = 3_600_000)
 	public void cleanupExpiredSessions() {
 		long now = System.currentTimeMillis();
-		sessionStore.entrySet().removeIf(e -> {
-			boolean expired = (now - e.getValue().createdAt()) > 3_600_000L;
-			if (expired) {
-				contextMemoryService.clearSession(e.getKey());
-			}
-			return expired;
-		});
+		synchronized (sessionStore) {
+			sessionStore.entrySet().removeIf(e -> {
+				boolean expired = (now - e.getValue().createdAt()) > 3_600_000L;
+				if (expired) {
+					contextMemoryService.clearSession(e.getKey());
+				}
+				return expired;
+			});
+		}
 	}
 
 	// Sessions
