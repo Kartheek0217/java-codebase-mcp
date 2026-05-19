@@ -9,7 +9,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.stream.Stream;
 
 import org.eclipse.jgit.ignore.IgnoreNode;
 import org.slf4j.Logger;
@@ -131,40 +130,63 @@ public class FileScannerService {
 				}
 			}
 
-			try (Stream<Path> paths = Files.walk(root)) {
-				List<CompletableFuture<Void>> futures = paths.filter(Files::isRegularFile).filter(path -> {
-					String relativePath = root.relativize(path).toString().replace("\\", "/");
-
-					// Always skip .git directory and the .gitignore file itself
-					if (relativePath.startsWith(".git/") || relativePath.equals(".git")
-							|| relativePath.equals(".gitignore")) {
-						return false;
+			List<Path> filesToIndex = new java.util.ArrayList<>();
+			try {
+				Files.walkFileTree(root, new java.nio.file.SimpleFileVisitor<Path>() {
+					@Override
+					public java.nio.file.FileVisitResult preVisitDirectory(Path dir,
+							java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+						String relativePath = root.relativize(dir).toString().replace("\\", "/");
+						if (relativePath.isEmpty()) {
+							return java.nio.file.FileVisitResult.CONTINUE;
+						}
+						// Always skip .git directory
+						if (relativePath.equals(".git") || relativePath.startsWith(".git/")) {
+							return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+						}
+						// Check if ignored by .gitignore rules
+						if (ignoreNode.isIgnored(relativePath, true) == IgnoreNode.MatchResult.IGNORED) {
+							return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+						}
+						// Default fallback filters for common large/generated directories.
+						if (hasPathSegment(relativePath, "node_modules")
+								|| hasPathSegment(relativePath, "target")
+								|| hasPathSegment(relativePath, "dist")
+								|| hasPathSegment(relativePath, "build")
+								|| hasPathSegment(relativePath, "bin")
+								|| hasPathSegment(relativePath, "logs")
+								|| hasPathSegment(relativePath, ".idea")
+								|| hasPathSegment(relativePath, ".vscode")
+								|| hasPathSegment(relativePath, ".gradle")
+								|| hasPathSegment(relativePath, ".settings")) {
+							return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+						}
+						return java.nio.file.FileVisitResult.CONTINUE;
 					}
 
-					// Check if ignored by .gitignore rules
-					if (ignoreNode.isIgnored(relativePath, false) == IgnoreNode.MatchResult.IGNORED) {
-						return false;
+					@Override
+					public java.nio.file.FileVisitResult visitFile(Path file,
+							java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+						String relativePath = root.relativize(file).toString().replace("\\", "/");
+						// Always skip .gitignore file itself
+						if (relativePath.equals(".gitignore")) {
+							return java.nio.file.FileVisitResult.CONTINUE;
+						}
+						// Check if ignored by .gitignore rules
+						if (ignoreNode.isIgnored(relativePath, false) == IgnoreNode.MatchResult.IGNORED) {
+							return java.nio.file.FileVisitResult.CONTINUE;
+						}
+						if (isIndexable(file)) {
+							filesToIndex.add(file);
+						}
+						return java.nio.file.FileVisitResult.CONTINUE;
 					}
+				});
 
-					// Default fallback filters for common large/generated directories.
-					// Use path-segment-safe check (starts-with segment boundary) to avoid
-					// false positives like src/main/my-target/ matching "target/".
-					if (hasPathSegment(relativePath, "node_modules")
-							|| hasPathSegment(relativePath, "target")
-							|| hasPathSegment(relativePath, "dist")
-							|| hasPathSegment(relativePath, "build")
-							|| hasPathSegment(relativePath, "bin")
-							|| hasPathSegment(relativePath, "logs")
-							|| hasPathSegment(relativePath, ".idea")
-							|| hasPathSegment(relativePath, ".vscode")
-							|| hasPathSegment(relativePath, ".gradle")
-							|| hasPathSegment(relativePath, ".settings")) {
-						return false;
-					}
-
-					return isIndexable(path);
-				}).map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path),
-						applicationTaskExecutor)).toList();
+				List<CompletableFuture<Void>> futures = filesToIndex.stream()
+						.map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path),
+								applicationTaskExecutor))
+						.toList();
 
 				logger.info("Submitted {} indexing tasks for project {}", futures.size(), project.getName());
 				CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();

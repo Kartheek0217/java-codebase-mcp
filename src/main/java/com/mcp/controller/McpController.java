@@ -47,13 +47,7 @@ public class McpController {
 	private final ProjectRepository projectRepository;
 	private final ContextMemoryService contextMemoryService;
 
-	private final Map<String, Session> sessionStore = Collections
-			.synchronizedMap(new LinkedHashMap<>(100, 0.75f, true) {
-				@Override
-				protected boolean removeEldestEntry(Map.Entry<String, Session> eldest) {
-					return size() > 1000;
-				}
-			});
+	private final Map<String, Session> sessionStore;
 
 	public McpController(TaskService taskService, ProjectRuleService ruleService, SkillService skillService,
 			SkillRepository skillRepository, ProjectRepository projectRepository,
@@ -64,6 +58,16 @@ public class McpController {
 		this.skillRepository = skillRepository;
 		this.projectRepository = projectRepository;
 		this.contextMemoryService = contextMemoryService;
+		this.sessionStore = Collections.synchronizedMap(new LinkedHashMap<>(1024, 0.75f, true) {
+			@Override
+			protected boolean removeEldestEntry(Map.Entry<String, Session> eldest) {
+				boolean shouldRemove = size() > 1000;
+				if (shouldRemove) {
+					contextMemoryService.clearSession(eldest.getKey());
+				}
+				return shouldRemove;
+			}
+		});
 	}
 
 	/**

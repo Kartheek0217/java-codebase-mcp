@@ -86,45 +86,35 @@ public class GitInfoService {
         }
     }
 
-    private Repository getRepository(Long projectId) throws IOException {
-        // Avoid computeIfAbsent with a blocking IO lambda — ConcurrentHashMap docs warn
-        // this can deadlock when the lambda itself blocks on map operations.
+    private synchronized Repository getRepository(Long projectId) throws IOException {
         Repository existing = repositoryCache.get(projectId);
         if (existing != null) {
             lastAccessTimes.put(projectId, System.currentTimeMillis());
             return existing;
         }
-        synchronized (this) {
-            // Double-check inside lock
-            existing = repositoryCache.get(projectId);
-            if (existing != null) {
-                lastAccessTimes.put(projectId, System.currentTimeMillis());
-                return existing;
-            }
-            try {
-                Project project = projectRepository.findById(projectId)
-                        .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
+        try {
+            Project project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
 
-                FileRepositoryBuilder builder = new FileRepositoryBuilder();
-                Repository repository = builder
-                        .readEnvironment()
-                        .findGitDir(new File(project.getRootPath()))
-                        .build();
+            FileRepositoryBuilder builder = new FileRepositoryBuilder();
+            Repository repository = builder
+                    .readEnvironment()
+                    .findGitDir(new File(project.getRootPath()))
+                    .build();
 
-                if (repository == null || !repository.getDirectory().exists()) {
-                    throw new RuntimeException("Git repository not found for project: " + project.getName());
-                }
-                repositoryCache.put(projectId, repository);
-                lastAccessTimes.put(projectId, System.currentTimeMillis());
-                return repository;
-            } catch (IOException e) {
-                throw new IOException("Error opening Git repository for project " + projectId, e);
+            if (repository == null || !repository.getDirectory().exists()) {
+                throw new RuntimeException("Git repository not found for project: " + project.getName());
             }
+            repositoryCache.put(projectId, repository);
+            lastAccessTimes.put(projectId, System.currentTimeMillis());
+            return repository;
+        } catch (IOException e) {
+            throw new IOException("Error opening Git repository for project " + projectId, e);
         }
     }
 
     @Scheduled(fixedDelay = 1_800_000) // Run every 30 minutes
-    public void cleanupIdleRepositories() {
+    public synchronized void cleanupIdleRepositories() {
         long now = System.currentTimeMillis();
         long idleThreshold = 30 * 60 * 1000; // 30 minutes
 
@@ -135,10 +125,6 @@ public class GitInfoService {
             Long lastAccess = entry.getValue();
             if (now - lastAccess > idleThreshold) {
                 logger.info("Closing idle Git repository for project {}", projectId);
-                // Note: repositoryCache.remove + repo.close() are not atomic.
-                // A concurrent getRepository call could re-add an entry between
-                // the remove and close; that new entry would be a fresh handle and
-                // is not affected. The closed handle here is simply discarded.
                 Repository repo = repositoryCache.remove(projectId);
                 if (repo != null) {
                     repo.close();
