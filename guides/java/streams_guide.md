@@ -34,24 +34,144 @@ While the Java Stream API provides beautiful declarative ergonomics, it introduc
 
 ## 2. Advanced Stream Reduction & Collectors
 
-When transforming data, chaining multiple sequential `.filter().map().collect()` pipelines across the same underlying dataset causes redundant CPU iterations. Always condense operations into single-pass reductions using advanced collectors.
+When transforming data, chaining multiple sequential `.filter().map().collect()` pipelines across the same underlying dataset causes redundant CPU iterations. Using the declarative `Collectors` utility class simplifies verbose loops into clean pipelines and enables multi-level reductions.
+
+---
 
 ### 1. Grouping and Partitioning
-```java
-// Grouping orders by status and summing total amounts in a single pass
-Map<OrderStatus, Double> revenueByStatus = orders.stream()
-    .collect(Collectors.groupingBy(
-        Order::getStatus,
-        Collectors.summingDouble(Order::getTotalAmount)
-    ));
 
-// Partitioning active vs. inactive users in one pass
-Map<Boolean, List<User>> partitionedUsers = users.stream()
-    .collect(Collectors.partitioningBy(User::isActive));
+#### GroupingBy & Downstream Mapping
+The `groupingBy` collector is the primary tool for categorizing data. When grouping objects, you can use downstream collectors to transform the grouped elements.
+
+```java
+// Grouping employees by department
+Map<String, List<Employee>> byDept = employees.stream()
+    .collect(Collectors.groupingBy(Employee::getDepartment));
+
+// Downstream Mapping: Grouping only employee names by department
+Map<String, List<String>> namesByDept = employees.stream()
+    .collect(Collectors.groupingBy(
+        Employee::getDepartment,
+        Collectors.mapping(Employee::getName, Collectors.toList())
+    ));
 ```
 
-### 2. Custom Collectors for Complex Domain Reductions
-When standard `Collectors` do not support complex domain aggregation logic, implement a custom `Collector`.
+#### PartitioningBy (Binary Split)
+When splitting elements into exactly two groups based on a predicate, `partitioningBy` is significantly more efficient than using `groupingBy` with a boolean function.
+* **Invariant**: `partitioningBy` guarantees that the resulting map contains entries for both `true` and `false` keys, even if one of the collections is empty. `groupingBy` only creates keys that exist in the stream elements.
+
+```java
+// Splitting employees by high salary condition
+Map<Boolean, List<Employee>> splitBySalary = employees.stream()
+    .collect(Collectors.partitioningBy(e -> e.getSalary() > 100000));
+```
+
+---
+
+### 2. Downstream Collectors for Complex Aggregations
+
+Chaining downstream collectors allows multi-level grouping and statistical reductions inside a single stream pass.
+
+#### Counting and Summarizing
+```java
+// Count employees per department
+Map<String, Long> countByDept = employees.stream()
+    .collect(Collectors.groupingBy(
+        Employee::getDepartment,
+        Collectors.counting()
+    ));
+
+// Get salary statistics (min, max, average, sum) per department
+Map<String, DoubleSummaryStatistics> statsByDept = employees.stream()
+    .collect(Collectors.groupingBy(
+        Employee::getDepartment,
+        Collectors.summarizingDouble(Employee::getSalary)
+    ));
+```
+
+#### Multi-level / Nested Grouping
+```java
+// Group by department, then subgroup by salary tier
+Map<String, Map<String, List<Employee>>> nested = employees.stream()
+    .collect(Collectors.groupingBy(
+        Employee::getDepartment,
+        Collectors.groupingBy(e -> {
+            if (e.getSalary() < 50000) return "Junior";
+            if (e.getSalary() < 100000) return "Mid";
+            return "Senior";
+        })
+    ));
+```
+
+#### Reducing to Single Values
+```java
+// Find highest salary earner per department
+Map<String, Optional<Employee>> highestPaid = employees.stream()
+    .collect(Collectors.groupingBy(
+        Employee::getDepartment,
+        Collectors.maxBy(Comparator.comparing(Employee::getSalary))
+    ));
+```
+
+---
+
+### 3. Custom Collectors for Specialized Needs
+
+When standard collectors are insufficient, you can implement custom structures using the `Collector` interface or factory methods.
+
+#### Custom Batching Collector (Fixed-size batches)
+Accumulating stream elements into fixed-size batches is highly useful for paginated API calls or batched database insertions.
+
+```java
+public class BatchCollector<T> implements Collector<T, List<List<T>>, List<List<T>>> {
+    private final int batchSize;
+
+    public BatchCollector(int batchSize) {
+        if (batchSize <= 0) throw new IllegalArgumentException("Batch size must be > 0");
+        this.batchSize = batchSize;
+    }
+
+    @Override
+    public Supplier<List<List<T>>> supplier() {
+        return ArrayList::new;
+    }
+
+    @Override
+    public BiConsumer<List<List<T>>, T> accumulator() {
+        return (batches, element) -> {
+            if (batches.isEmpty() || batches.get(batches.size() - 1).size() >= batchSize) {
+                batches.add(new ArrayList<>());
+            }
+            batches.get(batches.size() - 1).add(element);
+        };
+    }
+
+    @Override
+    public BinaryOperator<List<List<T>>> combiner() {
+        return (left, right) -> {
+            left.addAll(right);
+            return left;
+        };
+    }
+
+    @Override
+    public Function<List<List<T>>, List<List<T>>> finisher() {
+        return Function.identity();
+    }
+
+    @Override
+    public Set<Characteristics> characteristics() {
+        return Set.of(Characteristics.IDENTITY_FINISH);
+    }
+}
+
+// Usage: Partitioning orders into chunks of 100
+List<List<Order>> batches = orders.stream()
+    .collect(new BatchCollector<>(100));
+```
+
+#### State Summary Collector (`Collector.of`)
+For lighter domain-specific reductions, use `Collector.of` to build collectors inline:
 
 ```java
 public record BatchExecutionResult(int successful, int failed, List<String> errorLogs) {
@@ -62,21 +182,57 @@ public record BatchExecutionResult(int successful, int failed, List<String> erro
     }
 }
 
-// Custom Collector summarizing batch execution items in a single stream pass
 public static Collector<BatchItem, ?, BatchExecutionResult> summarizingBatch() {
     return Collector.of(
         () -> new BatchExecutionResult(0, 0, new ArrayList<>()),
-        (accumulator, item) -> {
+        (acc, item) -> {
             if (item.isSuccess()) {
-                accumulator = new BatchExecutionResult(accumulator.successful() + 1, accumulator.failed(), accumulator.errorLogs());
+                acc = new BatchExecutionResult(acc.successful() + 1, acc.failed(), acc.errorLogs());
             } else {
-                accumulator.errorLogs().add(item.getErrorMessage());
-                accumulator = new BatchExecutionResult(accumulator.successful(), accumulator.failed() + 1, accumulator.errorLogs());
+                acc.errorLogs().add(item.getErrorMessage());
+                acc = new BatchExecutionResult(acc.successful(), acc.failed() + 1, acc.errorLogs());
             }
         },
         BatchExecutionResult::merge
     );
 }
+```
+
+---
+
+### 4. Performance Considerations and Pitfalls
+
+#### Duplicate Keys in `toMap()`
+`Collectors.toMap()` throws `IllegalStateException` if the keys are not unique. Always supply a merge function for safety:
+```java
+Map<String, Employee> employeeMap = employees.stream()
+    .collect(Collectors.toMap(
+        Employee::getId,
+        Function.identity(),
+        (existing, replacement) -> existing // Keep the first key encountered
+    ));
+```
+
+#### Order Guarantees
+`groupingBy` does not guarantee the insertion order of keys. To enforce order (e.g., maintaining stream sorting order), supply a map constructor such as `LinkedHashMap::new`:
+```java
+Map<String, List<Employee>> ordered = employees.stream()
+    .collect(Collectors.groupingBy(
+        Employee::getDepartment,
+        LinkedHashMap::new,
+        Collectors.toList()
+    ));
+```
+
+#### Memory Footprint and OOM
+Building massive collections (especially maps) in memory can exhaust JVM heap space. Consider processing data in chunk sizes, using pagination, or employing `groupingByConcurrent` with parallel streams for concurrent reductions.
+
+#### Null Key Handling
+Many collectors throw `NullPointerException` if keys evaluate to `null`. Always filter elements containing `null` key fields before grouping:
+```java
+Map<String, List<Employee>> safeMap = employees.stream()
+    .filter(e -> e.getDepartment() != null)
+    .collect(Collectors.groupingBy(Employee::getDepartment));
 ```
 
 ---
