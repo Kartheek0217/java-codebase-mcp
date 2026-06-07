@@ -33,22 +33,21 @@ public class BrowserSessionManager {
 
     private synchronized void ensurePlaywrightInitialized() {
         if (playwright == null) {
+            System.setProperty("playwright.skip.browser.download", "true");
             playwright = Playwright.create();
+            
             BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
                     .setHeadless(properties.isHeadless());
 
-            String type = properties.getBrowserType().toLowerCase();
-            switch (type) {
-                case "firefox":
-                    browser = playwright.firefox().launch(options);
-                    break;
-                case "webkit":
-                    browser = playwright.webkit().launch(options);
-                    break;
-                case "chromium":
-                default:
-                    browser = playwright.chromium().launch(options);
-                    break;
+            try {
+                // Try launching with host's Google Chrome channel
+                BrowserType.LaunchOptions chromeOptions = new BrowserType.LaunchOptions()
+                        .setHeadless(properties.isHeadless())
+                        .setChannel("chrome");
+                browser = playwright.chromium().launch(chromeOptions);
+            } catch (Exception e) {
+                // Fallback to default Chromium (e.g. if Google Chrome is not installed)
+                browser = playwright.chromium().launch(options);
             }
         }
     }
