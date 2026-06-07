@@ -1,182 +1,188 @@
 package com.mcp.controller;
 
-import com.mcp.properties.OllamaProperties;
+import com.mcp.dto.LlmActionRequest;
+import com.mcp.repository.ProjectRepository;
 import com.mcp.service.LlmService;
-import com.mcp.service.OllamaClient;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
-import java.util.Map;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
- * REST endpoints that expose Ollama LLM capabilities over the indexed codebase.
- * <p>
- * All endpoints are NEW and additive — no existing endpoints are modified.
- * Base path: {@code /api/llm/{projectId}}
- * </p>
+ * Unified REST controller for all OpenAI-compatible / OpenAdapter LLM
+ * operations.
  *
- * <ul>
- * <li>{@code POST /api/llm/{projectId}/explain-symbol?symbolId=} — explain a
- * Java symbol</li>
- * <li>{@code POST /api/llm/{projectId}/explain-file?filePath=} — summarise a
- * source file</li>
- * <li>{@code POST /api/llm/{projectId}/ask} — free-form Q&A with codebase
- * context</li>
- * </ul>
+ * @author karthik.j
  */
 @RestController
 @RequestMapping("/api/llm")
-@Tag(name = "LLM", description = "Ollama / OpenAI-compatible LLM endpoints for AI-assisted codebase analysis.")
+@Tag(name = "LLM", description = "Unified OpenAI-compatible cloud LLM endpoints for AI assistance.")
 public class LlmController {
 
+    /** Service layer for executing LLM operations and managing response streams. */
     private final LlmService llmService;
-    private final OllamaProperties ollamaProps;
 
-    public LlmController(LlmService llmService, OllamaProperties ollamaProps) {
+    /** Repository for project data access and security validation. */
+    private final ProjectRepository projectRepository;
+
+    /**
+     * Constructs an {@code LlmController} with required dependencies.
+     *
+     * @param llmService        the service for executing LLM operations
+     * @param projectRepository the repository for project data access
+     */
+    public LlmController(LlmService llmService, ProjectRepository projectRepository) {
         this.llmService = llmService;
-        this.ollamaProps = ollamaProps;
+        this.projectRepository = projectRepository;
     }
-
-    // -------------------------------------------------------------------------
-    // Endpoint: Explain Symbol
-    // -------------------------------------------------------------------------
 
     /**
-     * Asks the LLM to explain what a specific Java symbol (class, method, field)
-     * does.
+     * Consolidates explain-symbol, explain-file, ask, code-review, code-refactor,
+     * and web-search actions.
+     * Validates input parameters based on the requested action and streams the
+     * response chunks back to the client.
      *
-     * <p>
-     * Example:
-     * 
-     * <pre>
-     * POST /api/llm/1/explain-symbol?symbolId=42
-     * </pre>
-     *
-     * @param projectId project that owns the symbol
-     * @param symbolId  database ID of the symbol (from
-     *                  {@code /api/codebase/{projectId}/symbols})
-     * @return JSON with the LLM answer and request metadata
+     * @param projectId the unique identifier of the project context
+     * @param action    the LLM action to execute (e.g., 'explain-symbol', 'ask',
+     *                  'code-review')
+     * @param symbolId  optional identifier for symbol explanation
+     * @param filePath  optional file path for file-based operations
+     * @param query     optional search query for web-search
+     * @param url       optional URL for web-search context
+     * @param diff      optional git diff payload for code-commit action
+     * @param request   optional request body containing action-specific parameters
+     * @return an {@link SseEmitter} for streaming the LLM response chunks
+     * @throws ResponseStatusException if validation fails, required parameters are
+     *                                 missing, or an unknown action is provided
      */
-    @PostMapping("/{projectId}/explain-symbol")
-    @Operation(summary = "explain-symbol", description = "Uses the LLM to explain what a Java symbol (class/method/field) does, "
-            + "using its source code as context. Provide the symbolId from the symbols search endpoint.")
-    public Map<String, Object> explainSymbol(
+    @PostMapping(value = "/{projectId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "llm-action", description = "Executes various LLM operations based on X-Action header and streams response chunks.")
+    public SseEmitter handleLlmAction(
             @PathVariable Long projectId,
-            @RequestParam Long symbolId) {
-        try {
-            String answer = llmService.explainSymbol(projectId, symbolId);
-            return buildResponse(projectId, answer);
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage());
-        } catch (OllamaClient.OllamaException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "LLM request failed: " + ex.getMessage());
-        }
-    }
+            @Parameter(description = "LLM action: 'explain-symbol', 'explain-file', 'ask', 'code-review', 'code-refactor', 'web-search', 'code-commit', 'java-doc', 'junit-test-cases'") @RequestHeader(value = "X-Action") String action,
+            @RequestParam(required = false) Long symbolId,
+            @RequestParam(required = false) String filePath,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String url,
+            @RequestParam(required = false) String diff,
+            @RequestBody(required = false) LlmActionRequest request) {
 
-    // -------------------------------------------------------------------------
-    // Endpoint: Explain File
-    // -------------------------------------------------------------------------
+        LlmActionRequest req = request != null ? request : new LlmActionRequest(null, null, null, null, null, null);
+
+        // Validation upfront to fail-fast
+        try {
+            switch (action.toLowerCase()) {
+                case "explain-symbol" -> {
+                    Long sId = symbolId != null ? symbolId : req.symbolId();
+                    if (sId == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "symbolId is required for explain-symbol");
+                    }
+                }
+                case "explain-file" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for explain-file");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "ask" -> {
+                    String question = req.question();
+                    if (question == null || question.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "question is required in request body");
+                    }
+                }
+                case "code-review" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for code-review");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "code-refactor", "code-optimise" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for code-refactor");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "web-search" -> {
+                    String q = query != null ? query : req.query();
+                    String u = url != null ? url : req.url();
+                    if ((q == null || q.isBlank()) && (u == null || u.isBlank())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Either query or url must be provided for web-search");
+                    }
+                }
+                case "code-commit" -> {
+                    String d = diff != null ? diff : req.diff();
+                    if (d == null || d.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "diff is required for code-commit");
+                    }
+                }
+                case "java-doc" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filePath is required for java-doc");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "junit-test-cases" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for junit-test-cases");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown LLM action: " + action);
+            }
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Validation failed", ex);
+        }
+
+        LlmActionRequest mergedReq = new LlmActionRequest(
+                symbolId != null ? symbolId : req.symbolId(),
+                filePath != null ? filePath : req.filePath(),
+                query != null ? query : req.query(),
+                url != null ? url : req.url(),
+                diff != null ? diff : req.diff(),
+                req.question());
+
+        return llmService.streamResponse(projectId, action, mergedReq);
+    }
 
     /**
-     * Asks the LLM to summarise an entire source file in plain English.
-     * Method bodies are stripped before sending to the LLM to reduce token usage
-     * while preserving all declarations, signatures, and Javadocs.
+     * Validates that the given file path is secure and belongs to the specified
+     * project.
+     * Prevents directory traversal attacks by normalizing the path.
      *
-     * <p>
-     * Example:
-     * 
-     * <pre>
-     * POST /api/llm/1/explain-file?filePath=src/main/java/com/mcp/service/ProjectService.java
-     * </pre>
-     *
-     * @param projectId project that owns the file
-     * @param filePath  path relative to the project root
-     * @return JSON with the LLM answer and request metadata
+     * @param projectId the unique identifier of the project
+     * @param filePath  the relative or absolute file path to validate
+     * @throws ResponseStatusException if the file path is invalid or attempts
+     *                                 directory traversal
      */
-    @PostMapping("/{projectId}/explain-file")
-    @Operation(summary = "explain-file", description = "Uses the LLM to produce a plain-English summary of a source file. "
-            + "Provide filePath relative to the project root.")
-    public Map<String, Object> explainFile(
-            @PathVariable Long projectId,
-            @RequestParam String filePath) {
-        try {
-            String answer = llmService.explainFile(projectId, filePath);
-            return buildResponse(projectId, answer);
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage());
-        } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "File not found or unreadable: " + filePath);
-        } catch (OllamaClient.OllamaException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "LLM request failed: " + ex.getMessage());
+    private void validateFilePath(Long projectId, String filePath) {
+        String rootPath = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found: " + projectId))
+                .getRootPath();
+        Path root = Paths.get(rootPath).toAbsolutePath().normalize();
+        Path target = root.resolve(filePath).toAbsolutePath().normalize();
+        if (!target.startsWith(root)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path: path traversal detected");
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // Endpoint: Ask Codebase
-    // -------------------------------------------------------------------------
-
-    /**
-     * Free-form Q&A about the codebase.
-     * <p>
-     * Lucene searches the indexed project for code snippets relevant to the
-     * question
-     * and injects them into the LLM system prompt as context before generating the
-     * answer.
-     * </p>
-     *
-     * <p>
-     * Example request body:
-     * 
-     * <pre>
-     * { "question": "How does file indexing work?" }
-     * </pre>
-     *
-     * @param projectId project to search within
-     * @param body      JSON object with a {@code "question"} field
-     * @return JSON with the LLM answer and request metadata
-     */
-    @PostMapping("/{projectId}/ask")
-    @Operation(summary = "ask", description = "Ask a free-form question about the codebase. "
-            + "Relevant code snippets are automatically retrieved from the Lucene index and "
-            + "injected into the LLM prompt as context. "
-            + "Request body: { \"question\": \"your question here\" }")
-    public Map<String, Object> ask(
-            @PathVariable Long projectId,
-            @RequestBody Map<String, String> body) {
-        String question = body == null ? null : body.get("question");
-        if (question == null || question.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Request body must contain a non-empty 'question' field.");
-        }
-        try {
-            String answer = llmService.askCodebase(projectId, question);
-            return buildResponse(projectId, answer);
-        } catch (OllamaClient.OllamaException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "LLM request failed: " + ex.getMessage());
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Helper
-    // -------------------------------------------------------------------------
-
-    private Map<String, Object> buildResponse(Long projectId, String answer) {
-        return Map.of(
-                "projectId", projectId,
-                "model", ollamaProps.getModel(),
-                "answer", answer);
     }
 }
