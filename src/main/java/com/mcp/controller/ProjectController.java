@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,7 +29,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/projects")
-@Tag(name = "Projects", description = "Endpoints for managing multiple codebases/projects. Each project defines a unique root directory to be indexed.")
+@Tag(name = "Projects", description = "Manage codebases/projects. Each project defines a unique root directory to index.")
 public class ProjectController {
 
 	private final ProjectService projectService;
@@ -39,170 +40,196 @@ public class ProjectController {
 		this.gitInfoService = gitInfoService;
 	}
 
+	// ─── Collection endpoints ─────────────────────────────────────────────────
+
 	/**
-	 * Creates a new project and begins background indexing.
+	 * {@code POST /api/projects} : Create a new project and begin background indexing.
 	 *
-	 * @param name     The human-readable name of the project
-	 * @param rootPath The absolute filesystem path to the project root
-	 * @return The created Project entity
+	 * @param name     Human-readable project name
+	 * @param rootPath Absolute filesystem path to the project root
+	 * @return Created Project entity
 	 * @throws IOException If the root path is invalid or inaccessible
 	 */
 	@PostMapping
-	@Operation(summary = "crt-project", description = "Initializes a new project with a unique name and root directory path. Once created, the system automatically starts background indexing of the directory.", responses = {
-			@ApiResponse(responseCode = "200", description = "Project created and indexing started successfully"),
-			@ApiResponse(responseCode = "400", description = "Invalid project name or root path") })
+	@Operation(
+		summary = "crt-project",
+		description = "Create a new project and start background indexing of its root directory. " +
+			"Required params: name (string), rootPath (absolute path). " +
+			"Returns the created Project object with status=INDEXING.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Project created and indexing started"),
+			@ApiResponse(responseCode = "400", description = "rootPath missing, not a directory, or not readable")
+		}
+	)
 	public Project createProject(
-			@Parameter(description = "Human-readable name for the project") @RequestParam String name,
-			@Parameter(description = "Absolute path to the project's root directory on the local filesystem") @RequestParam String rootPath)
+			@Parameter(description = "Human-readable project name") @RequestParam String name,
+			@Parameter(description = "Absolute path to the project root on the local filesystem") @RequestParam String rootPath)
 			throws IOException {
-		// Validate rootPath before creating project
 		Path path = Path.of(rootPath);
-		if (!Files.exists(path)) {
+		if (!Files.exists(path))
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path does not exist: " + rootPath);
-		}
-		if (!Files.isDirectory(path)) {
+		if (!Files.isDirectory(path))
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not a directory: " + rootPath);
-		}
-		if (!Files.isReadable(path)) {
+		if (!Files.isReadable(path))
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not readable: " + rootPath);
-		}
 		return projectService.createProject(name, rootPath);
 	}
 
 	/**
-	 * Retrieves all registered projects.
+	 * {@code GET /api/projects} : List projects. Behaviour controlled by {@code X-View} header.
 	 *
-	 * @return A list of all projects
+	 * @param view {@code list} (default) — all projects; {@code summary} — projects with file/symbol counts
+	 * @return List of projects or summary maps
 	 */
 	@GetMapping
-	@Operation(summary = "get-all-projects", description = "Returns a list of all registered projects and their configurations.")
-	public List<Project> getAllProjects() {
-		return projectService.getAllProjects();
+	@Operation(
+		summary = "get-projects",
+		description = "Retrieve project list. Behaviour is controlled by the X-View request header:\n" +
+			"• X-View: list (default) — returns all registered projects as Project objects.\n" +
+			"• X-View: summary — returns all projects with file count, symbol count, and status statistics.\n" +
+			"No path or body parameters required.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Project list returned"),
+			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
+		}
+	)
+	public Object getProjects(
+			@Parameter(description = "View variant: 'list' (default) | 'summary'")
+			@RequestHeader(value = "X-View", required = false, defaultValue = "list") String view) {
+		return switch (view.toLowerCase()) {
+			case "list" -> projectService.getAllProjects();
+			case "summary" -> projectService.getAllProjectSummaries();
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Unknown X-View value '" + view + "'. Allowed: list, summary");
+		};
 	}
 
-	/**
-	 * Retrieves a summary of all projects with statistics.
-	 *
-	 * @return A list of maps containing project details and counts
-	 */
-	@GetMapping("/summary")
-	@Operation(summary = "get-projects-summ", description = "Returns basic statistics for all projects.")
-	public List<Map<String, Object>> getProjectsSummary() {
-		return projectService.getAllProjectSummaries();
-	}
+	// ─── Project-scoped read ──────────────────────────────────────────────────
 
 	/**
-	 * Retrieves a project by its unique ID.
+	 * {@code GET /api/projects/{id}} : Read project data. Variant selected via {@code X-View} header.
 	 *
-	 * @param id The project ID
-	 * @return The project details
+	 * @param id   Project ID
+	 * @param view {@code detail} | {@code stats} | {@code git-status}
+	 * @return Project detail, stats map, or git-status map
 	 */
 	@GetMapping("/{id}")
-	@Operation(summary = "get-project", description = "Get project by ID")
-	public Project getProject(@PathVariable Long id) {
-		return projectService.getProject(id);
-	}
-
-	/**
-	 * Retrieves statistics for a specific project.
-	 *
-	 * @param id The project ID
-	 * @return A map containing file and symbol counts
-	 */
-	@GetMapping("/{id}/stats")
-	@Operation(summary = "get-project-stats", description = "Get project stats")
-	public Map<String, Object> getProjectStats(@PathVariable Long id) {
-		return projectService.getProjectStats(id);
-	}
-
-	/**
-	 * Retrieves the Git status for a specific project.
-	 *
-	 * @param id The project ID
-	 * @return A map containing modified, added, removed, and untracked files
-	 */
-	@GetMapping("/{id}/git-status")
-	@Operation(summary = "get-project-git-status", description = "Get project Git status")
-	public java.util.Map<String, Object> getProjectGitStatus(@PathVariable Long id) {
-		return gitInfoService.getProjectStatus(id);
-	}
-
-	/**
-	 * Stages specific files or patterns in the project's Git repository.
-	 *
-	 * @param id          The project ID
-	 * @param requestBody The request body (either direct list or object with body
-	 *                    field)
-	 */
-	@PostMapping("/{id}/git/stage")
-	@Operation(summary = "stage-files", description = "Stage files")
-	public void stageFiles(@PathVariable Long id, @RequestBody Object requestBody) {
-		List<String> patterns = parsePatterns(requestBody);
-		gitInfoService.stageFiles(id, patterns);
-	}
-
-	/**
-	 * Discards local changes for specific files in the project's Git repository.
-	 *
-	 * @param id          The project ID
-	 * @param requestBody The request body (either direct list or object with body
-	 *                    field)
-	 */
-	@PostMapping("/{id}/git/discard")
-	@Operation(summary = "discard-changes", description = "Discard changes")
-	public void discardChanges(@PathVariable Long id, @RequestBody Object requestBody) {
-		List<String> patterns = parsePatterns(requestBody);
-		gitInfoService.discardChanges(id, patterns);
-	}
-
-	@SuppressWarnings("unchecked")
-	private List<String> parsePatterns(Object requestBody) {
-		if (requestBody instanceof List) {
-			return (List<String>) requestBody;
-		} else if (requestBody instanceof Map) {
-			Object bodyVal = ((Map<?, ?>) requestBody).get("body");
-			if (bodyVal instanceof List) {
-				return (List<String>) bodyVal;
-			}
+	@Operation(
+		summary = "get-project",
+		description = "Read project data for the given project ID. Select the response shape with X-View:\n" +
+			"• X-View: detail (default) — full Project entity (name, rootPath, id, status).\n" +
+			"• X-View: stats — file count and symbol count for the project {fileCount, symbolCount, projectId}.\n" +
+			"• X-View: git-status — uncommitted changes {modified, added, removed, untracked} file lists.\n" +
+			"Path param: id (Long) — project ID.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Requested project data returned"),
+			@ApiResponse(responseCode = "404", description = "Project not found"),
+			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
 		}
-		throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-				"Invalid request body: expected a list of file patterns or an object with a 'body' list property");
+	)
+	public Object getProject(
+			@PathVariable Long id,
+			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'")
+			@RequestHeader(value = "X-View", required = false, defaultValue = "detail") String view) {
+		return switch (view.toLowerCase()) {
+			case "detail" -> projectService.getProject(id);
+			case "stats" -> projectService.getProjectStats(id);
+			case "git-status" -> gitInfoService.getProjectStatus(id);
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Unknown X-View value '" + view + "'. Allowed: detail, stats, git-status");
+		};
 	}
 
+	// ─── Project-scoped write operations ─────────────────────────────────────
+
 	/**
-	 * Commits staged changes in the project's Git repository.
+	 * {@code POST /api/projects/{id}} : Execute a project-scoped write operation.
+	 * Operation selected via {@code X-Op} header.
 	 *
-	 * @param id      The project ID
-	 * @param message The commit message
-	 * @return The new commit hash
+	 * @param id          Project ID
+	 * @param op          Operation name
+	 * @param requestBody Optional body used by stage/discard
+	 * @param message     Commit message (required when op=commit)
+	 * @return Operation result map or void
 	 */
-	@PostMapping("/{id}/git/commit")
-	@Operation(summary = "commit", description = "Commit changes")
-	public java.util.Map<String, String> commit(@PathVariable Long id, @RequestParam String message) {
-		String hash = gitInfoService.commit(id, message);
-		return java.util.Map.of("status", "success", "commitHash", hash);
+	@PostMapping("/{id}")
+	@Operation(
+		summary = "project-op",
+		description = "Execute a write operation on a project via the X-Op request header. Supported operations:\n" +
+			"• X-Op: reindex — trigger a full re-index of all project files. No body required.\n" +
+			"• X-Op: stage — stage files for git commit. Body: list of file glob patterns, e.g. [\"src/main/**\"].\n" +
+			"• X-Op: discard — discard local changes for matching files. Body: list of file glob patterns.\n" +
+			"• X-Op: commit — commit all staged changes. Query param: message (string, required).\n" +
+			"Path param: id (Long) — project ID.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Operation completed successfully"),
+			@ApiResponse(responseCode = "400", description = "Missing required params or unknown X-Op value"),
+			@ApiResponse(responseCode = "404", description = "Project not found")
+		}
+	)
+	public Object projectOp(
+			@PathVariable Long id,
+			@Parameter(description = "Operation: 'reindex' | 'stage' | 'discard' | 'commit'")
+			@RequestHeader(value = "X-Op") String op,
+			@RequestBody(required = false) Object requestBody,
+			@RequestParam(required = false) String message) {
+		return switch (op.toLowerCase()) {
+			case "reindex" -> {
+				projectService.reindexProject(id);
+				yield Map.of("status", "success", "op", "reindex");
+			}
+			case "stage" -> {
+				gitInfoService.stageFiles(id, parsePatterns(requestBody));
+				yield Map.of("status", "success", "op", "stage");
+			}
+			case "discard" -> {
+				gitInfoService.discardChanges(id, parsePatterns(requestBody));
+				yield Map.of("status", "success", "op", "discard");
+			}
+			case "commit" -> {
+				if (message == null || message.isBlank())
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'message' is required for op=commit");
+				String hash = gitInfoService.commit(id, message);
+				yield Map.of("status", "success", "op", "commit", "commitHash", hash);
+			}
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Unknown X-Op value '" + op + "'. Allowed: reindex, stage, discard, commit");
+		};
 	}
 
-	/**
-	 * Triggers a full re-index of a project.
-	 *
-	 * @param id The project ID
-	 */
-	@PostMapping("/{id}/reindex")
-	@Operation(summary = "reindex-project", description = "Re-index project")
-	public void reindexProject(@PathVariable Long id) {
-		projectService.reindexProject(id);
-	}
+	// ─── Delete ───────────────────────────────────────────────────────────────
 
 	/**
-	 * Deletes a project and all its indexed data.
+	 * {@code DELETE /api/projects/{id}} : Delete a project and all its indexed data.
 	 *
-	 * @param id The project ID to delete
+	 * @param id Project ID to delete
 	 */
 	@DeleteMapping("/{id}")
-	@Operation(summary = "del-project", description = "Delete a project")
+	@Operation(
+		summary = "del-project",
+		description = "Permanently delete a project and remove all its indexed symbols, files, and metadata. " +
+			"Path param: id (Long) — project ID. Returns 204 No Content on success.",
+		responses = {
+			@ApiResponse(responseCode = "204", description = "Project deleted"),
+			@ApiResponse(responseCode = "404", description = "Project not found")
+		}
+	)
 	public void deleteProject(@PathVariable Long id) {
 		projectService.deleteProject(id);
 	}
 
+	// ─── Helpers ──────────────────────────────────────────────────────────────
+
+	@SuppressWarnings("unchecked")
+	private List<String> parsePatterns(Object requestBody) {
+		if (requestBody instanceof List<?> list)
+			return (List<String>) list;
+		if (requestBody instanceof java.util.Map<?, ?> map) {
+			Object bodyVal = map.get("body");
+			if (bodyVal instanceof List<?> list)
+				return (List<String>) list;
+		}
+		throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+				"Body must be a list of file patterns or {\"body\": [\"pattern\"]}");
+	}
 }

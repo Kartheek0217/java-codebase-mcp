@@ -63,7 +63,32 @@ public class LlmController {
      *                                 missing, or an unknown action is provided
      */
     @PostMapping(value = "/{projectId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "llm-action", description = "Executes various LLM operations based on X-Action header and streams response chunks.")
+    @Operation(
+        summary = "handle-llm",
+        description = "Execute an LLM operation and stream the response as Server-Sent Events (SSE). " +
+            "Select the action with the X-Action request header:\n\n" +
+            "• X-Action: explain-symbol — Explain a code symbol in plain English. " +
+                "Params: symbolId (Long, required — use search-symbols to find it).\n\n" +
+            "• X-Action: explain-file — Explain what a source file does. " +
+                "Params: filePath (string, required, relative to project root).\n\n" +
+            "• X-Action: ask — Ask a free-form question about the codebase. " +
+                "Body: {question: string (required)}.\n\n" +
+            "• X-Action: code-review — Generate a code review for a file. " +
+                "Params: filePath (string, required). Returns inline review comments.\n\n" +
+            "• X-Action: code-refactor — Suggest refactoring improvements for a file. " +
+                "Params: filePath (string, required).\n\n" +
+            "• X-Action: code-optimise — Suggest performance optimisations for a file. " +
+                "Params: filePath (string, required). Alias of code-refactor.\n\n" +
+            "• X-Action: web-search — Search the web and summarise results. " +
+                "Params: query (string) or url (string); at least one required.\n\n" +
+            "• X-Action: code-commit — Generate a Conventional Commits message from a git diff. " +
+                "Params: diff (string, required — the raw output of git diff).\n\n" +
+            "• X-Action: java-doc — Generate Javadoc for all public methods in a file. " +
+                "Params: filePath (string, required).\n\n" +
+            "• X-Action: junit-test-cases — Generate JUnit 5 test class with 100% branch coverage. " +
+                "Params: filePath (string, required — path to the service/class under test).\n\n" +
+            "All actions stream response chunks as SSE events. Consume the event stream until the 'done' event is received."
+    )
     public SseEmitter handleLlmAction(
             @PathVariable Long projectId,
             @Parameter(description = "LLM action: 'explain-symbol', 'explain-file', 'ask', 'code-review', 'code-refactor', 'web-search', 'code-commit', 'java-doc', 'junit-test-cases'") @RequestHeader(value = "X-Action") String action,

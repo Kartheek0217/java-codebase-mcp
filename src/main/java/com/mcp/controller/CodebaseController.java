@@ -7,13 +7,13 @@ import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 import org.springframework.data.domain.PageRequest;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,10 +35,13 @@ import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Project;
 import com.mcp.entity.Symbol;
 import com.mcp.entity.SymbolType;
+import com.mcp.properties.CodebaseProperties;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
+import com.mcp.service.CodeSummarizerService;
 import com.mcp.service.ContextMemoryService;
+import com.mcp.service.EndpointAnalysisService;
 import com.mcp.service.FileIndexerService;
 import com.mcp.service.FileScannerService;
 import com.mcp.service.GitInfoService;
@@ -46,19 +49,16 @@ import com.mcp.service.LuceneIndexService;
 import com.mcp.service.ReconciliationService;
 import com.mcp.service.TopologyService;
 import com.mcp.util.CodeUtils;
-
-import java.util.Set;
-import com.mcp.service.CodeSummarizerService;
-import com.mcp.service.EndpointAnalysisService;
 import com.mcp.util.LlmResponseOptimizer;
-import com.mcp.properties.CodebaseProperties;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/codebase")
-@Tag(name = "Codebase", description = "Unified endpoints for codebase analysis, search, and context gathering.")
+@Tag(name = "Codebase", description = "Unified endpoints for codebase analysis, file reading, search, and index management.")
 public class CodebaseController {
 
 	private final FileIndexerService fileIndexerService;
@@ -72,15 +72,21 @@ public class CodebaseController {
 	private final ReconciliationService reconciliationService;
 	private final com.mcp.repository.SymbolCallRepository symbolCallRepository;
 	private final GitInfoService gitInfoService;
-
 	private final CodeSummarizerService codeSummarizerService;
 	private final EndpointAnalysisService endpointAnalysisService;
 	private final CodebaseProperties codebaseProperties;
 
-	public CodebaseController(FileIndexerService fileIndexerService, FileMetadataRepository fileMetadataRepository,
-			SymbolRepository symbolRepository, LuceneIndexService luceneIndexService,
-			ProjectRepository projectRepository, TopologyService topologyService,
-			ContextMemoryService contextMemoryService, FileScannerService fileScannerService,
+	// VT-backed executor for parallel batch context fetches
+	private static final Executor BATCH_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+
+	public CodebaseController(FileIndexerService fileIndexerService,
+			FileMetadataRepository fileMetadataRepository,
+			SymbolRepository symbolRepository,
+			LuceneIndexService luceneIndexService,
+			ProjectRepository projectRepository,
+			TopologyService topologyService,
+			ContextMemoryService contextMemoryService,
+			FileScannerService fileScannerService,
 			ReconciliationService reconciliationService,
 			com.mcp.repository.SymbolCallRepository symbolCallRepository,
 			GitInfoService gitInfoService,
@@ -103,15 +109,223 @@ public class CodebaseController {
 		this.codebaseProperties = codebaseProperties;
 	}
 
-	// Fix J: VT-backed executor for parallel batch context fetches
-	private static final Executor BATCH_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+	// ─── Project-scoped read (GET) ────────────────────────────────────────────
 
-	@GetMapping("/{projectId}/file")
-	@Operation(summary = "get-file-context", description = "Retrieves the content of a file along with its symbols and metadata.")
-	public ResponseEntity<Object> getFileContext(@PathVariable Long projectId, @RequestParam String filePath,
+	/**
+	 * {@code GET /api/codebase/{projectId}} : Read or search codebase data.
+	 * Operation selected via {@code X-Op} header.
+	 *
+	 * @param projectId Project ID
+	 * @param op        Operation name (see description)
+	 * @param filePath  Required for: file, summarize, analyze-endpoint
+	 * @param query     Required for: search, search-changed, symbols, files, suggest
+	 * @param sessionId Optional for: file (record access), history (required)
+	 * @param format    Optional for: file — full | structure | summary | numbered | markdown (default: full)
+	 * @param type      Optional for: symbols — CLASS | METHOD | FIELD | CONSTRUCTOR
+	 * @param limit     Optional for: search, search-changed, symbols, files (default varies)
+	 * @param controllerName Required for: analyze-endpoint
+	 * @param methodName     Required for: analyze-endpoint
+	 * @param ifNoneMatch    Optional ETag for: file
+	 * @return Response shape varies by X-Op value
+	 */
+	@GetMapping("/{projectId}")
+	@Operation(
+		summary = "codebase-read",
+		description = "Read or search codebase data for a project. Select the operation with the X-Op header:\n\n" +
+			"• X-Op: file — Read a single file with its symbols and metadata. " +
+				"Params: filePath (required), format (full|structure|summary|numbered|markdown, default=full), " +
+				"sessionId (optional, records access). " +
+				"Supports If-None-Match ETag caching; returns 304 if unchanged.\n\n" +
+			"• X-Op: search — Full-text Lucene search across all indexed files. " +
+				"Params: query (required), limit (default=10).\n\n" +
+			"• X-Op: search-changed — Full-text search restricted to uncommitted (modified/added/staged) files only. " +
+				"Params: query (required), limit (default=10).\n\n" +
+			"• X-Op: symbols — Search for classes, methods, constructors, or fields by name. " +
+				"Params: query (required), type (CLASS|METHOD|FIELD|CONSTRUCTOR, optional), limit (default=50).\n\n" +
+			"• X-Op: files — Find indexed files whose paths contain the query string. " +
+				"Params: query (required), limit (default=100).\n\n" +
+			"• X-Op: suggest — Combined symbol + content search for relevant code context. " +
+				"Returns top-10 symbols and top-10 content hits. Params: query (required).\n\n" +
+			"• X-Op: history — Return file paths accessed in a session. Params: sessionId (required).\n\n" +
+			"• X-Op: topology — Return project package structure and dependency graph. No extra params.\n\n" +
+			"• X-Op: summarize — Generate an AI summary of a file. Params: filePath (required).\n\n" +
+			"• X-Op: analyze-endpoint — Trace a controller endpoint down to entity level. " +
+				"Params: controllerName (required), methodName (required).",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Requested data returned"),
+			@ApiResponse(responseCode = "304", description = "File unchanged (ETag match, X-Op=file only)"),
+			@ApiResponse(responseCode = "400", description = "Missing required param or unknown X-Op value"),
+			@ApiResponse(responseCode = "404", description = "Project or file not found")
+		}
+	)
+	public Object codebaseRead(
+			@PathVariable Long projectId,
+			@Parameter(description = "Operation: file | search | search-changed | symbols | files | suggest | history | topology | summarize | analyze-endpoint")
+			@RequestHeader(value = "X-Op") String op,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
 			@RequestParam(required = false) String sessionId,
 			@RequestParam(required = false, defaultValue = "full") String format,
+			@RequestParam(required = false) String type,
+			@RequestParam(required = false, defaultValue = "10") int limit,
+			@RequestParam(required = false) String controllerName,
+			@RequestParam(required = false) String methodName,
 			@RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) throws IOException {
+
+		return switch (op.toLowerCase()) {
+			case "file" -> getFileContext(projectId, filePath, sessionId, format, ifNoneMatch);
+			case "search" -> {
+				requireParam(query, "query", "search");
+				yield luceneIndexService.searchContent(projectId, query, limit);
+			}
+			case "search-changed" -> {
+				requireParam(query, "query", "search-changed");
+				Project project = projectRepository.findById(projectId).orElseThrow();
+				Set<String> changed = gitInfoService.getChangedFilePaths(projectId);
+				Set<String> absPaths = changed.stream()
+						.map(rel -> Paths.get(project.getRootPath()).resolve(rel).toAbsolutePath().toString())
+						.collect(java.util.stream.Collectors.toSet());
+				yield luceneIndexService.searchContent(projectId, query, absPaths, limit);
+			}
+			case "symbols" -> {
+				requireParam(query, "query", "symbols");
+				yield searchSymbols(projectId, query, type, limit);
+			}
+			case "files" -> {
+				requireParam(query, "query", "files");
+				PageRequest pr = PageRequest.of(0, limit);
+				yield fileMetadataRepository
+						.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query, pr)
+						.stream().map(this::toMetadataDTO).toList();
+			}
+			case "suggest" -> {
+				requireParam(query, "query", "suggest");
+				yield Map.of(
+						"symbols", searchSymbols(projectId, query, null, 10),
+						"content", luceneIndexService.searchContent(projectId, query, 10));
+			}
+			case "history" -> {
+				requireParam(sessionId, "sessionId", "history");
+				yield contextMemoryService.getSessionFiles(sessionId);
+			}
+			case "topology" -> topologyService.getProjectTopology(projectId);
+			case "summarize" -> {
+				requireParam(filePath, "filePath", "summarize");
+				Project project = projectRepository.findById(projectId).orElseThrow();
+				Path full = Paths.get(project.getRootPath()).resolve(filePath);
+				String content = Files.readString(full);
+				String summary = codeSummarizerService.createIntelligentSummary(content);
+				List<Symbol> symbols = fileIndexerService.getSymbols(projectId, full.toString());
+				yield Map.of(
+						"filePath", filePath,
+						"summary", summary,
+						"symbols", symbols.stream().map(s -> toSymbolDTO(s, null)).toList());
+			}
+			case "analyze-endpoint" -> {
+				requireParam(controllerName, "controllerName", "analyze-endpoint");
+				requireParam(methodName, "methodName", "analyze-endpoint");
+				yield endpointAnalysisService.analyzeEndpoint(projectId, controllerName, methodName);
+			}
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Unknown X-Op value '" + op + "'. Allowed: file, search, search-changed, symbols, files, " +
+					"suggest, history, topology, summarize, analyze-endpoint");
+		};
+	}
+
+	// ─── Project-scoped mutations (POST) ─────────────────────────────────────
+
+	/**
+	 * {@code POST /api/codebase/{projectId}} : Execute a codebase mutation.
+	 * Operation selected via {@code X-Op} header.
+	 *
+	 * @param projectId   Project ID
+	 * @param op          Operation name
+	 * @param filePaths   Body — list of file paths (required when op=batch)
+	 * @return Status map or batch result map
+	 */
+	@PostMapping("/{projectId}")
+	@Operation(
+		summary = "codebase-op",
+		description = "Execute a codebase mutation or heavy read via the X-Op request header:\n\n" +
+			"• X-Op: scan — Trigger a directory scan to detect new/changed/deleted files. No body needed.\n\n" +
+			"• X-Op: reconcile — Reconcile the symbol index against the current filesystem state. No body needed.\n\n" +
+			"• X-Op: batch — Fetch content for multiple files in parallel (uses virtual threads). " +
+				"Body: JSON array of relative file paths, e.g. [\"src/main/Foo.java\", \"src/main/Bar.java\"]. " +
+				"Returns a map of {filePath → ContextDTO}.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Operation completed"),
+			@ApiResponse(responseCode = "400", description = "Missing body for batch or unknown X-Op value"),
+			@ApiResponse(responseCode = "500", description = "Batch aborted on first file error")
+		}
+	)
+	public Object codebaseOp(
+			@PathVariable Long projectId,
+			@Parameter(description = "Operation: scan | reconcile | batch")
+			@RequestHeader(value = "X-Op") String op,
+			@RequestBody(required = false) List<String> filePaths) throws IOException {
+		return switch (op.toLowerCase()) {
+			case "scan" -> {
+				fileScannerService.scanProject(projectId);
+				yield Map.of("status", "success", "op", "scan");
+			}
+			case "reconcile" -> {
+				reconciliationService.reconcileProject(projectId);
+				yield Map.of("status", "success", "op", "reconcile");
+			}
+			case "batch" -> {
+				if (filePaths == null || filePaths.isEmpty())
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body must be a non-empty list of file paths for op=batch");
+				yield getBatchContext(projectId, filePaths);
+			}
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Unknown X-Op value '" + op + "'. Allowed: scan, reconcile, batch");
+		};
+	}
+
+	// ─── Symbol sub-resource ─────────────────────────────────────────────────
+
+	/**
+	 * {@code GET /api/codebase/symbols/{id}} : Get symbol data.
+	 * Variant selected via {@code X-View} header.
+	 *
+	 * @param id   Symbol ID
+	 * @param view {@code detail} | {@code hierarchy}
+	 * @return Symbol detail or call hierarchy map
+	 */
+	@GetMapping("/symbols/{id}")
+	@Operation(
+		summary = "get-symbol",
+		description = "Retrieve symbol data by symbol ID. Select the response shape with X-View:\n\n" +
+			"• X-View: detail (default) — full Symbol entity (id, name, type, filePath, lineNumber, signature, returnType, modifiers, annotations).\n\n" +
+			"• X-View: hierarchy — call hierarchy for the symbol: " +
+				"{symbol, outgoing: [SymbolCall], incoming: [{call, caller}]}. " +
+				"Shows which methods this symbol calls (outgoing) and which callers invoke it (incoming).\n\n" +
+			"Path param: id (Long) — symbol ID.",
+		responses = {
+			@ApiResponse(responseCode = "200", description = "Symbol data returned"),
+			@ApiResponse(responseCode = "404", description = "Symbol not found"),
+			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
+		}
+	)
+	public Object getSymbol(
+			@PathVariable Long id,
+			@Parameter(description = "View variant: 'detail' (default) | 'hierarchy'")
+			@RequestHeader(value = "X-View", required = false, defaultValue = "detail") String view) {
+		Symbol symbol = symbolRepository.findById(id)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Symbol not found: " + id));
+		return switch (view.toLowerCase()) {
+			case "detail" -> symbol;
+			case "hierarchy" -> buildHierarchy(symbol);
+			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Unknown X-View value '" + view + "'. Allowed: detail, hierarchy");
+		};
+	}
+
+	// ─── Internal helpers ─────────────────────────────────────────────────────
+
+	private Object getFileContext(Long projectId, String filePath, String sessionId, String format,
+			String ifNoneMatch) throws IOException {
+		requireParam(filePath, "filePath", "file");
 
 		Project project = projectRepository.findById(projectId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
@@ -119,32 +333,28 @@ public class CodebaseController {
 		Path projectRoot = Paths.get(project.getRootPath());
 		Path fullPath = projectRoot.resolve(filePath).toAbsolutePath();
 
-		if (!Files.exists(fullPath)) {
+		if (!Files.exists(fullPath))
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);
-		}
 
-		// Fix A: auto-downgrade to structure for large files to prevent massive token
-		// payloads
+		// Auto-downgrade to structure for large files to prevent massive token payloads
 		long fileBytes = Files.size(fullPath);
 		long maxBytes = (long) codebaseProperties.getMaxFileSizeKb() * 1024;
-		if (fileBytes > maxBytes && "full".equalsIgnoreCase(format)) {
+		if (fileBytes > maxBytes && "full".equalsIgnoreCase(format))
 			format = "structure";
-		}
 
-		FileMetadata metadata = fileMetadataRepository.findById(new FileMetadataId(projectId, fullPath.toString()))
-				.orElse(null);
+		FileMetadata metadata = fileMetadataRepository
+				.findById(new FileMetadataId(projectId, fullPath.toString())).orElse(null);
 		List<Symbol> symbols = fileIndexerService.getSymbols(projectId, fullPath.toString());
 		String content = Files.readString(fullPath);
-		String finalContent = content;
+		String finalContent;
 		String summary = null;
 
 		if ("structure".equalsIgnoreCase(format)) {
-			// Fix B: strip Java import blocks — high noise, zero AI signal
 			String structureContent = codeSummarizerService.extractStructure(content);
-			finalContent = com.mcp.util.CodeUtils.stripJavaImports(structureContent);
+			finalContent = CodeUtils.stripJavaImports(structureContent);
 		} else if ("summary".equalsIgnoreCase(format)) {
 			summary = codeSummarizerService.createIntelligentSummary(content);
-			finalContent = null; // No content in summary mode
+			finalContent = null;
 		} else if ("numbered".equalsIgnoreCase(format)) {
 			finalContent = CodeUtils.addLineNumbers(content);
 		} else {
@@ -152,34 +362,28 @@ public class CodebaseController {
 		}
 
 		String currentChecksum = metadata != null ? metadata.getChecksum() : null;
-		if (ifNoneMatch != null && currentChecksum != null && ifNoneMatch.equals("\"" + currentChecksum + "\"")) {
+		if (ifNoneMatch != null && currentChecksum != null && ifNoneMatch.equals("\"" + currentChecksum + "\""))
 			return ResponseEntity.status(HttpStatus.NOT_MODIFIED).build();
-		}
 
 		ContextDTO contextDTO = new ContextDTO(filePath, finalContent, summary, format,
 				symbols.stream().map(s -> toSymbolDTO(s, null)).toList(), toMetadataDTO(metadata), null, false, false);
 
-		if ("markdown".equalsIgnoreCase(format)) {
+		if ("markdown".equalsIgnoreCase(format))
 			return ResponseEntity.ok().eTag(currentChecksum).body(LlmResponseOptimizer.toMarkdown(contextDTO));
-		}
 
-		if (sessionId != null) {
+		if (sessionId != null)
 			contextMemoryService.recordAccess(sessionId, filePath, currentChecksum);
-		}
 
 		return ResponseEntity.ok().eTag(currentChecksum).body(contextDTO);
 	}
 
-	@PostMapping("/{projectId}/context/batch")
-	@Operation(summary = "get-batch-context", description = "Get batch file context")
-	public Map<String, Object> getBatchContext(@PathVariable Long projectId, @RequestBody List<String> filePaths) {
-		// Fix J: fetch all files in parallel using Virtual Threads; abort whole batch
-		// on first error
+	private Map<String, Object> getBatchContext(Long projectId, List<String> filePaths) {
 		List<CompletableFuture<Map.Entry<String, Object>>> futures = filePaths.stream()
 				.map(fp -> CompletableFuture.supplyAsync(() -> {
 					try {
-						ResponseEntity<Object> response = getFileContext(projectId, fp, null, "full", null);
-						return Map.entry(fp, response.getBody() != null ? response.getBody() : "");
+						Object response = getFileContext(projectId, fp, null, "full", null);
+						Object body = response instanceof ResponseEntity<?> re ? re.getBody() : response;
+						return Map.entry(fp, body != null ? body : "");
 					} catch (IOException e) {
 						throw new CompletionException("Failed to read file: " + fp, e);
 					}
@@ -193,7 +397,6 @@ public class CodebaseController {
 				result.put(entry.getKey(), entry.getValue());
 			}
 		} catch (CompletionException ex) {
-			// Abort: cancel all remaining futures and surface the error
 			futures.forEach(f -> f.cancel(true));
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
 					"Batch aborted: " + ex.getCause().getMessage());
@@ -201,51 +404,7 @@ public class CodebaseController {
 		return result;
 	}
 
-	@GetMapping("/{projectId}/summarize")
-	@Operation(summary = "summarize", description = "Summarize file content")
-	public Map<String, Object> summarize(@PathVariable Long projectId, @RequestParam String filePath)
-			throws IOException {
-		Project project = projectRepository.findById(projectId).orElseThrow();
-		Path fullPath = Paths.get(project.getRootPath()).resolve(filePath);
-		String content = Files.readString(fullPath);
-		String summary = codeSummarizerService.createIntelligentSummary(content);
-		List<Symbol> symbols = fileIndexerService.getSymbols(projectId, fullPath.toString());
-
-		Map<String, Object> result = new java.util.HashMap<>();
-		result.put("filePath", filePath);
-		result.put("summary", summary);
-		result.put("symbols", symbols.stream().map(s -> toSymbolDTO(s, null)).toList());
-		return result;
-	}
-
-	@GetMapping("/{projectId}/search")
-	@Operation(summary = "search-codebase", description = "Performs full-text search across all indexed files.")
-	public List<ContentSearchResult> search(@PathVariable Long projectId, @RequestParam String query,
-			@RequestParam(required = false, defaultValue = "10") int limit) {
-		return luceneIndexService.searchContent(projectId, query, limit);
-	}
-
-	@GetMapping("/{projectId}/search/changed")
-	@Operation(summary = "search-codebase-changed", description = "Performs full-text search ONLY across files that have uncommitted changes (modified, added, or staged).")
-	public List<ContentSearchResult> searchChanged(@PathVariable Long projectId, @RequestParam String query,
-			@RequestParam(required = false, defaultValue = "10") int limit) {
-		Project project = projectRepository.findById(projectId).orElseThrow();
-		String rootPath = project.getRootPath();
-		Set<String> changedFiles = gitInfoService.getChangedFilePaths(projectId);
-
-		Set<String> absolutePaths = changedFiles.stream()
-				.map(relPath -> Paths.get(rootPath).resolve(relPath).toAbsolutePath().toString())
-				.collect(java.util.stream.Collectors.toSet());
-
-		return luceneIndexService.searchContent(projectId, query, absolutePaths, limit);
-	}
-
-	@GetMapping("/{projectId}/symbols")
-	@Operation(summary = "search-symbols", description = "Searches for classes, methods, or fields by name.")
-	public List<SymbolDTO> searchSymbols(@PathVariable Long projectId, @RequestParam String query,
-			@RequestParam(required = false) String type, @RequestParam(defaultValue = "50") int limit) {
-		// Fix L: push limit to DB via Pageable — no more loading all rows then
-		// stream-limiting
+	private List<SymbolDTO> searchSymbols(Long projectId, String query, String type, int limit) {
 		PageRequest pageRequest = PageRequest.of(0, limit);
 		Project project = projectRepository.findById(projectId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
@@ -254,8 +413,8 @@ public class CodebaseController {
 		if (type != null && !type.isEmpty()) {
 			try {
 				SymbolType symbolType = SymbolType.valueOf(type.toUpperCase());
-				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCaseAndType(projectId, query,
-						symbolType, pageRequest);
+				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCaseAndType(
+						projectId, query, symbolType, pageRequest);
 			} catch (IllegalArgumentException e) {
 				symbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId, query, pageRequest);
 			}
@@ -265,98 +424,26 @@ public class CodebaseController {
 		return symbols.stream().map(s -> toSymbolDTO(s, rootPath)).toList();
 	}
 
-	@GetMapping("/{projectId}/files")
-	@Operation(summary = "search-files", description = "Finds indexed files whose paths match the query.")
-	public List<FileMetadataDTO> searchFiles(@PathVariable Long projectId, @RequestParam String query,
-			@RequestParam(defaultValue = "100") int limit) {
-		PageRequest pageRequest = PageRequest.of(0, limit);
-		return fileMetadataRepository.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query, pageRequest)
-				.stream().map(this::toMetadataDTO).toList();
-	}
-
-	@GetMapping("/{projectId}/suggest")
-	@Operation(summary = "suggest", description = "Combines symbol and content search for relevant code snippets.")
-	public Map<String, Object> suggest(@PathVariable Long projectId, @RequestParam String query) {
-		Map<String, Object> result = new java.util.HashMap<>();
-		result.put("symbols", searchSymbols(projectId, query, null, 10));
-		result.put("content", search(projectId, query, 10));
-
-		return result;
-	}
-
-	@GetMapping("/{projectId}/history")
-	@Operation(summary = "get-history", description = "Get file access history")
-	public java.util.Set<String> getHistory(@PathVariable Long projectId, @RequestParam String sessionId) {
-		return contextMemoryService.getSessionFiles(sessionId);
-	}
-
-	@GetMapping("/{projectId}/topology")
-	@Operation(summary = "get-topology", description = "Returns project structure and dependencies.")
-
-	public Map<String, Object> getTopology(@PathVariable Long projectId) {
-		return topologyService.getProjectTopology(projectId);
-	}
-
-	@GetMapping("/{projectId}/analyze-endpoint")
-	@Operation(summary = "analyze-endpoint", description = "Analyzes a controller endpoint by tracing implementation from controller to entity level.")
-	public com.mcp.entity.Skill analyzeEndpoint(@PathVariable Long projectId, @RequestParam String controllerName,
-			@RequestParam String methodName) throws IOException {
-		return endpointAnalysisService.analyzeEndpoint(projectId, controllerName, methodName);
-	}
-
-	@PostMapping("/{projectId}/scan")
-	@Operation(summary = "scan", description = "Trigger directory scan")
-	public Map<String, String> scan(@PathVariable Long projectId) throws IOException {
-		fileScannerService.scanProject(projectId);
-		return Map.of("status", "success");
-	}
-
-	@PostMapping("/{projectId}/reconcile")
-	@Operation(summary = "reconcile", description = "Reconcile index")
-	public Map<String, String> reconcile(@PathVariable Long projectId) {
-		reconciliationService.reconcileProject(projectId);
-		return Map.of("status", "success");
-	}
-
-	@GetMapping("/symbols/{id}")
-	@Operation(summary = "get-symbol", description = "Get symbol details")
-	public Symbol getSymbol(@PathVariable Long id) {
-		return symbolRepository.findById(id)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-	}
-
-	@GetMapping("/symbols/{id}/hierarchy")
-	@Operation(summary = "get-call-hierarchy", description = "Get call hierarchy for a symbol")
-	public Map<String, Object> getCallHierarchy(@PathVariable Long id) {
-		Symbol symbol = symbolRepository.findById(id)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-
+	private Map<String, Object> buildHierarchy(Symbol symbol) {
 		Map<String, Object> result = new java.util.HashMap<>();
 		result.put("symbol", symbol);
-
-		List<com.mcp.entity.SymbolCall> outgoing = symbolCallRepository.findByCallerId(id);
+		List<com.mcp.entity.SymbolCall> outgoing = symbolCallRepository.findByCallerId(symbol.getId());
 		result.put("outgoing", outgoing);
-
-		List<com.mcp.entity.SymbolCall> incoming = symbolCallRepository.findByProjectIdAndCalleeName(
-				symbol.getProjectId(),
-				symbol.getName());
-
+		List<com.mcp.entity.SymbolCall> incoming = symbolCallRepository
+				.findByProjectIdAndCalleeName(symbol.getProjectId(), symbol.getName());
 		List<Map<String, Object>> incomingEnriched = incoming.stream().map(call -> {
 			Map<String, Object> item = new java.util.HashMap<>();
 			item.put("call", call);
 			symbolRepository.findById(call.getCallerId()).ifPresent(caller -> item.put("caller", caller));
 			return item;
 		}).toList();
-
 		result.put("incoming", incomingEnriched);
 		return result;
 	}
 
 	/**
-	 * Fix G: Relativize filePath against project rootPath before exposing it in the
-	 * DTO.
-	 * Absolute paths waste tokens and leak machine-specific directory layout to AI
-	 * tools.
+	 * Relativize filePath against project rootPath before exposing it in the DTO.
+	 * Absolute paths waste tokens and leak machine-specific directory layout to AI tools.
 	 * Pass {@code null} for rootPath to skip relativization.
 	 */
 	private SymbolDTO toSymbolDTO(Symbol symbol, String rootPath) {
@@ -364,26 +451,23 @@ public class CodebaseController {
 		if (rootPath != null && relativePath != null && relativePath.startsWith(rootPath)) {
 			try {
 				relativePath = Paths.get(rootPath).relativize(Paths.get(relativePath)).toString();
-			} catch (Exception ignored) {
-				/* keep absolute if relativize fails */ }
+			} catch (Exception ignored) { /* keep absolute if relativize fails */ }
 		}
 		return new SymbolDTO(
-				symbol.getId(),
-				symbol.getName(),
-				symbol.getType(),
-				relativePath,
-				symbol.getLineNumber(),
-				symbol.getSignature(),
-				symbol.getReturnType(),
-				symbol.getModifiers(),
-				symbol.getAnnotations());
+				symbol.getId(), symbol.getName(), symbol.getType(), relativePath,
+				symbol.getLineNumber(), symbol.getSignature(), symbol.getReturnType(),
+				symbol.getModifiers(), symbol.getAnnotations());
 	}
 
 	private FileMetadataDTO toMetadataDTO(FileMetadata metadata) {
-		if (metadata == null)
-			return null;
-		return new FileMetadataDTO(metadata.getFilePath(), metadata.getFileSize(), metadata.getChecksum(),
-				metadata.getLastScanned());
+		if (metadata == null) return null;
+		return new FileMetadataDTO(metadata.getFilePath(), metadata.getFileSize(),
+				metadata.getChecksum(), metadata.getLastScanned());
 	}
 
+	private void requireParam(String value, String name, String op) {
+		if (value == null || value.isBlank())
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Query param '" + name + "' is required for X-Op=" + op);
+	}
 }
