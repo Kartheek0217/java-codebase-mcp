@@ -11,4 +11,5 @@ import java.util.List;
 public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> {
     List<ProjectTask> findByProjectIdOrderByCreatedAtDesc(Long projectId);
     List<ProjectTask> findByProjectIdAndStatus(Long projectId, TaskStatus status);
+    void deleteByProjectId(Long projectId);
 }

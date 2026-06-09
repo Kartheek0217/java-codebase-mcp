@@ -41,7 +41,7 @@ public class TopologyService {
 	@Cacheable(value = "topology", key = "#projectId")
 	public Map<String, Object> getProjectTopology(Long projectId) {
 		Project project = projectRepository.findById(projectId)
-				.orElseThrow(() -> new RuntimeException("Project not found"));
+				.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found"));
 
 		List<FileMetadata> files = fileMetadataRepository.findByProjectId(projectId);
 

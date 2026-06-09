@@ -22,11 +22,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.mcp.dto.ContentSearchResult;
 import com.mcp.dto.ContextDTO;
 import com.mcp.dto.FileMetadataDTO;
 import com.mcp.dto.SymbolDTO;
@@ -75,6 +73,7 @@ public class CodebaseController {
 	private final CodeSummarizerService codeSummarizerService;
 	private final EndpointAnalysisService endpointAnalysisService;
 	private final CodebaseProperties codebaseProperties;
+	private final com.mcp.service.ProjectService projectService;
 
 	// VT-backed executor for parallel batch context fetches
 	private static final Executor BATCH_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
@@ -92,7 +91,8 @@ public class CodebaseController {
 			GitInfoService gitInfoService,
 			CodeSummarizerService codeSummarizerService,
 			EndpointAnalysisService endpointAnalysisService,
-			CodebaseProperties codebaseProperties) {
+			CodebaseProperties codebaseProperties,
+			com.mcp.service.ProjectService projectService) {
 		this.fileIndexerService = fileIndexerService;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.symbolRepository = symbolRepository;
@@ -107,6 +107,7 @@ public class CodebaseController {
 		this.codeSummarizerService = codeSummarizerService;
 		this.endpointAnalysisService = endpointAnalysisService;
 		this.codebaseProperties = codebaseProperties;
+		this.projectService = projectService;
 	}
 
 	// ─── Project-scoped read (GET) ────────────────────────────────────────────
@@ -162,75 +163,70 @@ public class CodebaseController {
 			@PathVariable Long projectId,
 			@Parameter(description = "Operation: file | search | search-changed | symbols | files | suggest | history | topology | summarize | analyze-endpoint")
 			@RequestHeader(value = "X-Op") String op,
-			@RequestParam(required = false) String filePath,
-			@RequestParam(required = false) String query,
-			@RequestParam(required = false) String sessionId,
-			@RequestParam(required = false, defaultValue = "full") String format,
-			@RequestParam(required = false) String type,
-			@RequestParam(required = false, defaultValue = "10") int limit,
-			@RequestParam(required = false) String controllerName,
-			@RequestParam(required = false) String methodName,
+			com.mcp.dto.CodebaseQuery query,
 			@RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) throws IOException {
 
 		return switch (op.toLowerCase()) {
-			case "file" -> getFileContext(projectId, filePath, sessionId, format, ifNoneMatch);
+			case "file" -> getFileContext(projectId, query.filePath(), query.sessionId(), query.getFormatOrDefault(), ifNoneMatch);
 			case "search" -> {
-				requireParam(query, "query", "search");
-				yield luceneIndexService.searchContent(projectId, query, limit);
+				requireParam(query.query(), "query", "search");
+				yield luceneIndexService.searchContent(projectId, query.query(), query.getLimitOrDefault());
 			}
 			case "search-changed" -> {
-				requireParam(query, "query", "search-changed");
+				requireParam(query.query(), "query", "search-changed");
 				Project project = projectRepository.findById(projectId).orElseThrow();
 				Set<String> changed = gitInfoService.getChangedFilePaths(projectId);
 				Set<String> absPaths = changed.stream()
 						.map(rel -> Paths.get(project.getRootPath()).resolve(rel).toAbsolutePath().toString())
 						.collect(java.util.stream.Collectors.toSet());
-				yield luceneIndexService.searchContent(projectId, query, absPaths, limit);
+				yield luceneIndexService.searchContent(projectId, query.query(), absPaths, query.getLimitOrDefault());
 			}
 			case "symbols" -> {
-				requireParam(query, "query", "symbols");
-				yield searchSymbols(projectId, query, type, limit);
+				requireParam(query.query(), "query", "symbols");
+				yield searchSymbols(projectId, query.query(), query.type(), query.getSymbolLimitOrDefault());
 			}
 			case "files" -> {
-				requireParam(query, "query", "files");
-				PageRequest pr = PageRequest.of(0, limit);
+				requireParam(query.query(), "query", "files");
+				PageRequest pr = PageRequest.of(0, query.getFileLimitOrDefault());
 				yield fileMetadataRepository
-						.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query, pr)
+						.findByProjectIdAndFilePathContainingIgnoreCase(projectId, query.query(), pr)
 						.stream().map(this::toMetadataDTO).toList();
 			}
 			case "suggest" -> {
-				requireParam(query, "query", "suggest");
+				requireParam(query.query(), "query", "suggest");
 				yield Map.of(
-						"symbols", searchSymbols(projectId, query, null, 10),
-						"content", luceneIndexService.searchContent(projectId, query, 10));
+						"symbols", searchSymbols(projectId, query.query(), null, 10),
+						"content", luceneIndexService.searchContent(projectId, query.query(), 10));
 			}
 			case "history" -> {
-				requireParam(sessionId, "sessionId", "history");
-				yield contextMemoryService.getSessionFiles(sessionId);
+				requireParam(query.sessionId(), "sessionId", "history");
+				yield contextMemoryService.getSessionFiles(query.sessionId());
 			}
 			case "topology" -> topologyService.getProjectTopology(projectId);
 			case "summarize" -> {
-				requireParam(filePath, "filePath", "summarize");
+				requireParam(query.filePath(), "filePath", "summarize");
 				Project project = projectRepository.findById(projectId).orElseThrow();
-				Path full = Paths.get(project.getRootPath()).resolve(filePath);
+				Path full = Paths.get(project.getRootPath()).resolve(query.filePath());
 				String content = Files.readString(full);
 				String summary = codeSummarizerService.createIntelligentSummary(content);
 				List<Symbol> symbols = fileIndexerService.getSymbols(projectId, full.toString());
 				yield Map.of(
-						"filePath", filePath,
+						"filePath", query.filePath(),
 						"summary", summary,
 						"symbols", symbols.stream().map(s -> toSymbolDTO(s, null)).toList());
 			}
 			case "analyze-endpoint" -> {
-				requireParam(controllerName, "controllerName", "analyze-endpoint");
-				requireParam(methodName, "methodName", "analyze-endpoint");
-				yield endpointAnalysisService.analyzeEndpoint(projectId, controllerName, methodName);
+				requireParam(query.controllerName(), "controllerName", "analyze-endpoint");
+				requireParam(query.methodName(), "methodName", "analyze-endpoint");
+				yield endpointAnalysisService.analyzeEndpoint(projectId, query.controllerName(), query.methodName());
 			}
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 					"Unknown X-Op value '" + op + "'. Allowed: file, search, search-changed, symbols, files, " +
 					"suggest, history, topology, summarize, analyze-endpoint");
 		};
 	}
+
+
 
 	// ─── Project-scoped mutations (POST) ─────────────────────────────────────
 
@@ -266,11 +262,11 @@ public class CodebaseController {
 		return switch (op.toLowerCase()) {
 			case "scan" -> {
 				fileScannerService.scanProject(projectId);
-				yield Map.of("status", "success", "op", "scan");
+				yield projectService.buildProjectOpResponse(projectId, "scan", null);
 			}
 			case "reconcile" -> {
 				reconciliationService.reconcileProject(projectId);
-				yield Map.of("status", "success", "op", "reconcile");
+				yield projectService.buildProjectOpResponse(projectId, "reconcile", null);
 			}
 			case "batch" -> {
 				if (filePaths == null || filePaths.isEmpty())
@@ -323,7 +319,7 @@ public class CodebaseController {
 
 	// ─── Internal helpers ─────────────────────────────────────────────────────
 
-	private Object getFileContext(Long projectId, String filePath, String sessionId, String format,
+	private ResponseEntity<Object> getFileContext(Long projectId, String filePath, String sessionId, String format,
 			String ifNoneMatch) throws IOException {
 		requireParam(filePath, "filePath", "file");
 
@@ -369,12 +365,12 @@ public class CodebaseController {
 				symbols.stream().map(s -> toSymbolDTO(s, null)).toList(), toMetadataDTO(metadata), null, false, false);
 
 		if ("markdown".equalsIgnoreCase(format))
-			return ResponseEntity.ok().eTag(currentChecksum).body(LlmResponseOptimizer.toMarkdown(contextDTO));
+			return ResponseEntity.ok().eTag(currentChecksum).body(Map.of("type", "markdown", "content", LlmResponseOptimizer.toMarkdown(contextDTO)));
 
 		if (sessionId != null)
 			contextMemoryService.recordAccess(sessionId, filePath, currentChecksum);
 
-		return ResponseEntity.ok().eTag(currentChecksum).body(contextDTO);
+		return ResponseEntity.ok().eTag(currentChecksum).body(Map.of("type", "context", "data", contextDTO));
 	}
 
 	private Map<String, Object> getBatchContext(Long projectId, List<String> filePaths) {

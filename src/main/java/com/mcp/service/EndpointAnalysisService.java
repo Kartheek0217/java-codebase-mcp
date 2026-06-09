@@ -50,7 +50,7 @@ public class EndpointAnalysisService {
     @Transactional
     public Skill analyzeEndpoint(Long projectId, String controllerName, String methodName) throws IOException {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found"));
 
         // Find the controller method symbol
         List<Symbol> controllerSymbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,

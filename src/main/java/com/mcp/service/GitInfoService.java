@@ -1,9 +1,14 @@
 package com.mcp.service;
 
-import com.mcp.entity.Project;
-import com.mcp.repository.ProjectRepository;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.lib.ObjectId;
@@ -13,15 +18,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import com.mcp.entity.Project;
+import com.mcp.repository.ProjectRepository;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 @Service
 public class GitInfoService {
@@ -86,15 +89,21 @@ public class GitInfoService {
         }
     }
 
-    private synchronized Repository getRepository(Long projectId) throws IOException {
+    private Repository getRepository(Long projectId) {
         Repository existing = repositoryCache.get(projectId);
         if (existing != null) {
             lastAccessTimes.put(projectId, System.currentTimeMillis());
             return existing;
         }
+        synchronized (("repo-lock-" + projectId).intern()) {
+            return repositoryCache.computeIfAbsent(projectId, this::openRepository);
+        }
+    }
+
+    private Repository openRepository(Long projectId) {
         try {
             Project project = projectRepository.findById(projectId)
-                    .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found: " + projectId));
 
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
             Repository repository = builder
@@ -103,13 +112,12 @@ public class GitInfoService {
                     .build();
 
             if (repository == null || !repository.getDirectory().exists()) {
-                throw new RuntimeException("Git repository not found for project: " + project.getName());
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Git repository not found for project: " + project.getName());
             }
-            repositoryCache.put(projectId, repository);
             lastAccessTimes.put(projectId, System.currentTimeMillis());
             return repository;
         } catch (IOException e) {
-            throw new IOException("Error opening Git repository for project " + projectId, e);
+            throw new RuntimeException("Error opening Git repository for project " + projectId, e);
         }
     }
 
@@ -152,7 +160,7 @@ public class GitInfoService {
             }
         } catch (Exception e) {
             logger.error("Error getting Git status for project {}: {}", projectId, e.getMessage());
-            throw new RuntimeException("Could not get Git status: " + e.getMessage());
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "Could not get Git status: " + e.getMessage());
         }
     }
 
@@ -167,7 +175,7 @@ public class GitInfoService {
                 changedFiles.addAll(status.getRemoved());
                 changedFiles.addAll(status.getMissing());
                 changedFiles.addAll(status.getUntracked());
-                changedFiles.addAll(status.getChanged()); // staged
+                changedFiles.addAll(status.getChanged());
                 return changedFiles;
             }
         } catch (Exception e) {
@@ -202,7 +210,7 @@ public class GitInfoService {
             }
         } catch (Exception e) {
             logger.error("Error staging files for project {}: {}", projectId, e.getMessage());
-            throw new RuntimeException("Could not stage files: " + e.getMessage());
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "Could not stage files: " + e.getMessage());
         }
     }
 
@@ -218,22 +226,29 @@ public class GitInfoService {
             }
         } catch (Exception e) {
             logger.error("Error discarding changes for project {}: {}", projectId, e.getMessage());
-            throw new RuntimeException("Could not discard changes: " + e.getMessage());
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "Could not discard changes: " + e.getMessage());
         }
     }
 
     public String commit(Long projectId, String message) {
+        if (message == null || message.isBlank()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Commit message required");
+        }
+        String sanitised = message.strip().replaceAll("[\r\n]", " ");
+        if (sanitised.length() > 500) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Commit message exceeds 500 chars");
+        }
         try {
             Repository repository = getRepository(projectId);
             try (Git git = new Git(repository)) {
                 var commit = git.commit()
-                        .setMessage(message)
+                        .setMessage(sanitised)
                         .call();
                 return commit.getName().substring(0, 8);
             }
         } catch (Exception e) {
             logger.error("Error committing for project {}: {}", projectId, e.getMessage());
-            throw new RuntimeException("Could not commit changes: " + e.getMessage());
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "Could not commit changes: " + e.getMessage());
         }
     }
 

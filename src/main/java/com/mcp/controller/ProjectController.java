@@ -43,7 +43,8 @@ public class ProjectController {
 	// ─── Collection endpoints ─────────────────────────────────────────────────
 
 	/**
-	 * {@code POST /api/projects} : Create a new project and begin background indexing.
+	 * {@code POST /api/projects} : Create a new project and begin background
+	 * indexing.
 	 *
 	 * @param name     Human-readable project name
 	 * @param rootPath Absolute filesystem path to the project root
@@ -51,51 +52,49 @@ public class ProjectController {
 	 * @throws IOException If the root path is invalid or inaccessible
 	 */
 	@PostMapping
-	@Operation(
-		summary = "crt-project",
-		description = "Create a new project and start background indexing of its root directory. " +
+	@Operation(summary = "crt-project", description = "Create a new project and start background indexing of its root directory. "
+			+
 			"Required params: name (string), rootPath (absolute path). " +
-			"Returns the created Project object with status=INDEXING.",
-		responses = {
-			@ApiResponse(responseCode = "200", description = "Project created and indexing started"),
-			@ApiResponse(responseCode = "400", description = "rootPath missing, not a directory, or not readable")
-		}
-	)
-	public Project createProject(
+			"Returns the created Project object with status=INDEXING.", responses = {
+					@ApiResponse(responseCode = "200", description = "Project created and indexing started"),
+					@ApiResponse(responseCode = "400", description = "rootPath missing, not a directory, or not readable")
+			})
+	public Object createProject(
 			@Parameter(description = "Human-readable project name") @RequestParam String name,
-			@Parameter(description = "Absolute path to the project root on the local filesystem") @RequestParam String rootPath)
+			@Parameter(description = "Absolute path to the project root on the local filesystem. Examples: 'C:\\path\\to\\project' (Windows), '/path/to/project' (Linux/macOS)") @RequestParam String rootPath)
 			throws IOException {
 		Path path = Path.of(rootPath);
 		if (!Files.exists(path))
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path does not exist: " + rootPath);
+
+		path = path.toRealPath();
 		if (!Files.isDirectory(path))
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not a directory: " + rootPath);
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not a directory: " + path);
 		if (!Files.isReadable(path))
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not readable: " + rootPath);
-		return projectService.createProject(name, rootPath);
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not readable: " + path);
+		Project project = projectService.createProject(name, path.toString());
+		return projectService.buildProjectOpResponse(project.getId(), "create", project);
 	}
 
 	/**
-	 * {@code GET /api/projects} : List projects. Behaviour controlled by {@code X-View} header.
+	 * {@code GET /api/projects} : List projects. Behaviour controlled by
+	 * {@code X-View} header.
 	 *
-	 * @param view {@code list} (default) — all projects; {@code summary} — projects with file/symbol counts
+	 * @param view {@code list} (default) — all projects; {@code summary} — projects
+	 *             with file/symbol counts
 	 * @return List of projects or summary maps
 	 */
 	@GetMapping
-	@Operation(
-		summary = "get-projects",
-		description = "Retrieve project list. Behaviour is controlled by the X-View request header:\n" +
+	@Operation(summary = "get-projects", description = "Retrieve project list. Behaviour is controlled by the X-View request header:\n"
+			+
 			"• X-View: list (default) — returns all registered projects as Project objects.\n" +
 			"• X-View: summary — returns all projects with file count, symbol count, and status statistics.\n" +
-			"No path or body parameters required.",
-		responses = {
-			@ApiResponse(responseCode = "200", description = "Project list returned"),
-			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
-		}
-	)
+			"No path or body parameters required.", responses = {
+					@ApiResponse(responseCode = "200", description = "Project list returned"),
+					@ApiResponse(responseCode = "400", description = "Unknown X-View value")
+			})
 	public Object getProjects(
-			@Parameter(description = "View variant: 'list' (default) | 'summary'")
-			@RequestHeader(value = "X-View", required = false, defaultValue = "list") String view) {
+			@Parameter(description = "View variant: 'list' (default) | 'summary'") @RequestHeader(value = "X-View", required = false, defaultValue = "list") String view) {
 		return switch (view.toLowerCase()) {
 			case "list" -> projectService.getAllProjects();
 			case "summary" -> projectService.getAllProjectSummaries();
@@ -107,30 +106,27 @@ public class ProjectController {
 	// ─── Project-scoped read ──────────────────────────────────────────────────
 
 	/**
-	 * {@code GET /api/projects/{id}} : Read project data. Variant selected via {@code X-View} header.
+	 * {@code GET /api/projects/{id}} : Read project data. Variant selected via
+	 * {@code X-View} header.
 	 *
 	 * @param id   Project ID
 	 * @param view {@code detail} | {@code stats} | {@code git-status}
 	 * @return Project detail, stats map, or git-status map
 	 */
 	@GetMapping("/{id}")
-	@Operation(
-		summary = "get-project",
-		description = "Read project data for the given project ID. Select the response shape with X-View:\n" +
+	@Operation(summary = "get-project", description = "Read project data for the given project ID. Select the response shape with X-View:\n"
+			+
 			"• X-View: detail (default) — full Project entity (name, rootPath, id, status).\n" +
 			"• X-View: stats — file count and symbol count for the project {fileCount, symbolCount, projectId}.\n" +
 			"• X-View: git-status — uncommitted changes {modified, added, removed, untracked} file lists.\n" +
-			"Path param: id (Long) — project ID.",
-		responses = {
-			@ApiResponse(responseCode = "200", description = "Requested project data returned"),
-			@ApiResponse(responseCode = "404", description = "Project not found"),
-			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
-		}
-	)
+			"Path param: id (Long) — project ID.", responses = {
+					@ApiResponse(responseCode = "200", description = "Requested project data returned"),
+					@ApiResponse(responseCode = "404", description = "Project not found"),
+					@ApiResponse(responseCode = "400", description = "Unknown X-View value")
+			})
 	public Object getProject(
 			@PathVariable Long id,
-			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'")
-			@RequestHeader(value = "X-View", required = false, defaultValue = "detail") String view) {
+			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'") @RequestHeader(value = "X-View", required = false, defaultValue = "detail") String view) {
 		return switch (view.toLowerCase()) {
 			case "detail" -> projectService.getProject(id);
 			case "stats" -> projectService.getProjectStats(id);
@@ -153,30 +149,26 @@ public class ProjectController {
 	 * @return Operation result map or void
 	 */
 	@PostMapping("/{id}")
-	@Operation(
-		summary = "project-op",
-		description = "Execute a write operation on a project via the X-Op request header. Supported operations:\n" +
+	@Operation(summary = "project-op", description = "Execute a write operation on a project via the X-Op request header. Supported operations:\n"
+			+
 			"• X-Op: reindex — trigger a full re-index of all project files. No body required.\n" +
 			"• X-Op: stage — stage files for git commit. Body: list of file glob patterns, e.g. [\"src/main/**\"].\n" +
 			"• X-Op: discard — discard local changes for matching files. Body: list of file glob patterns.\n" +
 			"• X-Op: commit — commit all staged changes. Query param: message (string, required).\n" +
-			"Path param: id (Long) — project ID.",
-		responses = {
-			@ApiResponse(responseCode = "200", description = "Operation completed successfully"),
-			@ApiResponse(responseCode = "400", description = "Missing required params or unknown X-Op value"),
-			@ApiResponse(responseCode = "404", description = "Project not found")
-		}
-	)
+			"Path param: id (Long) — project ID.", responses = {
+					@ApiResponse(responseCode = "200", description = "Operation completed successfully"),
+					@ApiResponse(responseCode = "400", description = "Missing required params or unknown X-Op value"),
+					@ApiResponse(responseCode = "404", description = "Project not found")
+			})
 	public Object projectOp(
 			@PathVariable Long id,
-			@Parameter(description = "Operation: 'reindex' | 'stage' | 'discard' | 'commit'")
-			@RequestHeader(value = "X-Op") String op,
+			@Parameter(description = "Operation: 'reindex' | 'stage' | 'discard' | 'commit'") @RequestHeader(value = "X-Op") String op,
 			@RequestBody(required = false) Object requestBody,
 			@RequestParam(required = false) String message) {
 		return switch (op.toLowerCase()) {
 			case "reindex" -> {
 				projectService.reindexProject(id);
-				yield Map.of("status", "success", "op", "reindex");
+				yield projectService.buildProjectOpResponse(id, "reindex", null);
 			}
 			case "stage" -> {
 				gitInfoService.stageFiles(id, parsePatterns(requestBody));
@@ -188,7 +180,8 @@ public class ProjectController {
 			}
 			case "commit" -> {
 				if (message == null || message.isBlank())
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'message' is required for op=commit");
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+							"Query param 'message' is required for op=commit");
 				String hash = gitInfoService.commit(id, message);
 				yield Map.of("status", "success", "op", "commit", "commitHash", hash);
 			}
@@ -200,20 +193,18 @@ public class ProjectController {
 	// ─── Delete ───────────────────────────────────────────────────────────────
 
 	/**
-	 * {@code DELETE /api/projects/{id}} : Delete a project and all its indexed data.
+	 * {@code DELETE /api/projects/{id}} : Delete a project and all its indexed
+	 * data.
 	 *
 	 * @param id Project ID to delete
 	 */
 	@DeleteMapping("/{id}")
-	@Operation(
-		summary = "del-project",
-		description = "Permanently delete a project and remove all its indexed symbols, files, and metadata. " +
-			"Path param: id (Long) — project ID. Returns 204 No Content on success.",
-		responses = {
-			@ApiResponse(responseCode = "204", description = "Project deleted"),
-			@ApiResponse(responseCode = "404", description = "Project not found")
-		}
-	)
+	@Operation(summary = "del-project", description = "Permanently delete a project and remove all its indexed symbols, files, and metadata. "
+			+
+			"Path param: id (Long) — project ID. Returns 204 No Content on success.", responses = {
+					@ApiResponse(responseCode = "204", description = "Project deleted"),
+					@ApiResponse(responseCode = "404", description = "Project not found")
+			})
 	public void deleteProject(@PathVariable Long id) {
 		projectService.deleteProject(id);
 	}

@@ -1,16 +1,16 @@
 package com.mcp.service;
 
-import com.mcp.entity.FileMetadata;
-import com.mcp.repository.FileMetadataRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.mcp.entity.FileMetadata;
+import com.mcp.repository.FileMetadataRepository;
 
 @Service
 public class ReconciliationService {
@@ -59,7 +59,7 @@ public class ReconciliationService {
 		// 2. Trigger full scan to catch missing/changed files
 		try {
 			fileScannerService.scanProject(projectId);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			logger.error("Error during reconciliation scan for project {}", projectId, e);
 		}
 

@@ -171,7 +171,7 @@ public class LlmController {
                     }
                     validateFilePath(projectId, path);
                 }
-                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown LLM action: " + action);
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown action. Allowed: explain-symbol, explain-file, ask, code-review, ...");
             }
         } catch (ResponseStatusException ex) {
             throw ex;

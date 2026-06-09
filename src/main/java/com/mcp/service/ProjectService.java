@@ -34,6 +34,10 @@ public class ProjectService {
     private final GitInfoService gitInfoService;
     private final LuceneIndexService luceneIndexService;
     private final com.mcp.repository.ProjectTaskRepository projectTaskRepository;
+    private final com.mcp.repository.ProjectRuleRepository projectRuleRepository;
+
+    @org.springframework.beans.factory.annotation.Value("classpath:skills/global/jcb/SKILL.md")
+    private org.springframework.core.io.Resource jcbSkillResource;
 
     public ProjectService(ProjectRepository projectRepository,
             FileScannerService fileScannerService,
@@ -43,7 +47,8 @@ public class ProjectService {
             SymbolCallRepository symbolCallRepository,
             GitInfoService gitInfoService,
             LuceneIndexService luceneIndexService,
-            com.mcp.repository.ProjectTaskRepository projectTaskRepository) {
+            com.mcp.repository.ProjectTaskRepository projectTaskRepository,
+            com.mcp.repository.ProjectRuleRepository projectRuleRepository) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
         this.symbolRepository = symbolRepository;
@@ -53,6 +58,7 @@ public class ProjectService {
         this.gitInfoService = gitInfoService;
         this.luceneIndexService = luceneIndexService;
         this.projectTaskRepository = projectTaskRepository;
+        this.projectRuleRepository = projectRuleRepository;
     }
 
     @Transactional
@@ -78,7 +84,7 @@ public class ProjectService {
                 java.util.concurrent.CompletableFuture.runAsync(() -> {
                     try {
                         fileScannerService.scanProject(savedProject.getId(), savedTask.getId());
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         logger.error("Failed to start scan for new project {}", savedProject.getId(), e);
                     }
                 })
@@ -99,10 +105,9 @@ public class ProjectService {
     }
 
     public Project getProject(Long id) {
-        return projectRepository.findById(id).orElseThrow(() -> new RuntimeException("Project not found"));
+        return projectRepository.findById(id).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found"));
     }
 
-    @Transactional(readOnly = true)
     public void reindexProject(Long id) {
         Project project = getProject(id);
         logger.info("Triggering manual Git-based re-index for project: {}", project.getName());
@@ -138,19 +143,44 @@ public class ProjectService {
         return stats;
     }
 
+    public String getGlobalSkillContent() {
+        if (jcbSkillResource != null && jcbSkillResource.exists()) {
+            try (java.io.InputStream is = jcbSkillResource.getInputStream()) {
+                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (java.io.IOException e) {
+                logger.error("Failed to read global skill", e);
+            }
+        }
+        return "";
+    }
+
+    public Map<String, Object> buildProjectOpResponse(Long projectId, String op, Project projectOverride) {
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("status", "success");
+        if (op != null) {
+            response.put("op", op);
+        }
+        if (projectOverride != null) {
+            response.put("project", projectOverride);
+        }
+        response.put("stats", getProjectStats(projectId));
+        response.put("globalSkill", getGlobalSkillContent());
+        return response;
+    }
+
     /**
      * Returns a summary list of all projects including file and symbol counts.
      * Centralises repository access that was previously leaked into ProjectController.
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getAllProjectSummaries() {
-        return projectRepository.findAll().stream().map(p -> {
+        return projectRepository.findAllProjectSummaries().stream().map(row -> {
             Map<String, Object> map = new HashMap<>();
-            map.put("id", p.getId());
-            map.put("name", p.getName());
-            map.put("rootPath", p.getRootPath());
-            map.put("fileCount", fileMetadataRepository.countByProjectId(p.getId()));
-            map.put("symbolCount", symbolRepository.countByProjectId(p.getId()));
+            map.put("id", row[0]);
+            map.put("name", row[1]);
+            map.put("rootPath", row[2]);
+            map.put("fileCount", row[3]);
+            map.put("symbolCount", row[4]);
             return map;
         }).toList();
     }
@@ -161,6 +191,8 @@ public class ProjectService {
 
         // 2. Clean up associated data in DB (Dependent records first)
 
+        projectTaskRepository.deleteByProjectId(id);
+        projectRuleRepository.deleteByProjectId(id);
         symbolCallRepository.deleteByProjectId(id);
         symbolRepository.deleteByProjectId(id);
         fileMetadataRepository.deleteByProjectId(id);

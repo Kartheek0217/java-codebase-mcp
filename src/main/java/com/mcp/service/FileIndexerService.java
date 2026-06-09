@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.javaparser.JavaParser;
@@ -38,10 +37,8 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Symbol;
-import com.mcp.entity.SymbolCall;
 import com.mcp.entity.SymbolType;
 import com.mcp.repository.FileMetadataRepository;
-import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
 
 @Service
@@ -63,25 +60,20 @@ public class FileIndexerService {
 	private final LuceneIndexService luceneIndexService;
 	private final Cache<String, List<Symbol>> symbolCache;
 	private final SkillService skillService;
-	private final SymbolCallRepository symbolCallRepository;
-
-	private FileIndexerService self;
+	private final FileDataPersistenceService fileDataPersistenceService;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
 			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
-			SymbolCallRepository symbolCallRepository) {
+			FileDataPersistenceService fileDataPersistenceService) {
 		this.symbolRepository = symbolRepository;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.luceneIndexService = luceneIndexService;
 		this.symbolCache = symbolCache;
 		this.skillService = skillService;
-		this.symbolCallRepository = symbolCallRepository;
+		this.fileDataPersistenceService = fileDataPersistenceService;
 	}
 
-	@org.springframework.beans.factory.annotation.Autowired
-	public void setSelf(@org.springframework.context.annotation.Lazy FileIndexerService self) {
-		this.self = self;
-	}
+
 
 	private static final ParserConfiguration JAVA_PARSER_CONFIG = new ParserConfiguration()
 			// Fix I: BLEEDING_EDGE handles JDK 25 syntax (unnamed vars, pattern matching
@@ -143,83 +135,17 @@ public class FileIndexerService {
 				symbols = extractGeneralSymbols(content, filePath);
 			}
 
-			// Update metadata and symbols in a single transaction. Use self-proxy when
-			// available to enable @Transactional; fall back to direct call during early
-			// startup before the proxy is wired (self may be null at that point).
-			FileIndexerService proxy = self;
-			if (proxy == null) {
-				logger.warn("Self-proxy not yet wired for {}; saveFileData runs without @Transactional — no rollback on failure",
-						filePath);
-				proxy = this;
-			}
-			proxy.saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
+			fileDataPersistenceService.saveFileData(projectId, filePath, checksum, fileSize, now, symbols, calls, dependencies, metadata);
 
 			// Index content in Lucene (Outside DB transaction)
 			luceneIndexService.indexFileContent(projectId, filePath, content);
 
-		} catch (Throwable t) {
-			logger.error("Critical error indexing file: {}", path, t);
+		} catch (Exception e) {
+			logger.error("Failed to index file {} in project {}: {}", path, projectId, e.getMessage(), e);
 		}
 	}
 
-	@Transactional
-	public void saveFileData(Long projectId, String filePath, String checksum, long fileSize, LocalDateTime now,
-			List<Symbol> symbols, List<CallInfo> calls, String dependencies, FileMetadata existingMetadata) {
-		// Clear existing symbols and their calls from this file
 
-		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
-		symbolCallRepository.deleteByProjectIdAndCallerFilePath(projectId, filePath);
-		symbolCache.invalidate(projectId + ":" + filePath);
-
-		if (symbols != null && !symbols.isEmpty()) {
-			for (Symbol s : symbols) {
-				s.setProjectId(projectId);
-				s.setFilePath(filePath);
-				s.setLastModified(now);
-			}
-			symbolRepository.saveAll(symbols);
-			symbolCache.put(projectId + ":" + filePath, symbols);
-
-			// Save calls after symbols are persisted to resolve caller IDs.
-			// Known limitation: callerName matches by method name only — overloaded methods
-			// in the same file share a callerName so edges may be attributed to the first
-			// overload found. Acceptable simplification for call-graph navigation.
-			if (calls != null && !calls.isEmpty()) {
-				List<SymbolCall> symbolCalls = new ArrayList<>();
-				for (CallInfo ci : calls) {
-					// Find the caller symbol by name in the current file symbols
-					symbols.stream()
-							.filter(s -> s.getName().equals(ci.callerName) && s.getType() == SymbolType.METHOD)
-							.findFirst()
-							.ifPresent(caller -> {
-								SymbolCall sc = new SymbolCall();
-								sc.setProjectId(projectId);
-								sc.setCallerId(caller.getId());
-								sc.setCallerFilePath(filePath);
-								sc.setCalleeName(ci.calleeName);
-								symbolCalls.add(sc);
-							});
-				}
-				symbolCallRepository.saveAll(symbolCalls);
-			}
-		}
-
-		FileMetadata metadata = existingMetadata;
-		if (metadata == null) {
-			FileMetadataId id = new FileMetadataId(projectId, filePath);
-			metadata = fileMetadataRepository.findById(id).orElse(new FileMetadata());
-		}
-
-		if (metadata.getProjectId() == null) {
-			metadata.setProjectId(projectId);
-			metadata.setFilePath(filePath);
-		}
-		metadata.setChecksum(checksum);
-		metadata.setFileSize(fileSize);
-		metadata.setLastScanned(now);
-		metadata.setDependencies(dependencies);
-		fileMetadataRepository.save(metadata);
-	}
 
 	public List<Symbol> getSymbols(Long projectId, String filePath) {
 		return symbolCache.get(projectId + ":" + filePath, k -> {
@@ -227,15 +153,8 @@ public class FileIndexerService {
 		});
 	}
 
-	@Transactional
 	public void deleteFileData(Long projectId, Path path) {
-		String filePath = path.toAbsolutePath().toString();
-		logger.info("Deleting data for file: {} in project {}", filePath, projectId);
-
-		symbolRepository.deleteByProjectIdAndFilePath(projectId, filePath);
-		fileMetadataRepository.deleteById(new FileMetadataId(projectId, filePath));
-		luceneIndexService.deleteFileContent(projectId, filePath);
-		symbolCache.invalidate(projectId + ":" + filePath);
+		fileDataPersistenceService.deleteFileData(projectId, path);
 	}
 
 	private List<Symbol> extractGeneralSymbols(String content, String filePath) {
@@ -297,7 +216,7 @@ public class FileIndexerService {
 		symbols.add(s);
 	}
 
-	private record CallInfo(String callerName, String calleeName) {
+	public record CallInfo(String callerName, String calleeName) {
 	}
 
 	private record JavaAnalysisResult(List<Symbol> symbols, List<CallInfo> calls, String dependencies) {

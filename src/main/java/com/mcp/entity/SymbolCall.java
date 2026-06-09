@@ -3,7 +3,10 @@ package com.mcp.entity;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "symbol_calls")
+@Table(name = "symbol_calls", indexes = {
+    @Index(name = "idx_call_caller", columnList = "caller_id"),
+    @Index(name = "idx_call_project_callee", columnList = "project_id, callee_name")
+})
 public class SymbolCall {
 
     @Id

@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,6 +47,7 @@ public class McpController {
 	private final SkillRepository skillRepository;
 	private final ProjectRepository projectRepository;
 	private final ContextMemoryService contextMemoryService;
+	private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
 	private final Map<String, Session> sessionStore;
 
@@ -63,37 +63,38 @@ public class McpController {
 		this.sessionStore = Collections.synchronizedMap(new LinkedHashMap<>(1024, 0.75f, true) {
 			@Override
 			protected boolean removeEldestEntry(Map.Entry<String, Session> eldest) {
-				boolean shouldRemove = size() > 1000;
-				if (shouldRemove)
-					contextMemoryService.clearSession(eldest.getKey());
-				return shouldRemove;
+				return size() > 1000;
 			}
 		});
 	}
 
 	/**
-	 * Cleans up sessions older than 1 hour. Runs every hour via Spring scheduler.
+	 * @implNote Cleans sessions older than 1 hour from store and memory
+	 * @return void
+	 * @author JCB
 	 */
 	@Scheduled(fixedDelay = 3_600_000)
 	public void cleanupExpiredSessions() {
 		long now = System.currentTimeMillis();
+		List<String> expired;
 		synchronized (sessionStore) {
-			sessionStore.entrySet().removeIf(e -> {
-				boolean expired = (now - e.getValue().createdAt()) > 3_600_000L;
-				if (expired)
-					contextMemoryService.clearSession(e.getKey());
-				return expired;
-			});
+			expired = sessionStore.entrySet().stream()
+				.filter(e -> now - e.getValue().createdAt() > 3_600_000L)
+				.map(Map.Entry::getKey).toList();
+			expired.forEach(sessionStore::remove);
 		}
+		expired.forEach(contextMemoryService::clearSession);
 	}
 
 	// ─── Sessions ─────────────────────────────────────────────────────────────
 
 	/**
-	 * {@code POST /api/mcp/sessions} : Start a new AI agent session for a project.
-	 *
-	 * @param projectId Project ID to bind the session to
-	 * @return Map with generated sessionId
+	 * {@code POST /api/mcp/sessions} : Start AI agent session for project.
+	 * 
+	 * @implNote Stores Session with new UUID
+	 * @param projectId
+	 * @return Map with sessionId
+	 * @author JCB
 	 */
 	@PostMapping("/sessions")
 	@Operation(
@@ -116,10 +117,12 @@ public class McpController {
 	}
 
 	/**
-	 * {@code GET /api/mcp/sessions/{sessionId}} : Retrieve session metadata and context.
-	 *
-	 * @param sessionId Session ID returned from start-session
-	 * @return SessionDTO with projectId, sessionId, createdAt
+	 * {@code GET /api/mcp/sessions/{sessionId}} : Retrieve session metadata.
+	 * 
+	 * @implNote Retrieves existing Session from store
+	 * @param sessionId
+	 * @return SessionDTO
+	 * @author JCB
 	 */
 	@GetMapping("/sessions/{sessionId}")
 	@Operation(
@@ -143,10 +146,12 @@ public class McpController {
 	// ─── Tasks ────────────────────────────────────────────────────────────────
 
 	/**
-	 * {@code GET /api/mcp/tasks} : List all tasks for a project.
-	 *
-	 * @param projectId Project ID filter
-	 * @return List of TaskDTOs
+	 * {@code GET /api/mcp/tasks} : List project tasks.
+	 * 
+	 * @implNote Delegates to taskService
+	 * @param projectId
+	 * @return List of TaskDTO
+	 * @author JCB
 	 */
 	@GetMapping("/tasks")
 	@Operation(
@@ -164,14 +169,12 @@ public class McpController {
 	}
 
 	/**
-	 * {@code POST /api/mcp/tasks} : Create, update, or delete tasks via {@code X-Op} header.
-	 *
-	 * @param op      Operation: create | update | delete | update-step
-	 * @param id      Task ID — required for update, delete, update-step
-	 * @param stepId  Step ID — required for update-step
-	 * @param status  Step status string — required for update-step
-	 * @param body    Body — CreateTaskRequest for create, TaskDTO for update
-	 * @return TaskDTO or void
+	 * {@code POST /api/mcp/tasks} : Execute task operation.
+	 * 
+	 * @implNote Routes create/update/delete/update-step to taskService
+	 * @param op, id, stepId, status, body
+	 * @return Object
+	 * @author JCB
 	 */
 	@PostMapping("/tasks")
 	@Operation(
@@ -224,7 +227,12 @@ public class McpController {
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'stepId' is required for op=update-step");
 				if (status == null || status.isBlank())
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'status' is required for op=update-step");
-				com.mcp.model.TaskStatus taskStatus = com.mcp.model.TaskStatus.valueOf(status.toUpperCase());
+				com.mcp.model.TaskStatus taskStatus;
+				try {
+					taskStatus = com.mcp.model.TaskStatus.valueOf(status.toUpperCase());
+				} catch (IllegalArgumentException e) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status '" + status + "'. Allowed: " + java.util.Arrays.toString(com.mcp.model.TaskStatus.values()));
+				}
 				yield taskService.updateStepStatus(id, stepId, taskStatus);
 			}
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -235,10 +243,12 @@ public class McpController {
 	// ─── Rules ────────────────────────────────────────────────────────────────
 
 	/**
-	 * {@code GET /api/mcp/rules} : List all rules for a project.
-	 *
-	 * @param projectId Project ID filter
-	 * @return List of RuleDTOs
+	 * {@code GET /api/mcp/rules} : List project rules.
+	 * 
+	 * @implNote Delegates to ruleService
+	 * @param projectId
+	 * @return List of RuleDTO
+	 * @author JCB
 	 */
 	@GetMapping("/rules")
 	@Operation(
@@ -256,13 +266,12 @@ public class McpController {
 	}
 
 	/**
-	 * {@code POST /api/mcp/rules} : Create, delete, or clear project rules via {@code X-Op} header.
-	 *
-	 * @param op        Operation: create | delete | clear
-	 * @param id        Rule ID — required for delete
-	 * @param projectId Project ID — required for clear
-	 * @param body      Body — RuleDTO for create
-	 * @return RuleDTO or void
+	 * {@code POST /api/mcp/rules} : Execute rule operation.
+	 * 
+	 * @implNote Routes create/delete/clear to ruleService
+	 * @param op, id, projectId, body
+	 * @return Object
+	 * @author JCB
 	 */
 	@PostMapping("/rules")
 	@Operation(
@@ -309,10 +318,12 @@ public class McpController {
 	// ─── Skills ───────────────────────────────────────────────────────────────
 
 	/**
-	 * {@code GET /api/mcp/skills} : List all skills (global + project-scoped).
-	 *
-	 * @param projectId Optional project ID; if omitted returns only global built-in skills
-	 * @return List of Skill entities
+	 * {@code GET /api/mcp/skills} : List global and project skills.
+	 * 
+	 * @implNote Combines global and project-specific skills from repository
+	 * @param projectId
+	 * @return List of Skill
+	 * @author JCB
 	 */
 	@GetMapping("/skills")
 	@Operation(
@@ -336,13 +347,13 @@ public class McpController {
 	}
 
 	/**
-	 * {@code POST /api/mcp/skills} : Learn a skill or clear project skills via {@code X-Op} header.
-	 *
-	 * @param op        Operation: learn-url | learn-file | clear
-	 * @param projectId Project ID — required for all ops
-	 * @param url       Skill URL — required for learn-url
-	 * @param filePath  Local file path — required for learn-file
-	 * @return Status map or void
+	 * {@code POST /api/mcp/skills} : Execute skill operation.
+	 * 
+	 * @implNote Routes learn-url/learn-file/clear to skillService
+	 * @param op, projectId, url, filePath
+	 * @return Object
+	 * @exception IOException
+	 * @author JCB
 	 */
 	@PostMapping("/skills")
 	@Operation(
@@ -397,16 +408,14 @@ public class McpController {
 					"Query param 'id' is required for op=" + op);
 	}
 
-	@SuppressWarnings("unchecked")
 	private <T> T convertBody(Object raw, Class<T> type) {
 		if (raw == null)
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
 		// Spring already deserialises to the target type when the parameter is typed
 		if (type.isInstance(raw)) return type.cast(raw);
-		// Fallback: convert via Jackson ObjectMapper
-		com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+		// Fallback: convert via Spring-managed Jackson ObjectMapper
 		try {
-			return mapper.convertValue(raw, type);
+			return objectMapper.convertValue(raw, type);
 		} catch (Exception e) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 					"Invalid request body for type " + type.getSimpleName() + ": " + e.getMessage());

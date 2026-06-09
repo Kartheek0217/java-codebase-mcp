@@ -1,7 +1,7 @@
 package com.mcp.service;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.mcp.properties.LlmProperties;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -9,8 +9,11 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mcp.properties.LlmProperties;
+
 import jakarta.annotation.PostConstruct;
-import java.util.List;
 
 /**
  * Low-level HTTP client for OpenAI-compatible chat completions endpoint
@@ -101,7 +104,7 @@ public class LlmClient {
         return content != null ? content : "";
     }
 
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * Sends a list of chat messages using the specified task-specific model and
@@ -146,7 +149,7 @@ public class LlmClient {
 
     private String parseDeltaContent(String json) {
         try {
-            var node = objectMapper.readTree(json);
+            var node = OBJECT_MAPPER.readTree(json);
             var choices = node.get("choices");
             if (choices != null && choices.isArray() && !choices.isEmpty()) {
                 var delta = choices.get(0).get("delta");

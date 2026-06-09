@@ -46,9 +46,11 @@ public class LuceneIndexService {
 	private static final Logger logger = LoggerFactory.getLogger(LuceneIndexService.class);
 	// Resolve to absolute path at class-load time so the index location is stable
 	// regardless of which directory the JVM is launched from.
-	private static final String BASE_INDEX_DIR =
-			Paths.get(System.getProperty("user.dir"), "data", "indices").toAbsolutePath().toString();
-	private static final long SEARCH_TIMEOUT_MS = 2000;
+	@org.springframework.beans.factory.annotation.Value("${lucene.indexDir:${user.dir}/data/indices}")
+	private String baseIndexDir;
+
+	@org.springframework.beans.factory.annotation.Value("${lucene.searchTimeoutMs:2000}")
+	private long searchTimeoutMs;
 
 	private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
 	private final Map<Long, SearcherManager> searcherManagers = new ConcurrentHashMap<>();
@@ -89,7 +91,7 @@ public class LuceneIndexService {
 	public void scheduleCommits() {
 		writers.forEach((projectId, writer) -> {
 			try {
-				if (writer.hasUncommittedChanges()) {
+				if (writer.isOpen() && writer.hasUncommittedChanges()) {
 					logger.debug("Performing scheduled commit for project {}", projectId);
 					writer.commit();
 					// Fix H: refresh SearcherManager so searches see the newly-committed data
@@ -98,6 +100,8 @@ public class LuceneIndexService {
 						sm.maybeRefresh();
 					}
 				}
+			} catch (org.apache.lucene.store.AlreadyClosedException ignored) {
+				// writer was concurrently deleted — safe to skip
 			} catch (IOException e) {
 				logger.error("Error during scheduled commit for project {}", projectId, e);
 			}
@@ -120,7 +124,7 @@ public class LuceneIndexService {
 				return existing;
 			}
 			try {
-				Path indexPath = Paths.get(BASE_INDEX_DIR, String.valueOf(projectId));
+				Path indexPath = Paths.get(baseIndexDir, String.valueOf(projectId));
 				if (!Files.exists(indexPath)) {
 					Files.createDirectories(indexPath);
 				}
@@ -168,7 +172,7 @@ public class LuceneIndexService {
 			if (title != null) {
 				doc.add(new TextField("title", title, Field.Store.YES));
 			}
-			doc.add(new TextField("content", content, Field.Store.YES));
+			doc.add(new TextField("content", content, Field.Store.NO));
 			doc.add(new StringField("type", type, Field.Store.YES));
 
 			if ("web".equals(type)) {
@@ -286,7 +290,7 @@ public class LuceneIndexService {
 					query = builder.build();
 				}
 
-				searcher.setTimeout(new IndexSearcherTimeout(SEARCH_TIMEOUT_MS));
+				searcher.setTimeout(new IndexSearcherTimeout(searchTimeoutMs));
 
 				TopDocs topDocs = searcher.search(query, limit + offset);
 
@@ -301,6 +305,13 @@ public class LuceneIndexService {
 						String filePath = doc.get("path");
 						String title = doc.get("title");
 						String content = doc.get("content");
+						if (content == null && filePath != null) {
+							try {
+								content = Files.readString(Paths.get(filePath));
+							} catch (IOException e) {
+								content = "";
+							}
+						}
 						String snippet = (snippets != null && i < snippets.length) ? snippets[i] : "";
 
 						if (snippet != null && !snippet.isEmpty()) {
@@ -312,8 +323,12 @@ public class LuceneIndexService {
 			} finally {
 				sm.release(searcher);
 			}
+		} catch (org.apache.lucene.store.AlreadyClosedException | org.apache.lucene.index.CorruptIndexException e) {
+			logger.error("Index unavailable for project {}", projectId, e);
+			throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+					"Search index temporarily unavailable");
 		} catch (Exception e) {
-			logger.error("Error searching content in project {}: {}", projectId, queryStr, e);
+			logger.error("Search failed for project {}: {}", projectId, queryStr, e);
 		}
 		return results;
 	}
@@ -339,7 +354,7 @@ public class LuceneIndexService {
 		List<ContentSearchResult.ContentMatch> matches = new ArrayList<>();
 		// Fixed: was `fileContent.isEmpty()` which nulled out valid content and caused
 		// line numbers to always return 0. Now correctly preserves non-empty content.
-		if (fileContent != null && fileContent.isEmpty()) {
+		if (fileContent == null || fileContent.isEmpty()) {
 			fileContent = null;
 		}
 
@@ -390,7 +405,7 @@ public class LuceneIndexService {
 			if (writer != null) {
 				writer.close();
 			}
-			Path indexPath = Paths.get(BASE_INDEX_DIR, String.valueOf(projectId));
+			Path indexPath = Paths.get(baseIndexDir, String.valueOf(projectId));
 			if (Files.exists(indexPath)) {
 				deleteDirectory(indexPath);
 			}
