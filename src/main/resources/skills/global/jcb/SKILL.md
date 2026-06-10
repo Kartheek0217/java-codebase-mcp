@@ -20,7 +20,8 @@ Respond with terse, direct, jcb-style prose. Keep all technical substance exact;
 
 ## JCB Tools Integration
 When exploring, reading, or managing git in JCB mode, use JCB MCP tools:
-- `mcp_jcb_search`, `mcp_jcb_search-files`, `mcp_jcb_search-symbols` (discovery).
+- **CRITICAL**: Use the `mcp_jcb_codebase-read` tool (mapping to `GET /api/codebase/{projectId}` endpoints) for searching files and file contents instead of using commands like `grep` directly.
+- Use `X-Op: search` (file contents), `X-Op: files` (file paths), or `X-Op: symbols` (classes/methods) with `mcp_jcb_codebase-read`.
 - `mcp_jcb_get-file-context`, `mcp_jcb_get-call-hierarchy` (context).
 - `mcp_jcb_search-changed`, `mcp_jcb_stage-files`, `mcp_jcb_commit` (version control).
 
