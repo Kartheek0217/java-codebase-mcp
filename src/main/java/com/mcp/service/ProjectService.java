@@ -4,19 +4,26 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.entity.Project;
 import com.mcp.entity.ProjectTask;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
+import com.mcp.repository.ProjectRuleRepository;
+import com.mcp.repository.ProjectTaskRepository;
 import com.mcp.repository.SkillRepository;
 import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
@@ -33,11 +40,11 @@ public class ProjectService {
     private final SymbolCallRepository symbolCallRepository;
     private final GitInfoService gitInfoService;
     private final LuceneIndexService luceneIndexService;
-    private final com.mcp.repository.ProjectTaskRepository projectTaskRepository;
-    private final com.mcp.repository.ProjectRuleRepository projectRuleRepository;
+    private final ProjectTaskRepository projectTaskRepository;
+    private final ProjectRuleRepository projectRuleRepository;
 
-    @org.springframework.beans.factory.annotation.Value("classpath:skills/global/jcb/SKILL.md")
-    private org.springframework.core.io.Resource jcbSkillResource;
+    @Value("classpath:skills/global/jcb/SKILL.md")
+    private Resource jcbSkillResource;
 
     public ProjectService(ProjectRepository projectRepository,
             FileScannerService fileScannerService,
@@ -47,8 +54,8 @@ public class ProjectService {
             SymbolCallRepository symbolCallRepository,
             GitInfoService gitInfoService,
             LuceneIndexService luceneIndexService,
-            com.mcp.repository.ProjectTaskRepository projectTaskRepository,
-            com.mcp.repository.ProjectRuleRepository projectRuleRepository) {
+            ProjectTaskRepository projectTaskRepository,
+            ProjectRuleRepository projectRuleRepository) {
         this.projectRepository = projectRepository;
         this.fileScannerService = fileScannerService;
         this.symbolRepository = symbolRepository;
@@ -81,7 +88,7 @@ public class ProjectService {
                 logger.info("Transaction committed for project {}. Starting initial scan in background...",
                         savedProject.getId());
                 // We use the executor to make it truly background
-                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                CompletableFuture.runAsync(() -> {
                     try {
                         fileScannerService.scanProject(savedProject.getId(), savedTask.getId());
                     } catch (Exception e) {
@@ -105,9 +112,10 @@ public class ProjectService {
     }
 
     public Project getProject(Long id) {
-        return projectRepository.findById(id).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found"));
+        return projectRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void reindexProject(Long id) {
         Project project = getProject(id);
         logger.info("Triggering manual Git-based re-index for project: {}", project.getName());
@@ -119,7 +127,7 @@ public class ProjectService {
         }
 
         // Run async without transaction — no DB writes needed
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
+        CompletableFuture.runAsync(() -> {
             logger.info("Starting partial scan for project {} based on Git changes...", id);
             fileScannerService.scanChangedFiles(id, changedFiles);
         })

@@ -2,6 +2,7 @@ package com.mcp.service;
 
 import com.mcp.entity.Project;
 import com.mcp.entity.Skill;
+import com.mcp.event.MarkdownFileIndexedEvent;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SkillRepository;
 import org.slf4j.Logger;
@@ -92,6 +93,19 @@ public class SkillService {
 		} else {
 			logger.debug("Markdown file at {} does not contain valid skill frontmatter.", source);
 		}
+	}
+
+	/**
+	 * Handles {@link MarkdownFileIndexedEvent} published by {@code FileIndexerService}.
+	 * Extracts skill definitions from indexed Markdown files without requiring a direct
+	 * compile-time dependency on this service.
+	 *
+	 * @param event Event containing the projectId, file content, and file path
+	 */
+	@EventListener
+	@Transactional
+	public void onMarkdownFileIndexed(MarkdownFileIndexedEvent event) {
+		learnSkillFromMarkdown(event.getProjectId(), event.getContent(), event.getFilePath());
 	}
 
 	@Transactional

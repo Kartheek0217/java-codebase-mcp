@@ -81,23 +81,12 @@ Prevents runaway Lucene queries from blocking virtual threads. Good defensive de
 
 ## Issues & Recommendations 🔴
 
-### 1. `CodebaseController` — God Class *(High Priority)*
-
-**Problem**: 14 injected dependencies in a single controller. Handles file reading, symbol search, batch fetching, topology, reconciliation, summarization, endpoint analysis, and git integration — a clear Single Responsibility violation.
-
-**Fix**: Extract into focused controllers or introduce a `CodebaseQueryFacade` service:
-- `CodebaseReadController` — file / search / symbols / suggest / topology
-- `CodebaseOpsController` — scan / reconcile / batch
-- `SymbolController` — symbol detail / hierarchy
-
----
-
-### 2. In-Memory `sessionStore` in `McpController` *(High Priority)*
+### 1. In-Memory `sessionStore` in `McpController` *(High Priority)*
 
 **Problem**: Sessions are stored in a bounded `LinkedHashMap` — lost on restart, not shareable across instances, no durable TTL enforcement.
 
 ```java
-// McpController.java ~L52
+// McpController.java
 private final Map<String, Session> sessionStore; // ← in-memory only
 ```
 
@@ -105,7 +94,7 @@ private final Map<String, Session> sessionStore; // ← in-memory only
 
 ---
 
-### 3. Zero Test Coverage *(High Priority)*
+### 2. Zero Test Coverage *(High Priority)*
 
 **Problem**: `src/test/resources` is empty; no test classes exist anywhere. Core services like `FileIndexerService` and `LuceneIndexService` carry significant logic with no safety net.
 
@@ -120,84 +109,35 @@ private final Map<String, Session> sessionStore; // ← in-memory only
 
 ---
 
-### 4. Raw `new ObjectMapper()` — Not Spring-Managed *(Medium Priority)*
+### 3. Virtual Thread Carrier Pinning (Traps in `BrowserSessionManager`, `GitInfoService`, `LuceneIndexService`) *(High Priority)*
 
-**Problem**:
-```java
-// McpController.java ~L50
-private static final ObjectMapper objectMapper = new ObjectMapper(); // ← raw new
-```
-Bypasses Spring's configured `ObjectMapper` (custom serializers, date formats, `JavaTimeModule`, etc.). Deserialization via `convertBody` will silently produce wrong results for `LocalDate`, `Instant`, and similar types.
+**Problem**: Virtual threads are enabled (`spring.threads.virtual.enabled=true`). Executing blocking operations inside `synchronized` blocks/methods will **pin** the virtual thread to its carrier OS thread.
 
-**Fix**: Inject `ObjectMapper` via constructor DI, letting Spring provide the fully-configured instance.
+Specific pinning traps:
+- **`BrowserSessionManager`**: `createSession()` and `ensurePlaywrightInitialized()` are synchronized methods that spawn browser processes (`Playwright.create()`, `chromium().launch()`), executing heavy blocking network/socket/IPC I/O.
+- **`GitInfoService`**: `getRepository()` uses `synchronized (("repo-lock-" + projectId).intern())` around file-system checks and database queries.
+- **`LuceneIndexService`**: `getWriter()` utilizes `synchronized (this)` around directory creation (`Files.createDirectories`) and Lucene `IndexWriter` instantiation.
 
----
-
-### 5. Repository Access Leaking Into `CodebaseController` *(Medium Priority)*
-
-**Problem**: `CodebaseController` directly injects `FileMetadataRepository`, `SymbolRepository`, and `SymbolCallRepository`. This bypasses the service layer and makes the controller impossible to unit-test without a full Spring context.
-
-**Fix**: Move all repository calls into services. The controller should only call services.
+**Fix**: Replace synchronized blocks/methods wrapping blocking I/O with `java.util.concurrent.locks.ReentrantLock`, allowing the JVM to unmount virtual threads during blocking calls.
 
 ---
 
-### 6. `LuceneIndexService` — 6 Overloaded `searchContent` Methods *(Medium Priority)*
+### 4. Unbounded Concurrency in Project Scans *(High Priority)*
 
-**Problem**: Six overloaded variants with various combinations of `type`, `site`, `filePaths`, `limit`, and `offset`. Callers can silently pick the wrong overload.
+**Problem**: In `FileScannerService.java`, the `scanProject()` and `scanChangedFiles()` methods walk the file tree and submit all discovered files concurrently to the virtual-thread-backed `applicationTaskExecutor` via `CompletableFuture.runAsync()`.
+- **DB Connection Exhaustion**: Spawning thousands of concurrent database transactions will instantly saturate the HikariCP connection pool (limited to 50 connections), causing connection timeouts (`SQLTransientConnectionException`).
+- **Memory Pressure**: Reading and parsing thousands of source files concurrently using `JavaParser` will result in massive heap allocation and GC thrashing (or OutOfMemoryError).
+- **Lucene Contention**: Writing thousands of updates to the same `IndexWriter` concurrently creates severe internal write lock contention.
 
-**Fix**: Consolidate with an options/builder pattern:
-```java
-SearchOptions opts = SearchOptions.builder()
-    .query("foo")
-    .type("java")
-    .limit(20)
-    .offset(0)
-    .build();
-List<ContentSearchResult> results = luceneIndexService.searchContent(projectId, opts);
-```
+**Fix**: Introduce a `Semaphore` (e.g., limit concurrency to 12 or 16) in `FileScannerService` to throttle the concurrent execution of file indexing.
 
 ---
 
-### 7. `SkillService` Dependency in `FileIndexerService` *(Medium Priority)*
+### 5. Missing Timeout Configuration on `OllamaClient` *(Low Priority)*
 
-**Problem**: `FileIndexerService` injects `SkillService` — indexing logic shouldn't depend on agent-layer skill management. Creates tight coupling and circular dependency risk.
+**Problem**: `OllamaProperties` contains `timeoutSeconds`, but `OllamaClient` builds its `RestClient` without setting a request factory or configuring connect/read timeouts. If the local Ollama instance hangs, calls to `/chat/completions` will block indefinitely.
 
-**Fix**: Remove `SkillService` from `FileIndexerService`. If skill context is needed during indexing, pass it as a method parameter from the calling service.
-
----
-
-### 8. Untyped `Object` Return Types on Public Endpoints *(Medium Priority)*
-
-**Problem**: `codebaseRead` and `codebaseOp` both return `Object` — no contract, misleading OpenAPI docs, fragile client code.
-
-**Fix**: Use a sealed interface or discriminated union DTO:
-```java
-sealed interface CodebaseResult
-    permits FileContext, SearchResult, SymbolList, TopologyResult, BatchResult {}
-```
-Or at minimum, typed response wrappers per `X-Op` value.
-
----
-
-### 9. Missing `@Transactional` on `reindexProject` *(Medium Priority)*
-
-**Problem**: `ProjectService.reindexProject` deletes and rebuilds symbol data without `@Transactional`. A mid-operation failure leaves the index in a corrupt partial state.
-
-**Fix**: Add `@Transactional` (or `@Transactional(rollbackFor = Exception.class)`).
-
----
-
-### 10. Fully-Qualified Type Names Instead of Imports *(Low Priority)*
-
-**Problem**: Multiple fields use FQNs instead of proper imports:
-```java
-private final com.mcp.repository.SymbolCallRepository symbolCallRepository;
-private final com.mcp.service.ProjectService projectService;
-private final org.springframework.core.io.Resource jcbSkillResource;
-```
-Indicates leftover auto-generation or incomplete refactoring.
-
-**Fix**: Add `import` statements; use short type names throughout.
+**Fix**: Configure a `SimpleClientHttpRequestFactory` on the `RestClient.builder()` in `OllamaClient.init()`, matching the pattern used in `LlmClient.java`.
 
 ---
 
@@ -205,19 +145,14 @@ Indicates leftover auto-generation or incomplete refactoring.
 
 | # | Issue | Area | Priority |
 |---|-------|------|----------|
-| 1 | `CodebaseController` God Class | Architecture | 🔴 High |
-| 2 | In-memory `sessionStore` (not restart-safe) | Reliability | 🔴 High |
-| 3 | Zero test coverage | Quality | 🔴 High |
-| 4 | Raw `new ObjectMapper()` bypass | Bug Risk | 🟡 Medium |
-| 5 | Repository access in controllers | Layering | 🟡 Medium |
-| 6 | 6 overloaded `searchContent` methods | Maintainability | 🟡 Medium |
-| 7 | `SkillService` in `FileIndexerService` | Coupling | 🟡 Medium |
-| 8 | Untyped `Object` returns on endpoints | API Contract | 🟡 Medium |
-| 9 | Missing `@Transactional` on `reindexProject` | Data Integrity | 🟡 Medium |
-| 10 | FQN references instead of imports | Cosmetic | 🟢 Low |
+| 1 | In-memory `sessionStore` (not restart-safe) | Reliability | 🔴 High |
+| 2 | Zero test coverage | Quality | 🔴 High |
+| 3 | Virtual Thread Carrier Pinning (synchronized blocks wrapping blocking I/O) | Concurrency | 🔴 High |
+| 4 | Unbounded Concurrency in Project Scans (connection pool/OOM risks) | Performance | 🔴 High |
+| 5 | Missing Timeout Configuration on `OllamaClient` | Resiliency | 🟢 Low |
 
 ---
 
 ## Overall Assessment
 
-The project is **architecturally sound** with several well-made engineering decisions (dual-index, virtual threads, ETag caching, gitignore integration, skill system). The primary concerns are **operability** (in-memory sessions, missing `@Transactional`), **maintainability** (controller bloat, overloaded APIs), and **quality assurance** (zero tests). Addressing items 1–3 should be the immediate focus before this is used in a production agent workflow.
+The project is **architecturally sound** with several well-made engineering decisions. The remaining concerns are **operability** (in-memory sessions), **quality assurance** (zero tests), and **performance/concurrency optimizations** (preventing carrier thread pinning, throttling project scanner concurrency, and establishing client HTTP timeouts). Addressing these items will ensure the system scales efficiently under concurrent AI agent workflows.

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ public class BrowserSessionManager {
     private Playwright playwright;
     private Browser browser;
     private final Map<String, BrowserContext> sessions = new ConcurrentHashMap<>();
+    private final ReentrantLock sessionLock = new ReentrantLock();
 
     /** Tracks the last-activity timestamp for each session (keyed by sessionId). */
     private final Map<String, Instant> lastActivity = new ConcurrentHashMap<>();
@@ -31,38 +33,48 @@ public class BrowserSessionManager {
         this.properties = properties;
     }
 
-    private synchronized void ensurePlaywrightInitialized() {
-        if (playwright == null) {
-            System.setProperty("playwright.skip.browser.download", "true");
-            playwright = Playwright.create();
-            
-            BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
-                    .setHeadless(properties.isHeadless());
+    private void ensurePlaywrightInitialized() {
+        sessionLock.lock();
+        try {
+            if (playwright == null) {
+                System.setProperty("playwright.skip.browser.download", "true");
+                playwright = Playwright.create();
+                
+                BrowserType.LaunchOptions options = new BrowserType.LaunchOptions()
+                        .setHeadless(properties.isHeadless());
 
-            try {
-                // Try launching with host's Google Chrome channel
-                BrowserType.LaunchOptions chromeOptions = new BrowserType.LaunchOptions()
-                        .setHeadless(properties.isHeadless())
-                        .setChannel("chrome");
-                browser = playwright.chromium().launch(chromeOptions);
-            } catch (Exception e) {
-                // Fallback to default Chromium (e.g. if Google Chrome is not installed)
-                browser = playwright.chromium().launch(options);
+                try {
+                    // Try launching with host's Google Chrome channel
+                    BrowserType.LaunchOptions chromeOptions = new BrowserType.LaunchOptions()
+                            .setHeadless(properties.isHeadless())
+                            .setChannel("chrome");
+                    browser = playwright.chromium().launch(chromeOptions);
+                } catch (Exception e) {
+                    // Fallback to default Chromium (e.g. if Google Chrome is not installed)
+                    browser = playwright.chromium().launch(options);
+                }
             }
+        } finally {
+            sessionLock.unlock();
         }
     }
 
-    // Synchronized: enforceSessionLimit() check + ensurePlaywrightInitialized() +
+    // Lock-protected: enforceSessionLimit() check + ensurePlaywrightInitialized() +
     // session creation must be atomic to prevent TOCTOU races under concurrent calls.
-    public synchronized String createSession() {
-        enforceSessionLimit();
-        ensurePlaywrightInitialized();
-        String sessionId = UUID.randomUUID().toString();
-        BrowserContext context = browser.newContext(new Browser.NewContextOptions()
-                .setViewportSize(properties.getViewportWidth(), properties.getViewportHeight()));
-        sessions.put(sessionId, context);
-        lastActivity.put(sessionId, Instant.now());
-        return sessionId;
+    public String createSession() {
+        sessionLock.lock();
+        try {
+            enforceSessionLimit();
+            ensurePlaywrightInitialized();
+            String sessionId = UUID.randomUUID().toString();
+            BrowserContext context = browser.newContext(new Browser.NewContextOptions()
+                    .setViewportSize(properties.getViewportWidth(), properties.getViewportHeight()));
+            sessions.put(sessionId, context);
+            lastActivity.put(sessionId, Instant.now());
+            return sessionId;
+        } finally {
+            sessionLock.unlock();
+        }
     }
 
     public BrowserContext getSession(String sessionId) {

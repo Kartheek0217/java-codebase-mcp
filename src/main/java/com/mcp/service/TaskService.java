@@ -3,8 +3,10 @@ package com.mcp.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.dto.CreateTaskRequest;
 import com.mcp.dto.TaskDTO;
@@ -40,7 +42,7 @@ public class TaskService {
 	@Transactional
 	public TaskDTO createTask(CreateTaskRequest request) {
 		Project project = projectRepository.findById(request.projectId())
-				.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found: " + request.projectId()));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found: " + request.projectId()));
 
 		ProjectTask task = new ProjectTask();
 		task.setProject(project);
@@ -68,7 +70,7 @@ public class TaskService {
 	@Transactional
 	public TaskDTO updateTask(Long id, TaskDTO taskDTO) {
 		ProjectTask task = taskRepository.findById(id)
-				.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Task not found: " + id));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found: " + id));
 
 		task.setTitle(taskDTO.title());
 		task.setDescription(taskDTO.description());
@@ -82,7 +84,7 @@ public class TaskService {
 	@Transactional
 	public TaskDTO updateStepStatus(Long taskId, Long stepId, TaskStatus status) {
 		TaskStep step = stepRepository.findById(stepId)
-				.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Step not found: " + stepId));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Step not found: " + stepId));
 
 		if (!step.getTask().getId().equals(taskId)) {
 			throw new IllegalArgumentException("Step does not belong to the specified task");

@@ -15,6 +15,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
 import com.mcp.dto.ContentSearchResult;
+import com.mcp.dto.SearchOptions;
 import com.mcp.entity.Symbol;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
@@ -230,7 +231,8 @@ public class LlmPromptBuilder {
     }
 
     public List<LlmClient.Message> buildAskCodebaseMessages(Long projectId, String question) {
-        List<ContentSearchResult> hits = luceneIndexService.searchContent(projectId, question, 5);
+        List<ContentSearchResult> hits = luceneIndexService.searchContent(projectId,
+                SearchOptions.builder().query(question).limit(5).build());
         String context = buildContextBlock(hits);
 
         String systemPrompt = """

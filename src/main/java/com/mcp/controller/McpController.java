@@ -1,6 +1,7 @@
 package com.mcp.controller;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,11 +20,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mcp.dto.CreateTaskRequest;
 import com.mcp.dto.RuleDTO;
 import com.mcp.dto.SessionDTO;
 import com.mcp.dto.TaskDTO;
 import com.mcp.entity.Skill;
+import com.mcp.model.TaskStatus;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SkillRepository;
 import com.mcp.service.ContextMemoryService;
@@ -47,19 +50,20 @@ public class McpController {
 	private final SkillRepository skillRepository;
 	private final ProjectRepository projectRepository;
 	private final ContextMemoryService contextMemoryService;
-	private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+	private final ObjectMapper objectMapper;
 
 	private final Map<String, Session> sessionStore;
 
 	public McpController(TaskService taskService, ProjectRuleService ruleService, SkillService skillService,
 			SkillRepository skillRepository, ProjectRepository projectRepository,
-			ContextMemoryService contextMemoryService) {
+			ContextMemoryService contextMemoryService, ObjectMapper objectMapper) {
 		this.taskService = taskService;
 		this.ruleService = ruleService;
 		this.skillService = skillService;
 		this.skillRepository = skillRepository;
 		this.projectRepository = projectRepository;
 		this.contextMemoryService = contextMemoryService;
+		this.objectMapper = objectMapper;
 		this.sessionStore = Collections.synchronizedMap(new LinkedHashMap<>(1024, 0.75f, true) {
 			@Override
 			protected boolean removeEldestEntry(Map.Entry<String, Session> eldest) {
@@ -207,13 +211,21 @@ public class McpController {
 			case "create" -> {
 				if (!(body instanceof java.util.Map))
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body must be a CreateTaskRequest for op=create");
-				// Spring deserializes to LinkedHashMap; re-use Jackson via ObjectMapper binding
-				CreateTaskRequest req = convertBody(body, CreateTaskRequest.class);
+				java.util.Map<?, ?> map = (java.util.Map<?, ?>) body;
+				Object actualBody = map.containsKey("body") ? map.get("body") : body;
+				CreateTaskRequest req = convertBody(actualBody, CreateTaskRequest.class);
 				yield taskService.createTask(req);
 			}
 			case "update" -> {
 				requireId(id, "update");
-				TaskDTO dto = convertBody(body, TaskDTO.class);
+				Object actualBody = body;
+				if (body instanceof java.util.Map) {
+					java.util.Map<?, ?> map = (java.util.Map<?, ?>) body;
+					if (map.containsKey("body")) {
+						actualBody = map.get("body");
+					}
+				}
+				TaskDTO dto = convertBody(actualBody, TaskDTO.class);
 				yield taskService.updateTask(id, dto);
 			}
 			case "delete" -> {
@@ -227,11 +239,11 @@ public class McpController {
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'stepId' is required for op=update-step");
 				if (status == null || status.isBlank())
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'status' is required for op=update-step");
-				com.mcp.model.TaskStatus taskStatus;
+				TaskStatus taskStatus;
 				try {
-					taskStatus = com.mcp.model.TaskStatus.valueOf(status.toUpperCase());
+					taskStatus = TaskStatus.valueOf(status.toUpperCase());
 				} catch (IllegalArgumentException e) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status '" + status + "'. Allowed: " + java.util.Arrays.toString(com.mcp.model.TaskStatus.values()));
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status '" + status + "'. Allowed: " + Arrays.toString(TaskStatus.values()));
 				}
 				yield taskService.updateStepStatus(id, stepId, taskStatus);
 			}
@@ -292,12 +304,20 @@ public class McpController {
 			@RequestHeader(value = "X-Op") String op,
 			@RequestParam(required = false) Long id,
 			@RequestParam(required = false) Long projectId,
-			@RequestBody(required = false) RuleDTO body) {
+			@RequestBody(required = false) Object body) {
 		return switch (op.toLowerCase()) {
 			case "create" -> {
 				if (body == null)
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body (RuleDTO) is required for op=create");
-				yield ruleService.createRule(body);
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body is required for op=create");
+				Object actualBody = body;
+				if (body instanceof java.util.Map) {
+					java.util.Map<?, ?> map = (java.util.Map<?, ?>) body;
+					if (map.containsKey("body")) {
+						actualBody = map.get("body");
+					}
+				}
+				RuleDTO rule = convertBody(actualBody, RuleDTO.class);
+				yield ruleService.createRule(rule);
 			}
 			case "delete" -> {
 				requireId(id, "delete");

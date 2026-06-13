@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -38,6 +39,7 @@ import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
 import com.mcp.entity.Symbol;
 import com.mcp.entity.SymbolType;
+import com.mcp.event.MarkdownFileIndexedEvent;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.SymbolRepository;
 
@@ -59,17 +61,18 @@ public class FileIndexerService {
 	private final FileMetadataRepository fileMetadataRepository;
 	private final LuceneIndexService luceneIndexService;
 	private final Cache<String, List<Symbol>> symbolCache;
-	private final SkillService skillService;
+	private final ApplicationEventPublisher eventPublisher;
 	private final FileDataPersistenceService fileDataPersistenceService;
 
 	public FileIndexerService(SymbolRepository symbolRepository, FileMetadataRepository fileMetadataRepository,
-			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache, SkillService skillService,
+			LuceneIndexService luceneIndexService, Cache<String, List<Symbol>> symbolCache,
+			ApplicationEventPublisher eventPublisher,
 			FileDataPersistenceService fileDataPersistenceService) {
 		this.symbolRepository = symbolRepository;
 		this.fileMetadataRepository = fileMetadataRepository;
 		this.luceneIndexService = luceneIndexService;
 		this.symbolCache = symbolCache;
-		this.skillService = skillService;
+		this.eventPublisher = eventPublisher;
 		this.fileDataPersistenceService = fileDataPersistenceService;
 	}
 
@@ -128,7 +131,8 @@ public class FileIndexerService {
 				calls = javaResult.calls;
 				dependencies = javaResult.dependencies;
 			} else if (filePath.toLowerCase().endsWith(".md")) {
-				skillService.learnSkillFromMarkdown(projectId, content, filePath);
+				// Decouple: publish event instead of calling SkillService directly
+				eventPublisher.publishEvent(new MarkdownFileIndexedEvent(this, projectId, content, filePath));
 				// Persist metadata so checksum is stored and the file is not re-processed on
 				// every scan (symbols/calls are null — skills are stored separately)
 			} else {

@@ -19,6 +19,9 @@ import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 @Service
 public class TopologyService {
 
@@ -41,7 +44,7 @@ public class TopologyService {
 	@Cacheable(value = "topology", key = "#projectId")
 	public Map<String, Object> getProjectTopology(Long projectId) {
 		Project project = projectRepository.findById(projectId)
-				.orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found"));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
 
 		List<FileMetadata> files = fileMetadataRepository.findByProjectId(projectId);
 

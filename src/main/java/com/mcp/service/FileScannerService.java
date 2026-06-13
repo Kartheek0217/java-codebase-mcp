@@ -27,6 +27,7 @@ public class FileScannerService {
 	private final ProjectTaskRepository projectTaskRepository;
 	private final FileIndexerService fileIndexerService;
 	private final Executor applicationTaskExecutor;
+	private final java.util.concurrent.Semaphore indexingSemaphore = new java.util.concurrent.Semaphore(12);
 
 	private static final List<String> INDEXABLE_EXTENSIONS = List.of(".java", ".ts", ".tsx", ".vue", ".js", ".jsx",
 			".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql");
@@ -61,13 +62,21 @@ public class FileScannerService {
 				List<CompletableFuture<Void>> futures = changedPaths.stream().map(relPath -> {
 					Path fullPath = root.resolve(relPath).toAbsolutePath();
 					return CompletableFuture.runAsync(() -> {
-						if (Files.exists(fullPath)) {
-							if (isIndexable(fullPath)) {
-								fileIndexerService.indexFile(projectId, fullPath);
+						try {
+							indexingSemaphore.acquire();
+							if (Files.exists(fullPath)) {
+								if (isIndexable(fullPath)) {
+									fileIndexerService.indexFile(projectId, fullPath);
+								}
+							} else {
+								// File was deleted
+								fileIndexerService.deleteFileData(projectId, fullPath);
 							}
-						} else {
-							// File was deleted
-							fileIndexerService.deleteFileData(projectId, fullPath);
+						} catch (InterruptedException e) {
+							Thread.currentThread().interrupt();
+							logger.warn("Indexing task interrupted for file: {}", fullPath);
+						} finally {
+							indexingSemaphore.release();
 						}
 					}, applicationTaskExecutor);
 				}).toList();
@@ -185,8 +194,17 @@ public class FileScannerService {
 					});
 
 					List<CompletableFuture<Void>> futures = filesToIndex.stream()
-							.map(path -> CompletableFuture.runAsync(() -> fileIndexerService.indexFile(projectId, path),
-									applicationTaskExecutor))
+							.map(path -> CompletableFuture.runAsync(() -> {
+								try {
+									indexingSemaphore.acquire();
+									fileIndexerService.indexFile(projectId, path);
+								} catch (InterruptedException e) {
+									Thread.currentThread().interrupt();
+									logger.warn("Indexing task interrupted for file: {}", path);
+								} finally {
+									indexingSemaphore.release();
+								}
+							}, applicationTaskExecutor))
 							.toList();
 
 					logger.info("Submitted {} indexing tasks for project {}", futures.size(), project.getName());

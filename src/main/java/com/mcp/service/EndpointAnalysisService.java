@@ -13,8 +13,10 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.entity.Project;
 import com.mcp.entity.Skill;
@@ -50,7 +52,7 @@ public class EndpointAnalysisService {
     @Transactional
     public Skill analyzeEndpoint(Long projectId, String controllerName, String methodName) throws IOException {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Project not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
 
         // Find the controller method symbol
         List<Symbol> controllerSymbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,

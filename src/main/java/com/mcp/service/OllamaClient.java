@@ -6,10 +6,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -39,13 +41,19 @@ public class OllamaClient {
 
     @PostConstruct
     void init() {
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(props.getTimeoutSeconds()));
+        factory.setReadTimeout(Duration.ofSeconds(props.getTimeoutSeconds()));
+
         restClient = RestClient.builder()
+                .requestFactory(factory)
                 .baseUrl(props.getBaseUrl())
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.getApiKey())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestInitializer(request -> request.getHeaders().setAccept(List.of(MediaType.APPLICATION_JSON)))
                 .build();
-        logger.info("OllamaClient initialised — baseUrl={}, model={}", props.getBaseUrl(), props.getModel());
+        logger.info("OllamaClient initialised — baseUrl={}, model={}, timeoutSeconds={}", props.getBaseUrl(),
+                props.getModel(), props.getTimeoutSeconds());
     }
 
     // -------------------------------------------------------------------------

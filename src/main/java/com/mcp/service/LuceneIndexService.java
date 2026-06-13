@@ -9,12 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.QueryTimeout;
@@ -28,14 +30,19 @@ import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.uhighlight.UnifiedHighlighter;
+import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.analysis.CodeAnalyzer;
 import com.mcp.dto.ContentSearchResult;
+import com.mcp.dto.SearchOptions;
 import com.mcp.properties.LuceneProperties;
 
 import jakarta.annotation.PreDestroy;
@@ -58,6 +65,7 @@ public class LuceneIndexService {
 	private final Analyzer sharedAnalyzer = new CodeAnalyzer();
 
 	private final LuceneProperties luceneProperties;
+	private final ReentrantLock writerInitializationLock = new ReentrantLock();
 
 	public LuceneIndexService(LuceneProperties luceneProperties) {
 		this.luceneProperties = luceneProperties;
@@ -87,7 +95,7 @@ public class LuceneIndexService {
 		}
 	}
 
-	@org.springframework.scheduling.annotation.Scheduled(fixedDelay = 5000)
+	@Scheduled(fixedDelay = 5000)
 	public void scheduleCommits() {
 		writers.forEach((projectId, writer) -> {
 			try {
@@ -100,7 +108,7 @@ public class LuceneIndexService {
 						sm.maybeRefresh();
 					}
 				}
-			} catch (org.apache.lucene.store.AlreadyClosedException ignored) {
+			} catch (AlreadyClosedException ignored) {
 				// writer was concurrently deleted — safe to skip
 			} catch (IOException e) {
 				logger.error("Error during scheduled commit for project {}", projectId, e);
@@ -117,7 +125,8 @@ public class LuceneIndexService {
 		}
 		// synchronized(this) is coarse-grained (serialises all projects' first write),
 		// but writer creation is a one-time-per-project event so contention is negligible.
-		synchronized (this) {
+		writerInitializationLock.lock();
+		try {
 			// Double-check inside the lock
 			existing = writers.get(projectId);
 			if (existing != null) {
@@ -143,6 +152,8 @@ public class LuceneIndexService {
 				logger.error("Error creating IndexWriter for project {}", projectId, e);
 				throw e;
 			}
+		} finally {
+			writerInitializationLock.unlock();
 		}
 	}
 
@@ -217,29 +228,51 @@ public class LuceneIndexService {
 		}
 	}
 
+	// ─── Canonical search entry-point ────────────────────────────────────────
+
+	/**
+	 * @implNote Single canonical entry-point for all Lucene content searches.
+	 *           All overloads delegate here via {@link SearchOptions}.
+	 * @param projectId Project to search within
+	 * @param opts      Fully-specified search options
+	 * @return List of content search results
+	 */
+	public List<ContentSearchResult> searchContent(Long projectId, SearchOptions opts) {
+		return searchContent(projectId, opts.query(), opts.type(), opts.site(),
+				opts.filePaths(), opts.limit(), opts.offset());
+	}
+
+	// ─── Backward-compatible overload shims ───────────────────────────────────
+
+	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
 	public List<ContentSearchResult> searchContent(Long projectId, String queryStr) {
-		return searchContent(projectId, queryStr, 50);
+		return searchContent(projectId, SearchOptions.builder().query(queryStr).limit(50).build());
 	}
 
+	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
 	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, int limit) {
-		return searchContent(projectId, queryStr, null, null, limit, 0);
+		return searchContent(projectId, SearchOptions.builder().query(queryStr).limit(limit).build());
 	}
 
+	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
 	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, int limit,
 			int offset) {
-		return searchContent(projectId, queryStr, type, null, limit, offset);
+		return searchContent(projectId, SearchOptions.builder().query(queryStr).type(type).limit(limit).offset(offset).build());
 	}
 
+	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
 	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, Set<String> filePaths, int limit) {
-		return searchContent(projectId, queryStr, null, null, filePaths, limit, 0);
+		return searchContent(projectId, SearchOptions.builder().query(queryStr).filePaths(filePaths).limit(limit).build());
 	}
 
+	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
 	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site, int limit,
 			int offset) {
-		return searchContent(projectId, queryStr, type, site, null, limit, offset);
+		return searchContent(projectId, SearchOptions.builder().query(queryStr).type(type).site(site).limit(limit).offset(offset).build());
 	}
 
-	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site,
+	// ─── Core implementation ──────────────────────────────────────────────────
+	private List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site,
 			Set<String> filePaths, int limit, int offset) {
 		List<ContentSearchResult> results = new ArrayList<>();
 		try {
@@ -323,9 +356,9 @@ public class LuceneIndexService {
 			} finally {
 				sm.release(searcher);
 			}
-		} catch (org.apache.lucene.store.AlreadyClosedException | org.apache.lucene.index.CorruptIndexException e) {
+		} catch (AlreadyClosedException | CorruptIndexException e) {
 			logger.error("Index unavailable for project {}", projectId, e);
-			throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
 					"Search index temporarily unavailable");
 		} catch (Exception e) {
 			logger.error("Search failed for project {}: {}", projectId, queryStr, e);
