@@ -109,50 +109,15 @@ private final Map<String, Session> sessionStore; // ← in-memory only
 
 ---
 
-### 3. Virtual Thread Carrier Pinning (Traps in `BrowserSessionManager`, `GitInfoService`, `LuceneIndexService`) *(High Priority)*
-
-**Problem**: Virtual threads are enabled (`spring.threads.virtual.enabled=true`). Executing blocking operations inside `synchronized` blocks/methods will **pin** the virtual thread to its carrier OS thread.
-
-Specific pinning traps:
-- **`BrowserSessionManager`**: `createSession()` and `ensurePlaywrightInitialized()` are synchronized methods that spawn browser processes (`Playwright.create()`, `chromium().launch()`), executing heavy blocking network/socket/IPC I/O.
-- **`GitInfoService`**: `getRepository()` uses `synchronized (("repo-lock-" + projectId).intern())` around file-system checks and database queries.
-- **`LuceneIndexService`**: `getWriter()` utilizes `synchronized (this)` around directory creation (`Files.createDirectories`) and Lucene `IndexWriter` instantiation.
-
-**Fix**: Replace synchronized blocks/methods wrapping blocking I/O with `java.util.concurrent.locks.ReentrantLock`, allowing the JVM to unmount virtual threads during blocking calls.
-
----
-
-### 4. Unbounded Concurrency in Project Scans *(High Priority)*
-
-**Problem**: In `FileScannerService.java`, the `scanProject()` and `scanChangedFiles()` methods walk the file tree and submit all discovered files concurrently to the virtual-thread-backed `applicationTaskExecutor` via `CompletableFuture.runAsync()`.
-- **DB Connection Exhaustion**: Spawning thousands of concurrent database transactions will instantly saturate the HikariCP connection pool (limited to 50 connections), causing connection timeouts (`SQLTransientConnectionException`).
-- **Memory Pressure**: Reading and parsing thousands of source files concurrently using `JavaParser` will result in massive heap allocation and GC thrashing (or OutOfMemoryError).
-- **Lucene Contention**: Writing thousands of updates to the same `IndexWriter` concurrently creates severe internal write lock contention.
-
-**Fix**: Introduce a `Semaphore` (e.g., limit concurrency to 12 or 16) in `FileScannerService` to throttle the concurrent execution of file indexing.
-
----
-
-### 5. Missing Timeout Configuration on `OllamaClient` *(Low Priority)*
-
-**Problem**: `OllamaProperties` contains `timeoutSeconds`, but `OllamaClient` builds its `RestClient` without setting a request factory or configuring connect/read timeouts. If the local Ollama instance hangs, calls to `/chat/completions` will block indefinitely.
-
-**Fix**: Configure a `SimpleClientHttpRequestFactory` on the `RestClient.builder()` in `OllamaClient.init()`, matching the pattern used in `LlmClient.java`.
-
----
-
 ## Priority Summary
 
 | # | Issue | Area | Priority |
 |---|-------|------|----------|
 | 1 | In-memory `sessionStore` (not restart-safe) | Reliability | 🔴 High |
 | 2 | Zero test coverage | Quality | 🔴 High |
-| 3 | Virtual Thread Carrier Pinning (synchronized blocks wrapping blocking I/O) | Concurrency | 🔴 High |
-| 4 | Unbounded Concurrency in Project Scans (connection pool/OOM risks) | Performance | 🔴 High |
-| 5 | Missing Timeout Configuration on `OllamaClient` | Resiliency | 🟢 Low |
 
 ---
 
 ## Overall Assessment
 
-The project is **architecturally sound** with several well-made engineering decisions. The remaining concerns are **operability** (in-memory sessions), **quality assurance** (zero tests), and **performance/concurrency optimizations** (preventing carrier thread pinning, throttling project scanner concurrency, and establishing client HTTP timeouts). Addressing these items will ensure the system scales efficiently under concurrent AI agent workflows.
+The project is **architecturally sound** with several well-made engineering decisions. The remaining concerns are **operability** (in-memory sessions) and **quality assurance** (zero tests). Addressing these items will ensure the system scales efficiently and is robust under concurrent AI agent workflows.
