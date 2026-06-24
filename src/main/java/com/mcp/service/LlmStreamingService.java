@@ -70,7 +70,7 @@ public class LlmStreamingService {
         if ("web-search".equalsIgnoreCase(action)) {
             String sessionId = null;
             try {
-                sessionId = browserSessionManager.createSession();
+                sessionId = browserSessionManager.createSession(new com.mcp.dto.browser.BrowserSessionRequest("chromium", true, null, null, projectId));
                 String q = query != null ? query : req.query();
                 String u = url != null ? url : req.url();
                 String pageText = webSearchOrchestrator.fetchWebSearchContent(q, u, sessionId);

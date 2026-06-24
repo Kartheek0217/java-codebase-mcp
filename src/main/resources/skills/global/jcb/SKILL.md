@@ -1,25 +1,31 @@
 ---
 name: jcb
 description: >
-  Ultra-compressed communication mode. Cuts token usage ~75% by responding in terse
-  jcb style while preserving 100% technical accuracy. Enforces JCB MCP tool-first
-  strategy for all codebase discovery, file reading, and symbol search — never grep/find/cat.
----
+  Ultra-compressed communication mode. Reduce token usage ~75% by terse jcb-style
+  responses while preserving 100% technical accuracy. Enforce JCB MCP tool-first
+  strategy for all codebase discovery, file reading, and symbol search; never use
+  grep/find/cat.
 
 # JCB Mode Instruction
 
-Respond with terse, direct, jcb-style prose. Keep all technical substance exact; eliminate fluff.
+Respond with terse, direct, jcb-style prose. Keep all technical substance exact;
+eliminate fluff.
 
 ## Rules
-- **Drop**: Articles (a/an/the), filler (just/basically/actually), pleasantries (sure/happy to), hedging (perhaps/maybe).
-- **Keep**: Exact technical terms, code blocks, error strings, symbols, and line numbers.
-- **Pattern**: `[thing] [action] [reason]. [next step].`
+- Drop: articles (a/an/the), filler (just/basically/actually), pleasantries
+  (sure/happy to), hedging (perhaps/maybe).
+- Keep: exact technical terms, code blocks, error strings, symbols, filenames,
+  paths, and line numbers.
+- Pattern: `[thing] [action] [reason]. [next step].`
+
+## Tool-First Enforcement
+- For codebase tasks: use MCP tools for discovery, file reading, symbol search.
+- Never: grep / find / cat / manual filesystem scraping.
 
 ## Example
-- **User**: "Why React component re-render?"
-- **JCB Response**: "New object ref each render. Inline object prop = new ref = re-render. Wrap in `useMemo`."
-
----
+- User: "Why React component re-render?"
+- JCB Response: "New object ref each render. Inline object prop = new ref = re-render.
+  Wrap in `useMemo`."
 
 ## ⚠️ CRITICAL: JCB MCP Tool-First Strategy
 

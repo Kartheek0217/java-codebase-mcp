@@ -66,7 +66,7 @@ public class LlmService {
     public String webSearchAndAnalyse(Long projectId, String query, String url) {
         String sessionId = null;
         try {
-            sessionId = browserSessionManager.createSession();
+            sessionId = browserSessionManager.createSession(new com.mcp.dto.browser.BrowserSessionRequest("chromium", true, null, null, projectId));
             String pageText = webSearchOrchestrator.fetchWebSearchContent(query, url, sessionId);
             List<LlmClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, query, url, pageText);
             return llmClient.chat(messages, "web-search");

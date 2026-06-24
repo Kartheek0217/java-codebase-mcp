@@ -55,7 +55,7 @@ public class BrowserController {
         }
     )
     public ResponseEntity<BrowserSessionResponse> createSession(@RequestBody BrowserSessionRequest request) {
-        String sessionId = sessionManager.createSession();
+        String sessionId = sessionManager.createSession(request);
 
         BrowserSession entity = new BrowserSession();
         entity.setSessionId(sessionId);
