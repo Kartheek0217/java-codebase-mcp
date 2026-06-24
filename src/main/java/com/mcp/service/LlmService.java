@@ -4,6 +4,8 @@ import com.mcp.dto.LlmActionRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.mcp.dto.browser.BrowserSessionRequest;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -66,7 +68,7 @@ public class LlmService {
     public String webSearchAndAnalyse(Long projectId, String query, String url) {
         String sessionId = null;
         try {
-            sessionId = browserSessionManager.createSession(new com.mcp.dto.browser.BrowserSessionRequest("chromium", true, null, null, projectId));
+            sessionId = browserSessionManager.createSession(new BrowserSessionRequest("chromium", true, null, null, projectId));
             String pageText = webSearchOrchestrator.fetchWebSearchContent(query, url, sessionId);
             List<LlmClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, query, url, pageText);
             return llmClient.chat(messages, "web-search");
@@ -79,5 +81,20 @@ public class LlmService {
 
     public SseEmitter streamResponse(Long projectId, String action, LlmActionRequest req) {
         return streamingService.streamResponse(projectId, action, req);
+    }
+
+    public String syncResponse(Long projectId, String action, LlmActionRequest req) throws IOException {
+        return switch (action.toLowerCase()) {
+            case "explain-symbol" -> explainSymbol(projectId, req.symbolId());
+            case "explain-file" -> explainFile(projectId, req.filePath());
+            case "ask" -> askCodebase(projectId, req.question());
+            case "code-review" -> codeReview(projectId, req.filePath());
+            case "code-refactor", "code-optimise" -> codeRefactor(projectId, req.filePath());
+            case "web-search" -> webSearchAndAnalyse(projectId, req.query(), req.url());
+            case "code-commit" -> codeCommit(projectId, req.diff());
+            case "java-doc" -> javaDoc(projectId, req.filePath());
+            case "junit-test-cases" -> junitTestCases(projectId, req.filePath());
+            default -> throw new IllegalArgumentException("Unknown action: " + action);
+        };
     }
 }
