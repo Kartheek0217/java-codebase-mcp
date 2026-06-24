@@ -99,94 +99,7 @@ public class LlmController {
             @RequestParam(required = false) String diff,
             @RequestBody(required = false) LlmActionRequest request) {
 
-        LlmActionRequest req = request != null ? request : new LlmActionRequest(null, null, null, null, null, null);
-
-        // Validation upfront to fail-fast
-        try {
-            switch (action.toLowerCase()) {
-                case "explain-symbol" -> {
-                    Long sId = symbolId != null ? symbolId : req.symbolId();
-                    if (sId == null) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "symbolId is required for explain-symbol");
-                    }
-                }
-                case "explain-file" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for explain-file");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "ask" -> {
-                    String question = req.question();
-                    if (question == null || question.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "question is required in request body");
-                    }
-                }
-                case "code-review" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for code-review");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "code-refactor", "code-optimise" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for code-refactor");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "web-search" -> {
-                    String q = query != null ? query : req.query();
-                    String u = url != null ? url : req.url();
-                    if ((q == null || q.isBlank()) && (u == null || u.isBlank())) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Either query or url must be provided for web-search");
-                    }
-                }
-                case "code-commit" -> {
-                    String d = diff != null ? diff : req.diff();
-                    if (d == null || d.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "diff is required for code-commit");
-                    }
-                }
-                case "java-doc" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filePath is required for java-doc");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "junit-test-cases" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for junit-test-cases");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown action. Allowed: explain-symbol, explain-file, ask, code-review, ...");
-            }
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Validation failed", ex);
-        }
-
-        LlmActionRequest mergedReq = new LlmActionRequest(
-                symbolId != null ? symbolId : req.symbolId(),
-                filePath != null ? filePath : req.filePath(),
-                query != null ? query : req.query(),
-                url != null ? url : req.url(),
-                diff != null ? diff : req.diff(),
-                req.question());
-
+        LlmActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
         return llmService.streamResponse(projectId, action, mergedReq);
     }
 
@@ -205,93 +118,7 @@ public class LlmController {
             @RequestParam(required = false) String diff,
             @RequestBody(required = false) LlmActionRequest request) {
 
-        LlmActionRequest req = request != null ? request : new LlmActionRequest(null, null, null, null, null, null);
-
-        // Validation upfront to fail-fast
-        try {
-            switch (action.toLowerCase()) {
-                case "explain-symbol" -> {
-                    Long sId = symbolId != null ? symbolId : req.symbolId();
-                    if (sId == null) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "symbolId is required for explain-symbol");
-                    }
-                }
-                case "explain-file" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for explain-file");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "ask" -> {
-                    String question = req.question();
-                    if (question == null || question.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "question is required in request body");
-                    }
-                }
-                case "code-review" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for code-review");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "code-refactor", "code-optimise" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for code-refactor");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "web-search" -> {
-                    String q = query != null ? query : req.query();
-                    String u = url != null ? url : req.url();
-                    if ((q == null || q.isBlank()) && (u == null || u.isBlank())) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Either query or url must be provided for web-search");
-                    }
-                }
-                case "code-commit" -> {
-                    String d = diff != null ? diff : req.diff();
-                    if (d == null || d.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "diff is required for code-commit");
-                    }
-                }
-                case "java-doc" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filePath is required for java-doc");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                case "junit-test-cases" -> {
-                    String path = filePath != null ? filePath : req.filePath();
-                    if (path == null || path.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "filePath is required for junit-test-cases");
-                    }
-                    validateFilePath(projectId, path);
-                }
-                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown action. Allowed: explain-symbol, explain-file, ask, code-review, ...");
-            }
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Validation failed", ex);
-        }
-
-        LlmActionRequest mergedReq = new LlmActionRequest(
-                symbolId != null ? symbolId : req.symbolId(),
-                filePath != null ? filePath : req.filePath(),
-                query != null ? query : req.query(),
-                url != null ? url : req.url(),
-                diff != null ? diff : req.diff(),
-                req.question());
+        LlmActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
 
         try {
             String responseText = llmService.syncResponse(projectId, action, mergedReq);
@@ -320,5 +147,95 @@ public class LlmController {
         if (!target.startsWith(root)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path: path traversal detected");
         }
+    }
+
+    private LlmActionRequest validateAndMergeParameters(Long projectId, String action, Long symbolId, String filePath, String query, String url, String diff, LlmActionRequest request) {
+        LlmActionRequest req = request != null ? request : new LlmActionRequest(null, null, null, null, null, null);
+
+        // Validation upfront to fail-fast
+        try {
+            switch (action.toLowerCase()) {
+                case "explain-symbol" -> {
+                    Long sId = symbolId != null ? symbolId : req.symbolId();
+                    if (sId == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "symbolId is required for explain-symbol");
+                    }
+                }
+                case "explain-file" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for explain-file");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "ask" -> {
+                    String question = req.question();
+                    if (question == null || question.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "question is required in request body");
+                    }
+                }
+                case "code-review" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for code-review");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "code-refactor", "code-optimise" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for code-refactor");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "web-search" -> {
+                    String q = query != null ? query : req.query();
+                    String u = url != null ? url : req.url();
+                    if ((q == null || q.isBlank()) && (u == null || u.isBlank())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Either query or url must be provided for web-search");
+                    }
+                }
+                case "code-commit" -> {
+                    String d = diff != null ? diff : req.diff();
+                    if (d == null || d.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "diff is required for code-commit");
+                    }
+                }
+                case "java-doc" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "filePath is required for java-doc");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                case "junit-test-cases" -> {
+                    String path = filePath != null ? filePath : req.filePath();
+                    if (path == null || path.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "filePath is required for junit-test-cases");
+                    }
+                    validateFilePath(projectId, path);
+                }
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown action. Allowed: explain-symbol, explain-file, ask, code-review, ...");
+            }
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Validation failed", ex);
+        }
+
+        return new LlmActionRequest(
+                symbolId != null ? symbolId : req.symbolId(),
+                filePath != null ? filePath : req.filePath(),
+                query != null ? query : req.query(),
+                url != null ? url : req.url(),
+                diff != null ? diff : req.diff(),
+                req.question());
     }
 }
