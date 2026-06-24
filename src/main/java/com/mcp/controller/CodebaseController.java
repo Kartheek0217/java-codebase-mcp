@@ -110,8 +110,10 @@ public class CodebaseController {
 	 * @return Response shape varies by X-Op value
 	 */
 	@GetMapping("/{projectId}")
-	@Operation(summary = "codebase-read", description = "Read or search codebase data for a project. Select the operation with the X-Op header:\n\n"
-			+
+	@Operation(summary = "codebase-read", description = "CRITICAL:\n" +
+			"1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
+			"2. You MUST provide the X-Op parameter exactly as requested.\n\n" +
+			"Read or search codebase data for a project. Select the operation with the X-Op header:\n\n" +
 			"• X-Op: file — Read a single file with its symbols and metadata. " +
 			"Params: filePath (required), format (full|structure|summary|numbered|markdown, default=full), " +
 			"sessionId (optional, records access). " +
@@ -137,7 +139,7 @@ public class CodebaseController {
 					@ApiResponse(responseCode = "404", description = "Project or file not found")
 			})
 	public Object codebaseRead(
-			@PathVariable Long projectId,
+			@Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @PathVariable Long projectId,
 			@Parameter(description = "Operation: file | search | search-changed | symbols | files | suggest | history | topology | summarize | analyze-endpoint") @RequestHeader(value = "X-Op") String op,
 			CodebaseQuery query,
 			@RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) throws IOException {
@@ -214,8 +216,10 @@ public class CodebaseController {
 	 * @return Status map or batch result map
 	 */
 	@PostMapping("/{projectId}")
-	@Operation(summary = "codebase-op", description = "Execute a codebase mutation or heavy read via the X-Op request header:\n\n"
-			+
+	@Operation(summary = "codebase-op", description = "CRITICAL:\n" +
+			"1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
+			"2. You MUST provide the X-Op parameter exactly as requested.\n\n" +
+			"Execute a codebase mutation or heavy read via the X-Op request header:\n\n" +
 			"• X-Op: scan — Trigger a directory scan to detect new/changed/deleted files. No body needed.\n\n" +
 			"• X-Op: reconcile — Reconcile the symbol index against the current filesystem state. No body needed.\n\n" +
 			"• X-Op: batch — Fetch content for multiple files in parallel (uses virtual threads). " +
@@ -226,7 +230,7 @@ public class CodebaseController {
 					@ApiResponse(responseCode = "500", description = "Batch aborted on first file error")
 			})
 	public Object codebaseOp(
-			@PathVariable Long projectId,
+			@Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @PathVariable Long projectId,
 			@Parameter(description = "Operation: scan | reconcile | batch") @RequestHeader(value = "X-Op") String op,
 			@RequestBody(required = false) Object rawBody) throws IOException {
 		return switch (op.toLowerCase()) {

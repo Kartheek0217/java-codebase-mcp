@@ -52,65 +52,56 @@ eliminate fluff.
 
 ---
 
-## Project Management Tools
+## Tools Reference
 
-| Task | Tool | Key Params |
-|------|------|-----------|
-| List all projects | `get-projects` | `X-View: list\|summary` |
-| Create & index a project | `crt-project` | `name`, `rootPath` (absolute) |
-| Get project detail / stats / git status | `get-project` | `id`, `X-View: detail\|stats\|git-status` |
-| Re-index project | `project-op` | `id`, `X-Op: reindex` |
-| Stage files for commit | `project-op` | `id`, `X-Op: stage`, body=glob patterns |
-| Discard local changes | `project-op` | `id`, `X-Op: discard`, body=glob patterns |
-| Commit staged changes | `project-op` | `id`, `X-Op: commit`, query `message` |
-| Delete a project | `del-project` | `id` |
-
----
-
-## Session & LLM Tools
-
-| Task | Tool | Key Params |
-|------|------|-----------|
-| Start agent session | `start-session` | `projectId` — returns `sessionId` (1hr TTL) |
-| Get session metadata | `get-session` | `sessionId` |
-| Get files accessed in session | `codebase-read` | `X-Op: history`, `sessionId` |
-| Explain a symbol | `handle-llm` | `X-Action: explain-symbol`, `symbolId` |
-| Explain a file | `handle-llm` | `X-Action: explain-file`, `filePath` |
-| Ask freeform question | `handle-llm` | `X-Action: ask`, body `{question}` |
-| Code review | `handle-llm` | `X-Action: code-review`, `filePath` |
-| Refactor suggestions | `handle-llm` | `X-Action: code-refactor`, `filePath` |
-| Performance optimisations | `handle-llm` | `X-Action: code-optimise`, `filePath` |
-| Generate Javadoc | `handle-llm` | `X-Action: java-doc`, `filePath` |
-| Generate JUnit 5 tests | `handle-llm` | `X-Action: junit-test-cases`, `filePath` |
-| Generate commit message | `handle-llm` | `X-Action: code-commit`, body `diff` string |
-| Web search | `handle-llm` | `X-Action: web-search`, `query` or `url` |
-
----
-
-## Rules & Skills Tools
-
-| Task | Tool | Key Params |
-|------|------|-----------|
-| List project rules | `get-rules` | `projectId` |
-| Add a rule | `rule-op` | `X-Op: create`, body `RuleDTO` |
-| Delete a rule | `rule-op` | `X-Op: delete`, query `id` |
-| Clear all rules | `rule-op` | `X-Op: clear`, query `projectId` |
-| List available skills | `get-skills` | `projectId` (optional) |
-| Learn skill from URL | `skill-op` | `X-Op: learn-url`, `projectId`, `url` |
-| Learn skill from file | `skill-op` | `X-Op: learn-file`, `projectId`, `filePath` |
-| Clear project skills | `skill-op` | `X-Op: clear`, `projectId` |
-
----
-
-## Task Management Tools
-
-| Task | Tool | Key Params |
-|------|------|-----------|
-| List tasks | `get-tasks` | `projectId` — check before creating to avoid duplicates |
-| Create task | `task-op` | `X-Op: create`, body `CreateTaskRequest {projectId, title, description, priority, steps}` |
-| Update task | `task-op` | `X-Op: update`, query `id`, body `TaskDTO` |
-| Delete task | `task-op` | `X-Op: delete`, query `id` |
-| Update step status | `task-op` | `X-Op: update-step`, query `id`, `stepId`, `status (TODO\|IN_PROGRESS\|DONE\|BLOCKED)` |
+1. **get-projects**
+   Retrieve project list. Behaviour is controlled by the X-View request header: • X-View: list (default) — returns all registered projects as Project objects. • X-View: summary — returns all projects with file count, symbol count, and status statistics. No path or body parameters required.
+2. **crt-project**
+   Create a new project and start background indexing of its root directory. Required params: name (string), rootPath (absolute path). Returns the created Project object with status=INDEXING.
+3. **get-project**
+   Read project data for the given project ID. Select the response shape with X-View: • X-View: detail (default) — full Project entity (name, rootPath, id, status). • X-View: stats — file count and symbol count for the project {fileCount, symbolCount, projectId}. • X-View: git-status — uncommitted changes {modified, added, removed, untracked} file lists. Path param: id (Long) — project ID.
+4. **project-op**
+   Execute a write operation on a project via the X-Op request header. Supported operations: • X-Op: reindex — trigger a full re-index of all project files. No body required. • X-Op: stage — stage files for git commit. Body: list of file glob patterns, e.g. ["src/main/**"]. • X-Op: discard — discard local changes for matching files. Body: list of file glob patterns. • X-Op: commit — commit all staged changes. Query param: message (string, required). Path param: id (Long) — project ID.
+5. **del-project**
+   Permanently delete a project and remove all its indexed symbols, files, and metadata. Path param: id (Long) — project ID. Returns 204 No Content on success.
+6. **get-tasks**
+   Retrieve all tasks for a project including their steps and status. Query param: projectId (Long, required). Returns list of TaskDTO {id, projectId, title, description, status, priority, createdAt, updatedAt, steps[]}. Use to check the current task list before creating duplicates.
+7. **task-op**
+   Create, update, or delete tasks via the X-Op request header: • X-Op: create — Create a new task. Body: CreateTaskRequest {projectId (required), title (required), description, priority (HIGH|MEDIUM|LOW), steps: [string]}. Returns the created TaskDTO. • X-Op: update — Update an existing task. Query param: id (Long, required). Body: TaskDTO with updated fields. Returns updated TaskDTO. • X-Op: delete — Delete a task by ID. Query param: id (Long, required). Returns 204. • X-Op: update-step — Update the status of a single task step. Query params: id (task ID, required), stepId (Long, required), status (TODO|IN_PROGRESS|DONE|BLOCKED, required). Returns updated TaskDTO with new step status.
+8. **get-skills**
+   Retrieve available skills for an agent. Query param: projectId (Long, optional). If projectId is omitted, returns only globally registered built-in skills. If projectId is provided, returns global skills plus project-specific learned skills. Each Skill has: {id, name, description, content (markdown instructions), project (null if global), source}.
+9. **skill-op**
+   Learn a new skill from a URL or local file, or clear all project skills via X-Op: • X-Op: learn-url — Fetch and learn a skill from a URL or built-in path. Query params: projectId (required), url (required, e.g. https://example.com/SKILL.md). The skill's name and description are parsed from the SKILL.md frontmatter. • X-Op: learn-file — Learn a skill from a local file path on the server. Query params: projectId (required), filePath (required, absolute or relative path to SKILL.md). • X-Op: clear — Remove all project-specific learned skills. Query param: projectId (required). Global built-in skills are not affected.
+10. **start-session**
+    Start a new AI agent session bound to a project. Sessions track file access history and provide context continuity across multiple MCP tool calls. Query param: projectId (Long, required). Returns {sessionId: string}. Sessions expire after 1 hour of inactivity.
+11. **get-rules**
+    Retrieve all coding rules associated with a project. Query param: projectId (Long, required). Returns list of RuleDTO {id, projectId, name, value, category, description}. Rules are injected into LLM prompts to enforce project-specific conventions (e.g. JDK version, code style).
+12. **rule-op**
+    Create, delete, or clear project rules via the X-Op request header: • X-Op: create — Add a new rule. Body: RuleDTO {projectId (required), name (required), value (required), category, description}. Returns created RuleDTO. • X-Op: delete — Delete a single rule by ID. Query param: id (Long, required). • X-Op: clear — Delete all rules for a project. Query param: projectId (Long, required).
+13. **handle-llm**
+    CRITICAL: 1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'. 2. You MUST provide the X-Action parameter exactly as requested. Execute an LLM operation and stream the response as Server-Sent Events (SSE). Select the action with the X-Action request header: • X-Action: explain-symbol — Explain a code symbol in plain English. Params: symbolId (Long, required — use search-symbols to find it). • X-Action: explain-file — Explain what a source file does. Params: filePath (string, required, relative to project root). • X-Action: ask — Ask a free-form question about the codebase. Body: {question: string (required)}. • X-Action: code-review — Generate a code review for a file. Params: filePath (string, required). Returns inline review comments. • X-Action: code-refactor — Suggest refactoring improvements for a file. Params: filePath (string, required). • X-Action: code-optimise — Suggest performance optimisations for a file. Params: filePath (string, required). Alias of code-refactor. • X-Action: web-search — Search the web and summarise results. Params: query (string) or url (string); at least one required. • X-Action: code-commit — Generate a Conventional Commits message from a git diff. Params: diff (string, required — the raw output of git diff). • X-Action: java-doc — Generate Javadoc for all public methods in a file. Params: filePath (string, required). • X-Action: junit-test-cases — Generate JUnit 5 test class with 100% branch coverage. Params: filePath (string, required — path to the service/class under test). All actions stream response chunks as SSE events. Consume the event stream until the 'done' event is received.
+14. **handle-llm-sync**
+    CRITICAL: 1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'. 2. You MUST provide the X-Action parameter exactly as requested. Execute an LLM operation synchronously and return a JSON object containing the response.
+15. **codebase-read**
+    CRITICAL: 1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'. 2. You MUST provide the X-Op parameter exactly as requested. Read or search codebase data for a project. Select the operation with the X-Op header: • X-Op: file — Read a single file with its symbols and metadata. Params: filePath (required), format (full|structure|summary|numbered|markdown, default=full), sessionId (optional, records access). Supports If-None-Match ETag caching; returns 304 if unchanged. • X-Op: search — Full-text Lucene search across all indexed files. Params: query (required), limit (default=10). • X-Op: search-changed — Full-text search restricted to uncommitted (modified/added/staged) files only. Params: query (required), limit (default=10). • X-Op: symbols — Search for classes, methods, constructors, or fields by name. Params: query (required), type (CLASS|METHOD|FIELD|CONSTRUCTOR, optional), limit (default=50). • X-Op: files — Find indexed files whose paths contain the query string. Params: query (required), limit (default=100). • X-Op: suggest — Combined symbol + content search for relevant code context. Returns top-10 symbols and top-10 content hits. Params: query (required). • X-Op: history — Return file paths accessed in a session. Params: sessionId (required). • X-Op: topology — Return project package structure and dependency graph. No extra params. • X-Op: summarize — Generate an AI summary of a file. Params: filePath (required). • X-Op: analyze-endpoint — Trace a controller endpoint down to entity level. Params: controllerName (required), methodName (required).
+16. **codebase-op**
+    CRITICAL: 1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'. 2. You MUST provide the X-Op parameter exactly as requested. Execute a codebase mutation or heavy read via the X-Op request header: • X-Op: scan — Trigger a directory scan to detect new/changed/deleted files. No body needed. • X-Op: reconcile — Reconcile the symbol index against the current filesystem state. No body needed. • X-Op: batch — Fetch content for multiple files in parallel (uses virtual threads). Body: JSON array of relative file paths, e.g. ["src/main/Foo.java", "src/main/Bar.java"]. Returns a map of {filePath → ContextDTO}.
+17. **lst-sessions**
+    List all active or historical browser sessions. Query param: projectId (Long, optional) — filter sessions by project. If omitted, returns sessions across all projects. Returns list of {sessionId, status (ACTIVE|CLOSED), currentUrl, createdAt}.
+18. **crt-session**
+    Initialize a new headless browser context. Body: BrowserSessionRequest {projectId (Long), browserType ('chromium'|'firefox'|'webkit', default=chromium), headless (boolean, default=true), viewportWidth (int, optional), viewportHeight (int, optional)}. Returns BrowserSessionResponse {sessionId, status='ACTIVE', currentUrl, createdAt}. Store the returned sessionId for all subsequent browser action calls.
+19. **get-session-state**
+    Read the current state of the browser page within a session. Select the view with X-View: • X-View: content (default) — retrieve current page URL, title, and full HTML content. Returns {url, title, content (HTML string)}. Use this after navigation or actions to inspect the rendered page before further interactions.
+20. **browser**
+    Perform a browser interaction within an active session. Select the action with the X-Action header: • X-Action: navigate — Navigate to a URL. Body: {url: string}. Updates session's currentUrl. • X-Action: screenshot — Capture current page screenshot. No body needed. Returns {base64: string} (PNG image encoded as base64). • X-Action: click — Click an element. Body: {selector: string} (CSS selector or XPath). • X-Action: fill — Set the value of an input field instantly. Body: {selector: string, value: string}. • X-Action: type — Type text keystroke-by-keystroke (simulates real typing). Body: {selector: string, text: string}. • X-Action: select — Choose an option in a <select> dropdown. Body: {selector: string, value: string}. • X-Action: wait — Wait until a DOM element appears. Body: {selector: string}. Blocks until visible. • X-Action: evaluate — Execute arbitrary JavaScript in page context. Body: {script: string}. Returns {result: any} with the script's return value. • X-Action: extract-locators — Navigate to a URL and extract all interactive elements. Body: {url: string}. Returns {locators: [{type, selector, label}]} for all clickable, fillable, and selectable elements on the page.
+21. **close-session**
+    Terminate a browser session and release all Playwright resources. Path param: sessionId (string). Marks the session as CLOSED in the database. After closing, any action calls with this sessionId will fail.
+22. **get-system-status**
+    Read system state via the X-View request header: • X-View: health (default) — Returns {status: UP|DEGRADED, database: connected|disconnected}. Checks DB connectivity. Use before any project operations to verify the server is ready. • X-View: info — Returns {commit: string, branch: string, available: boolean}. Reports the server's current git commit hash, active branch, and whether git is accessible. • X-View: llm-status — Returns {baseUrl, model, timeoutSeconds, maxTokens, reachable: boolean}. Shows the active Ollama/LLM configuration and pings the endpoint to confirm it is reachable before dispatching LLM action requests.
+23. **get-session**
+    Retrieve metadata for an active agent session. Path param: sessionId (string). Returns SessionDTO {sessionId, projectId, createdAt, files: []}. Use this to verify a session is still active before making context-dependent tool calls.
+24. **get-symbol**
+    Retrieve symbol data by symbol ID. Select the response shape with X-View: • X-View: detail (default) — full Symbol entity (id, name, type, filePath, lineNumber, signature, returnType, modifiers, annotations). • X-View: hierarchy — call hierarchy for the symbol: {symbol, outgoing: [SymbolCall], incoming: [{call, caller}]}. Shows which methods this symbol calls (outgoing) and which callers invoke it (incoming). Path param: id (Long) — symbol ID.
 
 ---
 

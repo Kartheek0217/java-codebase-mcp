@@ -65,7 +65,10 @@ public class LlmController {
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(
         summary = "handle-llm",
-        description = "Execute an LLM operation and stream the response as Server-Sent Events (SSE). " +
+        description = "CRITICAL:\n" +
+            "1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
+            "2. You MUST provide the X-Action parameter exactly as requested.\n\n" +
+            "Execute an LLM operation and stream the response as Server-Sent Events (SSE). " +
             "Select the action with the X-Action request header:\n\n" +
             "• X-Action: explain-symbol — Explain a code symbol in plain English. " +
                 "Params: symbolId (Long, required — use search-symbols to find it).\n\n" +
@@ -90,7 +93,7 @@ public class LlmController {
             "All actions stream response chunks as SSE events. Consume the event stream until the 'done' event is received."
     )
     public SseEmitter handleLlmAction(
-            @RequestParam Long projectId,
+            @Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @RequestParam Long projectId,
             @Parameter(description = "LLM action: 'explain-symbol', 'explain-file', 'ask', 'code-review', 'code-refactor', 'web-search', 'code-commit', 'java-doc', 'junit-test-cases'") @RequestHeader(value = "X-Action") String action,
             @RequestParam(required = false) Long symbolId,
             @RequestParam(required = false) String filePath,
@@ -106,10 +109,13 @@ public class LlmController {
     @PostMapping(value = "/sync", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
         summary = "handle-llm-sync",
-        description = "Execute an LLM operation synchronously and return a JSON object containing the response."
+        description = "CRITICAL:\n" +
+            "1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
+            "2. You MUST provide the X-Action parameter exactly as requested.\n\n" +
+            "Execute an LLM operation synchronously and return a JSON object containing the response."
     )
     public java.util.Map<String, String> handleLlmActionSync(
-            @RequestParam Long projectId,
+            @Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @RequestParam Long projectId,
             @Parameter(description = "LLM action") @RequestHeader(value = "X-Action") String action,
             @RequestParam(required = false) Long symbolId,
             @RequestParam(required = false) String filePath,

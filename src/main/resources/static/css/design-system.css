@@ -1,0 +1,340 @@
+:root {
+    /* Windows 11 / Android 16 Lite Theme Mixture */
+    --bg-base: #f3f3f3;
+    --bg-surface: rgba(255, 255, 255, 0.7);
+    --bg-surface-solid: #ffffff;
+    --bg-surface-hover: rgba(255, 255, 255, 0.9);
+    --border-color: rgba(0, 0, 0, 0.05);
+
+    --primary-color: #0060df;
+    --primary-hover: #003eaa;
+    --text-main: #1a1a1a;
+    --text-muted: #6b6b6b;
+
+    --success-color: #0f7b0f;
+    --error-color: #c42b1c;
+    --warning-color: #9d5d00;
+
+    --radius-sm: 8px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-full: 9999px;
+
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.02);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+    --transition-fast: 0.15s cubic-bezier(0.2, 0, 0, 1);
+    --transition-normal: 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    /* Windows 11 style background gradient */
+    background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+    min-height: 100vh;
+}
+
+/* Glassmorphism Utilities */
+.glass {
+    background: var(--bg-surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: var(--shadow-md);
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background: var(--bg-surface);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 16px;
+    transition: var(--transition-normal);
+    z-index: 10;
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px 32px 12px;
+}
+
+.logo-icon {
+    color: var(--primary-color);
+    width: 28px;
+    height: 28px;
+}
+
+.logo-text {
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: -0.5px;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    text-decoration: none;
+    color: var(--text-muted);
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: var(--transition-fast);
+}
+
+.nav-item:hover {
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--text-main);
+}
+
+.nav-item.active {
+    background: rgba(0, 96, 223, 0.08);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.nav-item i {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.2;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.topbar {
+    height: 72px;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: transparent;
+}
+
+.topbar-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 32px 32px 32px;
+}
+
+/* Card Style (Android 16 Material You vibe) */
+.card {
+    background: var(--bg-surface-solid);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    margin-bottom: 24px;
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Badges */
+.badge {
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.badge-success {
+    background: rgba(15, 123, 15, 0.1);
+    color: var(--success-color);
+}
+
+.badge-error {
+    background: rgba(196, 43, 28, 0.1);
+    color: var(--error-color);
+}
+
+.badge-warning {
+    background: rgba(157, 93, 0, 0.1);
+    color: var(--warning-color);
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-full);
+    border: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 96, 223, 0.3);
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: var(--bg-base);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: #f9f9f9;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: var(--transition-fast);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(0, 96, 223, 0.1);
+}
+
+textarea.form-control {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* SSE Streaming Output Area */
+.stream-output {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: var(--radius-md);
+    padding: 16px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.9rem;
+    overflow-y: auto;
+    max-height: 400px;
+    white-space: pre-wrap;
+    border: 1px solid var(--border-color);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Markdown Rendering inside Output */
+.markdown-body {
+    font-family: inherit;
+    color: inherit;
+}
+
+.markdown-body pre {
+    background: #2d2d2d;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 8px 0;
+}
+
+.markdown-body code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+/* GridJS Overrides for better blending */
+.gridjs-container {
+    font-family: inherit !important;
+    color: var(--text-main) !important;
+}
+
+.gridjs-wrapper {
+    border-radius: var(--radius-md) !important;
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
+}
+
+.gridjs-th {
+    background-color: #f8f9fa !important;
+    color: var(--text-muted) !important;
+    font-weight: 600 !important;
+    border-color: var(--border-color) !important;
+}
+
+.gridjs-td {
+    border-color: var(--border-color) !important;
+    background-color: white !important;
+}
+
+.grid-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.grid-actions .btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}

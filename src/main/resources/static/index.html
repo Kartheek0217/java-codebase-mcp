@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JCB MCP Dashboard</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Grid.js CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/design-system.css">
+</head>
+
+<body>
+    <div id="app" class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i data-lucide="blocks" class="logo-icon"></i>
+                <span class="logo-text">JCB MCP</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#/" class="nav-item active" data-path="/"><i data-lucide="layout-dashboard"></i> System</a>
+                </li>
+                <li><a href="#/projects" class="nav-item" data-path="/projects"><i data-lucide="folder-kanban"></i>
+                        Projects</a></li>
+                <li><a href="#/codebase" class="nav-item" data-path="/codebase"><i data-lucide="code-2"></i>
+                        Codebase</a></li>
+                <li><a href="#/mcp" class="nav-item" data-path="/mcp"><i data-lucide="terminal-square"></i> MCP</a></li>
+                <li><a href="#/llm" class="nav-item" data-path="/llm"><i data-lucide="bot"></i> LLM Review</a></li>
+                <li><a href="#/browser" class="nav-item" data-path="/browser"><i data-lucide="chrome"></i> Browser</a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-title" id="page-title">System Status</div>
+                <div class="topbar-actions">
+                    <span id="system-status-badge" class="badge">Checking...</span>
+                </div>
+            </header>
+            <div id="root" class="content-area">
+                <!-- Pages injected here by app.js -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- App Logic -->
+    <script type="module" src="/js/app.js"></script>
+</body>
+
+</html>
