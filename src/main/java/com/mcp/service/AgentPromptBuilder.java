@@ -39,9 +39,9 @@ public class AgentPromptBuilder {
     private String jcbSystemPrompt = "";
 
     public AgentPromptBuilder(SymbolRepository symbolRepository,
-                            ProjectRepository projectRepository,
-                            CodeSummarizerService codeSummarizerService,
-                            LuceneIndexService luceneIndexService) {
+            ProjectRepository projectRepository,
+            CodeSummarizerService codeSummarizerService,
+            LuceneIndexService luceneIndexService) {
         this.symbolRepository = symbolRepository;
         this.projectRepository = projectRepository;
         this.codeSummarizerService = codeSummarizerService;
@@ -136,19 +136,24 @@ public class AgentPromptBuilder {
         sb.append("Tailor your responses specifically to these technologies and follow their standard conventions.\n");
 
         if (types.contains("Spring Boot")) {
-            sb.append("- Follow enterprise Java Spring Boot conventions: dependency injection (constructor injection), REST controllers, JPA/Hibernate best practices, DTO mapping, and transactional safety.\n");
+            sb.append(
+                    "- Follow enterprise Java Spring Boot conventions: dependency injection (constructor injection), REST controllers, JPA/Hibernate best practices, DTO mapping, and transactional safety.\n");
         }
         if (types.contains("Vue")) {
-            sb.append("- Follow modern Vue (Vite-backed Vue 3 Composition API preferably) conventions: ref/reactive state management, component modularity, scoped styles, and clear lifecycles.\n");
+            sb.append(
+                    "- Follow modern Vue (Vite-backed Vue 3 Composition API preferably) conventions: ref/reactive state management, component modularity, scoped styles, and clear lifecycles.\n");
         }
         if (types.contains("React")) {
-            sb.append("- Follow modern React standards: functional components, hooks (useState, useEffect, useMemo, useCallback), immutability, and clean custom hooks.\n");
+            sb.append(
+                    "- Follow modern React standards: functional components, hooks (useState, useEffect, useMemo, useCallback), immutability, and clean custom hooks.\n");
         }
         if (types.contains("Angular")) {
-            sb.append("- Follow Angular design patterns: TypeScript-based components and services, DI, RxJS observables, reactive forms, and modular app layouts.\n");
+            sb.append(
+                    "- Follow Angular design patterns: TypeScript-based components and services, DI, RxJS observables, reactive forms, and modular app layouts.\n");
         }
         if (types.contains("Playwright E2E")) {
-            sb.append("- Follow Playwright test automation standards: Page Object Model (POM), async/await assertions, locators, and isolated fixtures.\n");
+            sb.append(
+                    "- Follow Playwright test automation standards: Page Object Model (POM), async/await assertions, locators, and isolated fixtures.\n");
         }
         sb.append("=== END CONTEXT ===\n");
         return sb.toString();
@@ -200,7 +205,8 @@ public class AgentPromptBuilder {
                 """.formatted(symbol.getName(), symbol.getType(), symbol.getFilePath(), truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
+                new AgentClient.Message("system",
+                        getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -226,7 +232,8 @@ public class AgentPromptBuilder {
                 """.formatted(filePath, truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
+                new AgentClient.Message("system",
+                        getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -267,10 +274,13 @@ public class AgentPromptBuilder {
                 ```java
                 %s
                 ```
-                """.formatted(filePath, truncated);
+                """
+                .formatted(filePath, truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior software engineer conducting a detailed code review.")),
+                new AgentClient.Message("system",
+                        getSystemPrompt(projectId,
+                                "You are a senior software engineer conducting a detailed code review.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -285,15 +295,26 @@ public class AgentPromptBuilder {
 
         String userPrompt = """
                 Refactor and optimize the following code for better readability, efficiency, and performance.
-                Provide the refactored code blocks and explain your optimization decisions.
+                Explain your optimization decisions.
+                CRITICAL INSTRUCTION - TOKEN REDUCTION:
+                Do NOT output the entire refactored file. Output ONLY the lines you want to change using SEARCH/REPLACE blocks.
+                Format:
+                <<<< SEARCH
+                [exact lines from original file]
+                ==== REPLACE
+                [new optimized lines]
+                >>>>
+
                 File: %s
                 ```java
                 %s
                 ```
-                """.formatted(filePath, truncated);
+                """
+                .formatted(filePath, truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a software architect specialized in code optimization.")),
+                new AgentClient.Message("system",
+                        getSystemPrompt(projectId, "You are a software architect specialized in code optimization.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -304,10 +325,12 @@ public class AgentPromptBuilder {
                 ```diff
                 %s
                 ```
-                """.formatted(truncated);
+                """
+                .formatted(truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a Git assistant. Generate clean, descriptive, and conventional commit messages.")),
+                new AgentClient.Message("system", getSystemPrompt(projectId,
+                        "You are a Git assistant. Generate clean, descriptive, and conventional commit messages.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -329,10 +352,12 @@ public class AgentPromptBuilder {
                 ```java
                 %s
                 ```
-                """.formatted(filePath, truncated);
+                """
+                .formatted(filePath, truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior Java architect. Document code following strict Javadoc specifications.")),
+                new AgentClient.Message("system", getSystemPrompt(projectId,
+                        "You are a senior Java architect. Document code following strict Javadoc specifications.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -352,10 +377,13 @@ public class AgentPromptBuilder {
                 ```java
                 %s
                 ```
-                """.formatted(filePath, truncated);
+                """
+                .formatted(filePath, truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior QA engineer. Generate clean, complete JUnit test suites.")),
+                new AgentClient.Message("system",
+                        getSystemPrompt(projectId,
+                                "You are a senior QA engineer. Generate clean, complete JUnit test suites.")),
                 new AgentClient.Message("user", userPrompt));
     }
 
@@ -366,10 +394,12 @@ public class AgentPromptBuilder {
                 Focus on answering the core query or detailing the technology, specifications, or findings.
                 Context:
                 %s
-                """.formatted(truncated);
+                """
+                .formatted(truncated);
 
         return List.of(
-                new AgentClient.Message("system", getSystemPrompt(projectId, "You are an expert research assistant. Synthesize web search results into a clean R&D report.")),
+                new AgentClient.Message("system", getSystemPrompt(projectId,
+                        "You are an expert research assistant. Synthesize web search results into a clean R&D report.")),
                 new AgentClient.Message("user", userPrompt));
     }
 

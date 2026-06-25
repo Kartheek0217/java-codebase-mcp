@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
+
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -85,21 +85,14 @@ public class ProjectController {
 	 * @return List of projects or summary maps
 	 */
 	@GetMapping
-	@Operation(summary = "get-projects", description = "Retrieve project list. Behaviour is controlled by the X-View request header:\n"
-			+
-			"• X-View: list (default) — returns all registered projects as Project objects.\n" +
-			"• X-View: summary — returns all projects with file count, symbol count, and status statistics.\n" +
-			"No path or body parameters required.", responses = {
-					@ApiResponse(responseCode = "200", description = "Project list returned"),
-					@ApiResponse(responseCode = "400", description = "Unknown X-View value")
-			})
+	@Operation(summary = "list_projects", description = "Retrieve project list. Optional view parameter can be 'list' or 'summary'.")
 	public Object getProjects(
-			@Parameter(description = "View variant: 'list' (default) | 'summary'") @RequestHeader(value = "X-View", required = false, defaultValue = "list") String view) {
+			@Parameter(description = "View variant: 'list' (default) | 'summary'") @RequestParam(required = false, defaultValue = "list") String view) {
 		return switch (view.toLowerCase()) {
 			case "list" -> projectService.getAllProjects();
 			case "summary" -> projectService.getAllProjectSummaries();
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown X-View value '" + view + "'. Allowed: list, summary");
+					"Unknown view value '" + view + "'. Allowed: list, summary");
 		};
 	}
 
@@ -114,25 +107,16 @@ public class ProjectController {
 	 * @return Project detail, stats map, or git-status map
 	 */
 	@GetMapping("/{id}")
-	@Operation(summary = "get-project", description = "Read project data for the given project ID. Select the response shape with X-View:\n"
-			+
-			"• X-View: detail (default) — full Project entity (name, rootPath, id, status).\n" +
-			"• X-View: stats — file count and symbol count for the project {fileCount, symbolCount, projectId}.\n" +
-			"• X-View: git-status — uncommitted changes {modified, added, removed, untracked} file lists.\n" +
-			"Path param: id (Long) — project ID.", responses = {
-					@ApiResponse(responseCode = "200", description = "Requested project data returned"),
-					@ApiResponse(responseCode = "404", description = "Project not found"),
-					@ApiResponse(responseCode = "400", description = "Unknown X-View value")
-			})
+	@Operation(summary = "get_project_details", description = "Read project data. Optional view parameter can be 'detail', 'stats', or 'git-status'.")
 	public Object getProject(
 			@PathVariable Long id,
-			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'") @RequestHeader(value = "X-View", required = false, defaultValue = "detail") String view) {
+			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'") @RequestParam(required = false, defaultValue = "detail") String view) {
 		return switch (view.toLowerCase()) {
 			case "detail" -> projectService.getProject(id);
 			case "stats" -> projectService.getProjectStats(id);
 			case "git-status" -> gitInfoService.getProjectStatus(id);
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown X-View value '" + view + "'. Allowed: detail, stats, git-status");
+					"Unknown view value '" + view + "'. Allowed: detail, stats, git-status");
 		};
 	}
 
@@ -140,7 +124,7 @@ public class ProjectController {
 
 	/**
 	 * {@code POST /api/projects/{id}} : Execute a project-scoped write operation.
-	 * Operation selected via {@code X-Op} header.
+	 * Operation selected via endpoint path.
 	 *
 	 * @param id          Project ID
 	 * @param op          Operation name
@@ -148,28 +132,21 @@ public class ProjectController {
 	 * @param message     Commit message (required when op=commit)
 	 * @return Operation result map or void
 	 */
-	@PostMapping("/{id}")
-	@Operation(summary = "project-op", description = "Execute a write operation on a project via the X-Op request header. Supported operations:\n"
-			+
-			"• X-Op: reindex — trigger a full re-index of all project files. No body required.\n" +
-			"• X-Op: stage — stage files for git commit. Body: list of file glob patterns, e.g. [\"src/main/**\"].\n" +
-			"• X-Op: discard — discard local changes for matching files. Body: list of file glob patterns.\n" +
-			"• X-Op: commit — commit all staged changes. Query param: message (string, required).\n" +
-			"Path param: id (Long) — project ID.", responses = {
-					@ApiResponse(responseCode = "200", description = "Operation completed successfully"),
-					@ApiResponse(responseCode = "400", description = "Missing required params or unknown X-Op value"),
-					@ApiResponse(responseCode = "404", description = "Project not found")
-			})
-	public Object projectOp(
+	@PostMapping("/{id}/reindex")
+	@Operation(summary = "reindex_project", description = "Trigger a full re-index of all project files.")
+	public Object reindexProject(@PathVariable Long id) {
+		projectService.reindexProject(id);
+		return projectService.buildProjectOpResponse(id, "reindex", null);
+	}
+
+	@PostMapping("/{id}/vcs")
+	@Operation(summary = "manage_project_vcs", description = "Execute a VCS operation (stage, discard, commit) on a project.")
+	public Object manageProjectVcs(
 			@PathVariable Long id,
-			@Parameter(description = "Operation: 'reindex' | 'stage' | 'discard' | 'commit'") @RequestHeader(value = "X-Op") String op,
+			@Parameter(description = "Action: 'stage' | 'discard' | 'commit'") @RequestParam String action,
 			@RequestBody(required = false) Object requestBody,
 			@RequestParam(required = false) String message) {
-		return switch (op.toLowerCase()) {
-			case "reindex" -> {
-				projectService.reindexProject(id);
-				yield projectService.buildProjectOpResponse(id, "reindex", null);
-			}
+		return switch (action.toLowerCase()) {
 			case "stage" -> {
 				gitInfoService.stageFiles(id, parsePatterns(requestBody));
 				yield Map.of("status", "success", "op", "stage");
@@ -181,12 +158,12 @@ public class ProjectController {
 			case "commit" -> {
 				if (message == null || message.isBlank())
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-							"Query param 'message' is required for op=commit");
+							"Query param 'message' is required for action=commit");
 				String hash = gitInfoService.commit(id, message);
 				yield Map.of("status", "success", "op", "commit", "commitHash", hash);
 			}
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown X-Op value '" + op + "'. Allowed: reindex, stage, discard, commit");
+					"Unknown action '" + action + "'. Allowed: stage, discard, commit");
 		};
 	}
 

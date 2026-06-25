@@ -5,9 +5,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
+
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,7 +19,7 @@ import com.mcp.repository.SkillRepository;
 import com.mcp.service.SkillService;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
+
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -64,57 +65,32 @@ public class SkillController {
 		return allSkills;
 	}
 
-	/**
-	 * {@code POST /api/mcp/skills} : Execute skill operation.
-	 * 
-	 * @implNote Routes learn-url/learn-file/clear to skillService
-	 * @param op, projectId, url, filePath
-	 * @return Object
-	 * @exception IOException
-	 * @author JCB
-	 */
-	@PostMapping("/skills")
-	@Operation(
-		summary = "skill-op",
-		description = "Learn a new skill from a URL or local file, or clear all project skills via X-Op:\n\n" +
-			"• X-Op: learn-url — Fetch and learn a skill from a URL or built-in path. " +
-				"Query params: projectId (required), url (required, e.g. https://example.com/SKILL.md). " +
-				"The skill's name and description are parsed from the SKILL.md frontmatter.\n\n" +
-			"• X-Op: learn-file — Learn a skill from a local file path on the server. " +
-				"Query params: projectId (required), filePath (required, absolute or relative path to SKILL.md).\n\n" +
-			"• X-Op: clear — Remove all project-specific learned skills. " +
-				"Query param: projectId (required). Global built-in skills are not affected.",
-		responses = {
-			@ApiResponse(responseCode = "200", description = "Skill learned successfully"),
-			@ApiResponse(responseCode = "400", description = "Missing required param or unknown X-Op"),
-			@ApiResponse(responseCode = "404", description = "Project not found")
-		}
-	)
-	public Object skillOp(
-			@Parameter(description = "Operation: learn-url | learn-file | clear")
-			@RequestHeader(value = "X-Op") String op,
+	@PostMapping("/skills/learn-url")
+	@Operation(summary = "learn_skill_from_url", description = "Fetch and learn a skill from a URL or built-in path. Query params: projectId (required), url (required).")
+	public Object learnSkillFromUrl(
 			@RequestParam Long projectId,
-			@RequestParam(required = false) String url,
-			@RequestParam(required = false) String filePath) throws IOException {
-		return switch (op.toLowerCase()) {
-			case "learn-url" -> {
-				if (url == null || url.isBlank())
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'url' is required for op=learn-url");
-				skillService.learnFromUrl(projectId, url);
-				yield Map.of("status", "success", "message", "Skill learned from: " + url);
-			}
-			case "learn-file" -> {
-				if (filePath == null || filePath.isBlank())
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'filePath' is required for op=learn-file");
-				skillService.learnFromFile(projectId, filePath);
-				yield Map.of("status", "success", "message", "Skill learned from file: " + filePath);
-			}
-			case "clear" -> {
-				skillService.deleteSkillsByProject(projectId);
-				yield Map.of("status", "success", "message", "All project skills cleared for projectId=" + projectId);
-			}
-			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown X-Op value '" + op + "'. Allowed: learn-url, learn-file, clear");
-		};
+			@RequestParam String url) throws IOException {
+		if (url == null || url.isBlank())
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'url' is required");
+		skillService.learnFromUrl(projectId, url);
+		return Map.of("status", "success", "message", "Skill learned from: " + url);
+	}
+
+	@PostMapping("/skills/learn-file")
+	@Operation(summary = "learn_skill_from_file", description = "Learn a skill from a local file path. Query params: projectId (required), filePath (required).")
+	public Object learnSkillFromFile(
+			@RequestParam Long projectId,
+			@RequestParam String filePath) throws IOException {
+		if (filePath == null || filePath.isBlank())
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'filePath' is required");
+		skillService.learnFromFile(projectId, filePath);
+		return Map.of("status", "success", "message", "Skill learned from file: " + filePath);
+	}
+
+	@DeleteMapping("/skills")
+	@Operation(summary = "clear_skills", description = "Remove all project-specific learned skills. Query param: projectId (required).")
+	public Object clearSkills(@RequestParam Long projectId) {
+		skillService.deleteSkillsByProject(projectId);
+		return Map.of("status", "success", "message", "All project skills cleared for projectId=" + projectId);
 	}
 }

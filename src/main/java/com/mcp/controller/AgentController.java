@@ -43,96 +43,7 @@ public class AgentController {
         this.projectRepository = projectRepository;
     }
 
-    /**
-     * Consolidates explain-symbol, explain-file, ask, code-review, code-refactor,
-     * and web-search actions.
-     * Validates input parameters based on the requested action and streams the
-     * response chunks back to the client.
-     *
-     * @param projectId the unique identifier of the project context
-     * @param action    the AGENT action to execute (e.g., 'explain-symbol', 'ask',
-     *                  'code-review')
-     * @param symbolId  optional identifier for symbol explanation
-     * @param filePath  optional file path for file-based operations
-     * @param query     optional search query for web-search
-     * @param url       optional URL for web-search context
-     * @param diff      optional git diff payload for code-commit action
-     * @param request   optional request body containing action-specific parameters
-     * @return an {@link SseEmitter} for streaming the AGENT response chunks
-     * @throws ResponseStatusException if validation fails, required parameters are
-     *                                 missing, or an unknown action is provided
-     */
-    @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(
-        summary = "handle-agent",
-        description = "CRITICAL:\n" +
-            "1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
-            "2. You MUST provide the X-Action parameter exactly as requested.\n\n" +
-            "Execute an AGENT operation and stream the response as Server-Sent Events (SSE). " +
-            "Select the action with the X-Action request header:\n\n" +
-            "• X-Action: explain-symbol — Explain a code symbol in plain English. " +
-                "Params: symbolId (Long, required — use search-symbols to find it).\n\n" +
-            "• X-Action: explain-file — Explain what a source file does. " +
-                "Params: filePath (string, required, relative to project root).\n\n" +
-            "• X-Action: ask — Ask a free-form question about the codebase. " +
-                "Body: {question: string (required)}.\n\n" +
-            "• X-Action: code-review — Generate a code review for a file. " +
-                "Params: filePath (string, required). Returns inline review comments.\n\n" +
-            "• X-Action: code-refactor — Suggest refactoring improvements for a file. " +
-                "Params: filePath (string, required).\n\n" +
-            "• X-Action: code-optimise — Suggest performance optimisations for a file. " +
-                "Params: filePath (string, required). Alias of code-refactor.\n\n" +
-            "• X-Action: web-search — Search the web and summarise results. " +
-                "Params: query (string) or url (string); at least one required.\n\n" +
-            "• X-Action: code-commit — Generate a Conventional Commits message from a git diff. " +
-                "Params: diff (string, required — the raw output of git diff).\n\n" +
-            "• X-Action: java-doc — Generate Javadoc for all public methods in a file. " +
-                "Params: filePath (string, required).\n\n" +
-            "• X-Action: junit-test-cases — Generate JUnit 5 test class with 100% branch coverage. " +
-                "Params: filePath (string, required — path to the service/class under test).\n\n" +
-            "All actions stream response chunks as SSE events. Consume the event stream until the 'done' event is received."
-    )
-    public SseEmitter handleAgentAction(
-            @Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @RequestParam Long projectId,
-            @Parameter(description = "AGENT action: 'explain-symbol', 'explain-file', 'ask', 'code-review', 'code-refactor', 'web-search', 'code-commit', 'java-doc', 'junit-test-cases'") @RequestHeader(value = "X-Action") String action,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
-            @RequestParam(required = false) String query,
-            @RequestParam(required = false) String url,
-            @RequestParam(required = false) String diff,
-            @RequestBody(required = false) AgentActionRequest request) {
 
-        AgentActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
-        return agentService.streamResponse(projectId, action, mergedReq);
-    }
-
-    @PostMapping(value = "/sync", produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(
-        summary = "handle-agent-sync",
-        description = "CRITICAL:\n" +
-            "1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
-            "2. You MUST provide the X-Action parameter exactly as requested.\n\n" +
-            "Execute an AGENT operation synchronously and return a JSON object containing the response."
-    )
-    public java.util.Map<String, String> handleAgentActionSync(
-            @Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @RequestParam Long projectId,
-            @Parameter(description = "AGENT action") @RequestHeader(value = "X-Action") String action,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
-            @RequestParam(required = false) String query,
-            @RequestParam(required = false) String url,
-            @RequestParam(required = false) String diff,
-            @RequestBody(required = false) AgentActionRequest request) {
-
-        AgentActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
-
-        try {
-            String responseText = agentService.syncResponse(projectId, action, mergedReq);
-            return java.util.Map.of("response", responseText);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
-        }
-    }
 
     /**
      * Validates that the given file path is secure and belongs to the specified
@@ -244,4 +155,324 @@ public class AgentController {
                 diff != null ? diff : req.diff(),
                 req.question());
     }
+	@PostMapping(value = "/explain-symbol", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "explain_symbol", description = "Explain a code symbol in plain English. Params: symbolId")
+	public SseEmitter explainSymbol(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "explain-symbol", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "explain-symbol", mergedReq);
+	}
+
+	@PostMapping(value = "/explain-symbol/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> explainSymbolSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "explain-symbol", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "explain-symbol", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/explain-file", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "explain_file", description = "Explain what a source file does. Params: filePath")
+	public SseEmitter explainFile(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "explain-file", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "explain-file", mergedReq);
+	}
+
+	@PostMapping(value = "/explain-file/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> explainFileSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "explain-file", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "explain-file", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "ask_question", description = "Ask a free-form question about the codebase. Body: {question}")
+	public SseEmitter askQuestion(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "ask", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "ask", mergedReq);
+	}
+
+	@PostMapping(value = "/ask/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> askQuestionSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "ask", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "ask", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/code-review", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "code_review", description = "Generate a code review for a file. Params: filePath")
+	public SseEmitter codeReview(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-review", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "code-review", mergedReq);
+	}
+
+	@PostMapping(value = "/code-review/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> codeReviewSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-review", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "code-review", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/code-refactor", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "code_refactor", description = "Suggest refactoring improvements for a file. Params: filePath")
+	public SseEmitter codeRefactor(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-refactor", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "code-refactor", mergedReq);
+	}
+
+	@PostMapping(value = "/code-refactor/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> codeRefactorSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-refactor", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "code-refactor", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/code-optimise", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "code_optimise", description = "Suggest performance optimisations for a file. Params: filePath")
+	public SseEmitter codeOptimise(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-optimise", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "code-optimise", mergedReq);
+	}
+
+	@PostMapping(value = "/code-optimise/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> codeOptimiseSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-optimise", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "code-optimise", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/web-search", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "web_search", description = "Search the web and summarise results. Params: query or url")
+	public SseEmitter webSearch(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "web-search", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "web-search", mergedReq);
+	}
+
+	@PostMapping(value = "/web-search/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> webSearchSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "web-search", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "web-search", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/code-commit", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "code_commit", description = "Generate a Conventional Commits message from a git diff. Params: diff")
+	public SseEmitter codeCommit(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-commit", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "code-commit", mergedReq);
+	}
+
+	@PostMapping(value = "/code-commit/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> codeCommitSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "code-commit", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "code-commit", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/java-doc", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "java_doc", description = "Generate Javadoc for all public methods in a file. Params: filePath")
+	public SseEmitter javaDoc(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "java-doc", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "java-doc", mergedReq);
+	}
+
+	@PostMapping(value = "/java-doc/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> javaDocSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "java-doc", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "java-doc", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
+	@PostMapping(value = "/junit-test-cases", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@Operation(summary = "junit_test_cases", description = "Generate JUnit 5 test class with 100% branch coverage. Params: filePath")
+	public SseEmitter junitTestCases(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "junit-test-cases", symbolId, filePath, query, url, diff, request);
+		return agentService.streamResponse(projectId, "junit-test-cases", mergedReq);
+	}
+
+	@PostMapping(value = "/junit-test-cases/sync", produces = MediaType.APPLICATION_JSON_VALUE)
+	public java.util.Map<String, String> junitTestCasesSync(
+			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@RequestParam(required = false) Long symbolId,
+			@RequestParam(required = false) String filePath,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String url,
+			@RequestParam(required = false) String diff,
+			@RequestBody(required = false) AgentActionRequest request) {
+		AgentActionRequest mergedReq = validateAndMergeParameters(projectId, "junit-test-cases", symbolId, filePath, query, url, diff, request);
+		try {
+			String responseText = agentService.syncResponse(projectId, "junit-test-cases", mergedReq);
+			return java.util.Map.of("response", responseText);
+		} catch (Exception ex) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
+		}
+	}
+
 }
