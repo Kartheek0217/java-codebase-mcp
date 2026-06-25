@@ -3,11 +3,11 @@ package com.mcp.util;
 import com.mcp.dto.ContextDTO;
 import java.util.stream.Collectors;
 
-public class LlmResponseOptimizer {
+public class AgentResponseOptimizer {
 
     /**
      * Formats a ContextDTO into a dense Markdown representation.
-     * This is often more token-efficient for LLMs than raw JSON.
+     * This is often more token-efficient for AGENTs than raw JSON.
      */
     public static String toMarkdown(ContextDTO dto) {
         if (dto == null) {

@@ -38,7 +38,7 @@ import com.mcp.service.ProjectService;
 import com.mcp.service.ReconciliationService;
 import com.mcp.service.TopologyService;
 import com.mcp.util.CodeUtils;
-import com.mcp.util.LlmResponseOptimizer;
+import com.mcp.util.AgentResponseOptimizer;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -356,7 +356,7 @@ public class CodebaseController {
 
 		if ("markdown".equalsIgnoreCase(format))
 			return ResponseEntity.ok().eTag(currentChecksum)
-					.body(Map.of("type", "markdown", "content", LlmResponseOptimizer.toMarkdown(contextDTO)));
+					.body(Map.of("type", "markdown", "content", AgentResponseOptimizer.toMarkdown(contextDTO)));
 
 		if (sessionId != null)
 			contextMemoryService.recordAccess(sessionId, filePath, currentChecksum);

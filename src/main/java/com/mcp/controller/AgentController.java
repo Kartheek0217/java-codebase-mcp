@@ -1,8 +1,8 @@
 package com.mcp.controller;
 
-import com.mcp.dto.LlmActionRequest;
+import com.mcp.dto.AgentActionRequest;
 import com.mcp.repository.ProjectRepository;
-import com.mcp.service.LlmService;
+import com.mcp.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,30 +16,30 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Unified REST controller for all OpenAI-compatible / OpenAdapter LLM
+ * Unified REST controller for all OpenAI-compatible / OpenAdapter AGENT
  * operations.
  *
  * @author karthik.j
  */
 @RestController
-@RequestMapping("/api/llm")
-@Tag(name = "LLM", description = "Unified OpenAI-compatible cloud LLM endpoints for AI assistance.")
-public class LlmController {
+@RequestMapping("/api/agent")
+@Tag(name = "AGENT", description = "Unified OpenAI-compatible cloud AGENT endpoints for AI assistance.")
+public class AgentController {
 
-    /** Service layer for executing LLM operations and managing response streams. */
-    private final LlmService llmService;
+    /** Service layer for executing AGENT operations and managing response streams. */
+    private final AgentService agentService;
 
     /** Repository for project data access and security validation. */
     private final ProjectRepository projectRepository;
 
     /**
-     * Constructs an {@code LlmController} with required dependencies.
+     * Constructs an {@code AgentController} with required dependencies.
      *
-     * @param llmService        the service for executing LLM operations
+     * @param agentService        the service for executing AGENT operations
      * @param projectRepository the repository for project data access
      */
-    public LlmController(LlmService llmService, ProjectRepository projectRepository) {
-        this.llmService = llmService;
+    public AgentController(AgentService agentService, ProjectRepository projectRepository) {
+        this.agentService = agentService;
         this.projectRepository = projectRepository;
     }
 
@@ -50,7 +50,7 @@ public class LlmController {
      * response chunks back to the client.
      *
      * @param projectId the unique identifier of the project context
-     * @param action    the LLM action to execute (e.g., 'explain-symbol', 'ask',
+     * @param action    the AGENT action to execute (e.g., 'explain-symbol', 'ask',
      *                  'code-review')
      * @param symbolId  optional identifier for symbol explanation
      * @param filePath  optional file path for file-based operations
@@ -58,17 +58,17 @@ public class LlmController {
      * @param url       optional URL for web-search context
      * @param diff      optional git diff payload for code-commit action
      * @param request   optional request body containing action-specific parameters
-     * @return an {@link SseEmitter} for streaming the LLM response chunks
+     * @return an {@link SseEmitter} for streaming the AGENT response chunks
      * @throws ResponseStatusException if validation fails, required parameters are
      *                                 missing, or an unknown action is provided
      */
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(
-        summary = "handle-llm",
+        summary = "handle-agent",
         description = "CRITICAL:\n" +
             "1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
             "2. You MUST provide the X-Action parameter exactly as requested.\n\n" +
-            "Execute an LLM operation and stream the response as Server-Sent Events (SSE). " +
+            "Execute an AGENT operation and stream the response as Server-Sent Events (SSE). " +
             "Select the action with the X-Action request header:\n\n" +
             "• X-Action: explain-symbol — Explain a code symbol in plain English. " +
                 "Params: symbolId (Long, required — use search-symbols to find it).\n\n" +
@@ -92,45 +92,45 @@ public class LlmController {
                 "Params: filePath (string, required — path to the service/class under test).\n\n" +
             "All actions stream response chunks as SSE events. Consume the event stream until the 'done' event is received."
     )
-    public SseEmitter handleLlmAction(
+    public SseEmitter handleAgentAction(
             @Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @RequestParam Long projectId,
-            @Parameter(description = "LLM action: 'explain-symbol', 'explain-file', 'ask', 'code-review', 'code-refactor', 'web-search', 'code-commit', 'java-doc', 'junit-test-cases'") @RequestHeader(value = "X-Action") String action,
+            @Parameter(description = "AGENT action: 'explain-symbol', 'explain-file', 'ask', 'code-review', 'code-refactor', 'web-search', 'code-commit', 'java-doc', 'junit-test-cases'") @RequestHeader(value = "X-Action") String action,
             @RequestParam(required = false) Long symbolId,
             @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
-            @RequestBody(required = false) LlmActionRequest request) {
+            @RequestBody(required = false) AgentActionRequest request) {
 
-        LlmActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
-        return llmService.streamResponse(projectId, action, mergedReq);
+        AgentActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
+        return agentService.streamResponse(projectId, action, mergedReq);
     }
 
     @PostMapping(value = "/sync", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
-        summary = "handle-llm-sync",
+        summary = "handle-agent-sync",
         description = "CRITICAL:\n" +
             "1. You MUST pass the actual numeric ID for projectId (e.g., 1), NEVER the literal string '{projectId}'.\n" +
             "2. You MUST provide the X-Action parameter exactly as requested.\n\n" +
-            "Execute an LLM operation synchronously and return a JSON object containing the response."
+            "Execute an AGENT operation synchronously and return a JSON object containing the response."
     )
-    public java.util.Map<String, String> handleLlmActionSync(
+    public java.util.Map<String, String> handleAgentActionSync(
             @Parameter(description = "Numeric Project ID (e.g. 1). DO NOT pass '{projectId}'") @RequestParam Long projectId,
-            @Parameter(description = "LLM action") @RequestHeader(value = "X-Action") String action,
+            @Parameter(description = "AGENT action") @RequestHeader(value = "X-Action") String action,
             @RequestParam(required = false) Long symbolId,
             @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
-            @RequestBody(required = false) LlmActionRequest request) {
+            @RequestBody(required = false) AgentActionRequest request) {
 
-        LlmActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
+        AgentActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url, diff, request);
 
         try {
-            String responseText = llmService.syncResponse(projectId, action, mergedReq);
+            String responseText = agentService.syncResponse(projectId, action, mergedReq);
             return java.util.Map.of("response", responseText);
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute LLM action", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to execute AGENT action", ex);
         }
     }
 
@@ -155,8 +155,8 @@ public class LlmController {
         }
     }
 
-    private LlmActionRequest validateAndMergeParameters(Long projectId, String action, Long symbolId, String filePath, String query, String url, String diff, LlmActionRequest request) {
-        LlmActionRequest req = request != null ? request : new LlmActionRequest(null, null, null, null, null, null);
+    private AgentActionRequest validateAndMergeParameters(Long projectId, String action, Long symbolId, String filePath, String query, String url, String diff, AgentActionRequest request) {
+        AgentActionRequest req = request != null ? request : new AgentActionRequest(null, null, null, null, null, null);
 
         // Validation upfront to fail-fast
         try {
@@ -236,7 +236,7 @@ public class LlmController {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Validation failed", ex);
         }
 
-        return new LlmActionRequest(
+        return new AgentActionRequest(
                 symbolId != null ? symbolId : req.symbolId(),
                 filePath != null ? filePath : req.filePath(),
                 query != null ? query : req.query(),

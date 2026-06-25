@@ -26,5 +26,5 @@ Senior engineers actively avoid deeply nested `if-else` chains because procedura
 
 ## See also
 
-- [`SKILL.md`](./SKILL.md) — full LLM-facing instructions
+- [`SKILL.md`](./SKILL.md) — full AGENT-facing instructions
 - [Jcb README](../../README.md) — repo overview

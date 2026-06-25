@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Configuration properties for the Ollama / OpenAI-compatible LLM integration.
+ * Configuration properties for the Ollama / OpenAI-compatible AGENT integration.
  * <p>
  * All values are overridable via {@code application.properties} under the
  * {@code mcp.ollama.*} prefix. The defaults point to a locally-hosted Ollama
@@ -43,7 +43,7 @@ public class OllamaProperties {
     private String model = "granite4.1:3b";
 
     /**
-     * HTTP read/connect timeout in seconds for calls to the LLM endpoint.
+     * HTTP read/connect timeout in seconds for calls to the AGENT endpoint.
      * Large models can be slow on first token — increase this if you see timeouts.
      */
     private int timeoutSeconds = 120;

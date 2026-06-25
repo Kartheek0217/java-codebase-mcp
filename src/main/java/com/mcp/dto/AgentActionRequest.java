@@ -2,8 +2,8 @@ package com.mcp.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Request body for unified LLM action")
-public record LlmActionRequest(
+@Schema(description = "Request body for unified AGENT action")
+public record AgentActionRequest(
     @Schema(description = "ID of the associated symbol (for explain-symbol)", example = "101")
     Long symbolId,
     @Schema(description = "Relative file path (for explain-file, code-review, code-refactor, java-doc, junit-test-cases)", example = "src/main/java/App.java")

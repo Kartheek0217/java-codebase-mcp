@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.mcp.properties.OllamaProperties;
+import com.mcp.properties.OllamaProperties; // Refresh IDE
 import com.mcp.repository.ProjectRepository;
 import com.mcp.service.GitInfoService;
 import com.mcp.service.OllamaClient;
@@ -22,7 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/system")
-@Tag(name = "System", description = "System health, git info, and LLM configuration diagnostics.")
+@Tag(name = "System", description = "System health, git info, and AGENT configuration diagnostics.")
 public class SystemController {
 
 	private final ProjectRepository projectRepository;
@@ -43,7 +43,7 @@ public class SystemController {
 	/**
 	 * {@code GET /api/system} : Read system state. Variant selected via {@code X-View} header.
 	 *
-	 * @param view {@code health} | {@code info} | {@code llm-status}
+	 * @param view {@code health} | {@code info} | {@code agent-status}
 	 * @return State map appropriate to the view
 	 */
 	@GetMapping
@@ -54,16 +54,16 @@ public class SystemController {
 				"Checks DB connectivity. Use before any project operations to verify the server is ready.\n\n" +
 			"• X-View: info — Returns {commit: string, branch: string, available: boolean}. " +
 				"Reports the server's current git commit hash, active branch, and whether git is accessible.\n\n" +
-			"• X-View: llm-status — Returns {baseUrl, model, timeoutSeconds, maxTokens, reachable: boolean}. " +
-				"Shows the active Ollama/LLM configuration and pings the endpoint to confirm it is reachable " +
-				"before dispatching LLM action requests.",
+			"• X-View: agent-status — Returns {baseUrl, model, timeoutSeconds, maxTokens, reachable: boolean}. " +
+				"Shows the active Ollama/AGENT configuration and pings the endpoint to confirm it is reachable " +
+				"before dispatching AGENT action requests.",
 		responses = {
 			@ApiResponse(responseCode = "200", description = "System state map returned"),
 			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
 		}
 	)
 	public Map<String, Object> getSystemStatus(
-			@Parameter(description = "View variant: 'health' (default) | 'info' | 'llm-status'")
+			@Parameter(description = "View variant: 'health' (default) | 'info' | 'agent-status'")
 			@RequestHeader(value = "X-View", required = false, defaultValue = "health") String view) {
 		return switch (view.toLowerCase()) {
 			case "health" -> {
@@ -85,7 +85,7 @@ public class SystemController {
 				info.put("available", gitInfoService.isGitAvailable());
 				yield info;
 			}
-			case "llm-status" -> {
+			case "agent-status" -> {
 				Map<String, Object> status = new HashMap<>();
 				status.put("baseUrl", ollamaProperties.getBaseUrl());
 				status.put("model", ollamaProperties.getModel());
@@ -95,7 +95,7 @@ public class SystemController {
 				yield status;
 			}
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown X-View value '" + view + "'. Allowed: health, info, llm-status");
+					"Unknown X-View value '" + view + "'. Allowed: health, info, agent-status");
 		};
 	}
 }

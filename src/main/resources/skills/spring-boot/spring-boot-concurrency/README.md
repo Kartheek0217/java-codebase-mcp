@@ -16,5 +16,5 @@ This guide establishes standards for concurrent execution in Spring Boot 3+: lev
 
 ## See also
 
-- [`SKILL.md`](./SKILL.md) — full LLM-facing instructions
+- [`SKILL.md`](./SKILL.md) — full AGENT-facing instructions
 - [Jcb README](../../README.md) — repo overview

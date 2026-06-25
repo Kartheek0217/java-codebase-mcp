@@ -23,9 +23,9 @@ import com.mcp.repository.SymbolRepository;
 import jakarta.annotation.PostConstruct;
 
 @Service
-public class LlmPromptBuilder {
+public class AgentPromptBuilder {
 
-    private static final Logger logger = LoggerFactory.getLogger(LlmPromptBuilder.class);
+    private static final Logger logger = LoggerFactory.getLogger(AgentPromptBuilder.class);
     private static final int MAX_CONTEXT_CHARS = 6_000;
 
     private final SymbolRepository symbolRepository;
@@ -38,7 +38,7 @@ public class LlmPromptBuilder {
 
     private String jcbSystemPrompt = "";
 
-    public LlmPromptBuilder(SymbolRepository symbolRepository,
+    public AgentPromptBuilder(SymbolRepository symbolRepository,
                             ProjectRepository projectRepository,
                             CodeSummarizerService codeSummarizerService,
                             LuceneIndexService luceneIndexService) {
@@ -179,7 +179,7 @@ public class LlmPromptBuilder {
         return sb.toString();
     }
 
-    public List<LlmClient.Message> buildExplainSymbolMessages(Long projectId, Long symbolId) {
+    public List<AgentClient.Message> buildExplainSymbolMessages(Long projectId, Long symbolId) {
         Symbol symbol = symbolRepository.findById(symbolId)
                 .orElseThrow(() -> new IllegalArgumentException("Symbol not found: " + symbolId));
 
@@ -200,11 +200,11 @@ public class LlmPromptBuilder {
                 """.formatted(symbol.getName(), symbol.getType(), symbol.getFilePath(), truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildExplainFileMessages(Long projectId, String filePath) throws IOException {
+    public List<AgentClient.Message> buildExplainFileMessages(Long projectId, String filePath) throws IOException {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId))
                 .getRootPath();
@@ -226,11 +226,11 @@ public class LlmPromptBuilder {
                 """.formatted(filePath, truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior code analyst. Answer concisely and accurately.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildAskCodebaseMessages(Long projectId, String question) {
+    public List<AgentClient.Message> buildAskCodebaseMessages(Long projectId, String question) {
         List<ContentSearchResult> hits = luceneIndexService.searchContent(projectId,
                 SearchOptions.builder().query(question).limit(5).build());
         String context = buildContextBlock(hits);
@@ -246,11 +246,11 @@ public class LlmPromptBuilder {
                 """.formatted(context.isEmpty() ? "(no relevant snippets found)" : context);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, systemPrompt)),
-                new LlmClient.Message("user", question));
+                new AgentClient.Message("system", getSystemPrompt(projectId, systemPrompt)),
+                new AgentClient.Message("user", question));
     }
 
-    public List<LlmClient.Message> buildCodeReviewMessages(Long projectId, String filePath) throws IOException {
+    public List<AgentClient.Message> buildCodeReviewMessages(Long projectId, String filePath) throws IOException {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId))
                 .getRootPath();
@@ -270,11 +270,11 @@ public class LlmPromptBuilder {
                 """.formatted(filePath, truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a senior software engineer conducting a detailed code review.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior software engineer conducting a detailed code review.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildCodeRefactorMessages(Long projectId, String filePath) throws IOException {
+    public List<AgentClient.Message> buildCodeRefactorMessages(Long projectId, String filePath) throws IOException {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId))
                 .getRootPath();
@@ -293,11 +293,11 @@ public class LlmPromptBuilder {
                 """.formatted(filePath, truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a software architect specialized in code optimization.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a software architect specialized in code optimization.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildCodeCommitMessages(Long projectId, String diff) {
+    public List<AgentClient.Message> buildCodeCommitMessages(Long projectId, String diff) {
         String truncated = truncate(diff, MAX_CONTEXT_CHARS);
         String userPrompt = """
                 Generate a concise, descriptive Git commit message following Conventional Commits guidelines based on the following code diff:
@@ -307,11 +307,11 @@ public class LlmPromptBuilder {
                 """.formatted(truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a Git assistant. Generate clean, descriptive, and conventional commit messages.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a Git assistant. Generate clean, descriptive, and conventional commit messages.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildJavaDocMessages(Long projectId, String filePath) throws IOException {
+    public List<AgentClient.Message> buildJavaDocMessages(Long projectId, String filePath) throws IOException {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId))
                 .getRootPath();
@@ -332,11 +332,11 @@ public class LlmPromptBuilder {
                 """.formatted(filePath, truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a senior Java architect. Document code following strict Javadoc specifications.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior Java architect. Document code following strict Javadoc specifications.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildJunitTestCasesMessages(Long projectId, String filePath) throws IOException {
+    public List<AgentClient.Message> buildJunitTestCasesMessages(Long projectId, String filePath) throws IOException {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId))
                 .getRootPath();
@@ -355,11 +355,11 @@ public class LlmPromptBuilder {
                 """.formatted(filePath, truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are a senior QA engineer. Generate clean, complete JUnit test suites.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are a senior QA engineer. Generate clean, complete JUnit test suites.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
-    public List<LlmClient.Message> buildWebSearchMessages(Long projectId, String query, String url, String pageText) {
+    public List<AgentClient.Message> buildWebSearchMessages(Long projectId, String query, String url, String pageText) {
         String truncated = truncate(pageText, 8000);
         String userPrompt = """
                 You are an expert research analyst. Review the following web page content/search results and provide a comprehensive R&D summary.
@@ -369,8 +369,8 @@ public class LlmPromptBuilder {
                 """.formatted(truncated);
 
         return List.of(
-                new LlmClient.Message("system", getSystemPrompt(projectId, "You are an expert research assistant. Synthesize web search results into a clean R&D report.")),
-                new LlmClient.Message("user", userPrompt));
+                new AgentClient.Message("system", getSystemPrompt(projectId, "You are an expert research assistant. Synthesize web search results into a clean R&D report.")),
+                new AgentClient.Message("user", userPrompt));
     }
 
     private String buildContextBlock(List<ContentSearchResult> hits) {
@@ -401,7 +401,7 @@ public class LlmPromptBuilder {
         try {
             return Files.readString(Paths.get(absolutePath));
         } catch (IOException e) {
-            logger.warn("Could not read file for LLM context: {}", absolutePath);
+            logger.warn("Could not read file for AGENT context: {}", absolutePath);
             return "";
         }
     }

@@ -11,11 +11,13 @@
 ```
 Controllers (REST/MCP)
     ├── CodebaseController   → file indexing, search, symbols, topology, batch
-    ├── McpController        → sessions, tasks, rules, skills
-    ├── LlmController        → LLM actions (explain, review, refactor, test-gen)
+    ├── TaskManagerController→ tasks, rules
+    ├── SessionController    → sessions
+    ├── SkillController      → skills
+    ├── AgentController        → AGENT actions (explain, review, refactor, test-gen)
     ├── ProjectController    → CRUD, reindex, git-status, stage/commit
     ├── BrowserController    → Playwright headless browser sessions
-    └── SystemController     → health, LLM status
+    └── SystemController     → health, AGENT status
 
 Services (Core)
     ├── FileIndexerService          → JavaParser AST + multi-language regex extraction
@@ -26,11 +28,11 @@ Services (Core)
     ├── ProjectService              → project lifecycle + async post-commit indexing
     └── ContextMemoryService        → Caffeine-backed session memory
 
-Services (LLM)
-    ├── LlmService                  → facade
-    ├── LlmClient / OllamaClient    → HTTP clients
-    ├── LlmPromptBuilder            → prompt construction
-    ├── LlmStreamingService         → SSE streaming
+Services (AGENT)
+    ├── AgentService                  → facade
+    ├── AgentClient / OllamaClient    → HTTP clients
+    ├── AgentPromptBuilder            → prompt construction
+    ├── AgentStreamingService         → SSE streaming
     └── WebSearchOrchestrator + HeadlessBrowserService
 
 Persistence (JPA Entities)
@@ -56,7 +58,7 @@ private static final Executor BATCH_EXECUTOR = Executors.newVirtualThreadPerTask
 Correct use of JDK 21+ virtual threads for I/O-bound parallel file reads in `getBatchContext`.
 
 ### 4. ETag / 304 Support
-`codebaseRead` supports `If-None-Match` + checksum-based ETags — avoids re-sending unchanged file content to LLM tools. Smart token optimization for agent workflows.
+`codebaseRead` supports `If-None-Match` + checksum-based ETags — avoids re-sending unchanged file content to AGENT tools. Smart token optimization for agent workflows.
 
 ### 5. Multi-Language Symbol Extraction
 `FileIndexerService` handles Java (AST), JS/TS, JSON, CSS, and HTML via dedicated patterns (`JS_PATTERN`, `JSON_PATTERN`, `CSS_PATTERN`, `ID_PATTERN`). Good breadth for a polyglot codebase tool.
@@ -81,12 +83,12 @@ Prevents runaway Lucene queries from blocking virtual threads. Good defensive de
 
 ## Issues & Recommendations 🔴
 
-### 1. In-Memory `sessionStore` in `McpController` *(High Priority)*
+### 1. In-Memory `sessionStore` in `SessionController` *(High Priority)*
 
 **Problem**: Sessions are stored in a bounded `LinkedHashMap` — lost on restart, not shareable across instances, no durable TTL enforcement.
 
 ```java
-// McpController.java
+// SessionController.java
 private final Map<String, Session> sessionStore; // ← in-memory only
 ```
 

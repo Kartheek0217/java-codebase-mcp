@@ -1,6 +1,6 @@
 package com.mcp.service;
 
-import com.mcp.dto.LlmActionRequest;
+import com.mcp.dto.AgentActionRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -10,23 +10,23 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * High-level LLM service that acts as a facade, delegating to specialized components.
+ * High-level AGENT service that acts as a facade, delegating to specialized components.
  */
 @Service
-public class LlmService {
+public class AgentService {
 
-    private final LlmClient llmClient;
-    private final LlmPromptBuilder promptBuilder;
-    private final LlmStreamingService streamingService;
+    private final AgentClient agentClient;
+    private final AgentPromptBuilder promptBuilder;
+    private final AgentStreamingService streamingService;
     private final WebSearchOrchestrator webSearchOrchestrator;
     private final BrowserSessionManager browserSessionManager;
 
-    public LlmService(LlmClient llmClient,
-                      LlmPromptBuilder promptBuilder,
-                      LlmStreamingService streamingService,
+    public AgentService(AgentClient agentClient,
+                      AgentPromptBuilder promptBuilder,
+                      AgentStreamingService streamingService,
                       WebSearchOrchestrator webSearchOrchestrator,
                       BrowserSessionManager browserSessionManager) {
-        this.llmClient = llmClient;
+        this.agentClient = agentClient;
         this.promptBuilder = promptBuilder;
         this.streamingService = streamingService;
         this.webSearchOrchestrator = webSearchOrchestrator;
@@ -34,35 +34,35 @@ public class LlmService {
     }
 
     public String explainSymbol(Long projectId, Long symbolId) {
-        return llmClient.chat(promptBuilder.buildExplainSymbolMessages(projectId, symbolId), "code-analyse");
+        return agentClient.chat(promptBuilder.buildExplainSymbolMessages(projectId, symbolId), "code-analyse");
     }
 
     public String explainFile(Long projectId, String filePath) throws IOException {
-        return llmClient.chat(promptBuilder.buildExplainFileMessages(projectId, filePath), "code-analyse");
+        return agentClient.chat(promptBuilder.buildExplainFileMessages(projectId, filePath), "code-analyse");
     }
 
     public String askCodebase(Long projectId, String question) {
-        return llmClient.chat(promptBuilder.buildAskCodebaseMessages(projectId, question), "code-analyse");
+        return agentClient.chat(promptBuilder.buildAskCodebaseMessages(projectId, question), "code-analyse");
     }
 
     public String codeReview(Long projectId, String filePath) throws IOException {
-        return llmClient.chat(promptBuilder.buildCodeReviewMessages(projectId, filePath), "code-review");
+        return agentClient.chat(promptBuilder.buildCodeReviewMessages(projectId, filePath), "code-review");
     }
 
     public String codeRefactor(Long projectId, String filePath) throws IOException {
-        return llmClient.chat(promptBuilder.buildCodeRefactorMessages(projectId, filePath), "code-refactor");
+        return agentClient.chat(promptBuilder.buildCodeRefactorMessages(projectId, filePath), "code-refactor");
     }
 
     public String codeCommit(Long projectId, String diff) {
-        return llmClient.chat(promptBuilder.buildCodeCommitMessages(projectId, diff), "code-commit");
+        return agentClient.chat(promptBuilder.buildCodeCommitMessages(projectId, diff), "code-commit");
     }
 
     public String javaDoc(Long projectId, String filePath) throws IOException {
-        return llmClient.chat(promptBuilder.buildJavaDocMessages(projectId, filePath), "java-doc");
+        return agentClient.chat(promptBuilder.buildJavaDocMessages(projectId, filePath), "java-doc");
     }
 
     public String junitTestCases(Long projectId, String filePath) throws IOException {
-        return llmClient.chat(promptBuilder.buildJunitTestCasesMessages(projectId, filePath), "junit-test-cases");
+        return agentClient.chat(promptBuilder.buildJunitTestCasesMessages(projectId, filePath), "junit-test-cases");
     }
 
     public String webSearchAndAnalyse(Long projectId, String query, String url) {
@@ -70,8 +70,8 @@ public class LlmService {
         try {
             sessionId = browserSessionManager.createSession(new BrowserSessionRequest("chromium", true, null, null, projectId));
             String pageText = webSearchOrchestrator.fetchWebSearchContent(query, url, sessionId);
-            List<LlmClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, query, url, pageText);
-            return llmClient.chat(messages, "web-search");
+            List<AgentClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, query, url, pageText);
+            return agentClient.chat(messages, "web-search");
         } finally {
             if (sessionId != null) {
                 browserSessionManager.closeSession(sessionId);
@@ -79,11 +79,11 @@ public class LlmService {
         }
     }
 
-    public SseEmitter streamResponse(Long projectId, String action, LlmActionRequest req) {
+    public SseEmitter streamResponse(Long projectId, String action, AgentActionRequest req) {
         return streamingService.streamResponse(projectId, action, req);
     }
 
-    public String syncResponse(Long projectId, String action, LlmActionRequest req) throws IOException {
+    public String syncResponse(Long projectId, String action, AgentActionRequest req) throws IOException {
         return switch (action.toLowerCase()) {
             case "explain-symbol" -> explainSymbol(projectId, req.symbolId());
             case "explain-file" -> explainFile(projectId, req.filePath());

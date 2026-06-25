@@ -6,32 +6,32 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import com.mcp.dto.LlmActionRequest;
+import com.mcp.dto.AgentActionRequest;
 
 @Service
-public class LlmStreamingService {
+public class AgentStreamingService {
 
-    private final LlmClient llmClient;
-    private final LlmPromptBuilder promptBuilder;
+    private final AgentClient agentClient;
+    private final AgentPromptBuilder promptBuilder;
     private final BrowserSessionManager browserSessionManager;
     private final WebSearchOrchestrator webSearchOrchestrator;
 
-    public LlmStreamingService(LlmClient llmClient,
-                               LlmPromptBuilder promptBuilder,
+    public AgentStreamingService(AgentClient agentClient,
+                               AgentPromptBuilder promptBuilder,
                                BrowserSessionManager browserSessionManager,
                                WebSearchOrchestrator webSearchOrchestrator) {
-        this.llmClient = llmClient;
+        this.agentClient = agentClient;
         this.promptBuilder = promptBuilder;
         this.browserSessionManager = browserSessionManager;
         this.webSearchOrchestrator = webSearchOrchestrator;
     }
 
-    public SseEmitter streamResponse(Long projectId, String action, LlmActionRequest req) {
+    public SseEmitter streamResponse(Long projectId, String action, AgentActionRequest req) {
         SseEmitter emitter = new SseEmitter(180000L); // 3-minute timeout
 
         Thread.startVirtualThread(() -> {
             try {
-                streamLlmAction(projectId, action, req, req.symbolId(), req.filePath(), req.query(), req.url(), req.diff(), chunk -> {
+                streamAgentAction(projectId, action, req, req.symbolId(), req.filePath(), req.query(), req.url(), req.diff(), chunk -> {
                     try {
                         emitter.send(SseEmitter.event().data(chunk));
                     } catch (IOException e) {
@@ -42,7 +42,7 @@ public class LlmStreamingService {
             } catch (Exception ex) {
                 try {
                     emitter.send(SseEmitter.event().name("error")
-                        .data("{\"error\":\"LLM action failed: " + ex.getMessage().replace("\"", "\\\"") + "\"}"));
+                        .data("{\"error\":\"AGENT action failed: " + ex.getMessage().replace("\"", "\\\"") + "\"}"));
                 } catch (IOException ignored) {}
                 emitter.complete();
             }
@@ -51,7 +51,7 @@ public class LlmStreamingService {
         return emitter;
     }
 
-    public void streamLlmAction(Long projectId, String action, LlmActionRequest req,
+    public void streamAgentAction(Long projectId, String action, AgentActionRequest req,
                                  Long symbolId, String filePath, String query, String url, String diff,
                                  java.util.function.Consumer<String> chunkConsumer) throws IOException {
         String taskType = switch (action.toLowerCase()) {
@@ -74,8 +74,8 @@ public class LlmStreamingService {
                 String q = query != null ? query : req.query();
                 String u = url != null ? url : req.url();
                 String pageText = webSearchOrchestrator.fetchWebSearchContent(q, u, sessionId);
-                List<LlmClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, q, u, pageText);
-                llmClient.streamChat(messages, taskType, chunkConsumer);
+                List<AgentClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, q, u, pageText);
+                agentClient.streamChat(messages, taskType, chunkConsumer);
             } finally {
                 if (sessionId != null) {
                     browserSessionManager.closeSession(sessionId);
@@ -84,7 +84,7 @@ public class LlmStreamingService {
             return;
         }
 
-        List<LlmClient.Message> messages = switch (action.toLowerCase()) {
+        List<AgentClient.Message> messages = switch (action.toLowerCase()) {
             case "explain-symbol" -> {
                 Long sId = symbolId != null ? symbolId : req.symbolId();
                 yield promptBuilder.buildExplainSymbolMessages(projectId, sId);
@@ -117,6 +117,6 @@ public class LlmStreamingService {
             default -> throw new IllegalArgumentException("Unknown action: " + action);
         };
 
-        llmClient.streamChat(messages, taskType, chunkConsumer);
+        agentClient.streamChat(messages, taskType, chunkConsumer);
     }
 }

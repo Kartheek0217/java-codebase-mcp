@@ -4,11 +4,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Configuration properties for the generic OpenAI-compatible / OpenAdapter LLM integration.
+ * Configuration properties for the generic OpenAI-compatible / OpenAdapter AGENT integration.
  */
 @Component
-@ConfigurationProperties(prefix = "mcp.llm")
-public class LlmProperties {
+@ConfigurationProperties(prefix = "mcp.agent")
+public class AgentProperties {
 
     private String baseUrl = "https://api.openadapter.in/v1";
     private String apiKey = "";

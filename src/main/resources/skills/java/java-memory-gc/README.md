@@ -16,5 +16,5 @@ This guide establishes rigorous standards for JVM memory management: identifying
 
 ## See also
 
-- [`SKILL.md`](./SKILL.md) — full LLM-facing instructions
+- [`SKILL.md`](./SKILL.md) — full AGENT-facing instructions
 - [Jcb README](../../README.md) — repo overview

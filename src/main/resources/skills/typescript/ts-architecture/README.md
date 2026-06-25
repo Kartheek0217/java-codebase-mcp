@@ -16,5 +16,5 @@ This guide establishes standard architectural patterns for TypeScript data model
 
 ## See also
 
-- [`SKILL.md`](./SKILL.md) — full LLM-facing instructions
+- [`SKILL.md`](./SKILL.md) — full AGENT-facing instructions
 - [Jcb README](../../README.md) — repo overview

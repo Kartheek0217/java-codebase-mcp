@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mcp.properties.LlmProperties;
+import com.mcp.properties.AgentProperties;
 
 import jakarta.annotation.PostConstruct;
 
@@ -20,14 +20,14 @@ import jakarta.annotation.PostConstruct;
  * (specifically OpenAdapter).
  */
 @Service
-public class LlmClient {
+public class AgentClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(LlmClient.class);
+    private static final Logger logger = LoggerFactory.getLogger(AgentClient.class);
 
-    private final LlmProperties props;
+    private final AgentProperties props;
     private RestClient restClient;
 
-    public LlmClient(LlmProperties props) {
+    public AgentClient(AgentProperties props) {
         this.props = props;
     }
 
@@ -44,7 +44,7 @@ public class LlmClient {
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestInitializer(request -> request.getHeaders().setAccept(List.of(MediaType.APPLICATION_JSON)))
                 .build();
-        logger.info("LlmClient initialised — baseUrl={}, defaultModel={}, timeoutSeconds={}", props.getBaseUrl(),
+        logger.info("AgentClient initialised — baseUrl={}, defaultModel={}, timeoutSeconds={}", props.getBaseUrl(),
                 props.getDefaultModel(), props.getTimeoutSeconds());
     }
 
@@ -81,7 +81,7 @@ public class LlmClient {
         String model = resolveModelForTask(taskType);
         ChatRequest request = new ChatRequest(model, messages, props.getMaxTokens(), false);
 
-        logger.info("Sending chat request to LLM — model={}, taskType={}, messages={}", model, taskType,
+        logger.info("Sending chat request to AGENT — model={}, taskType={}, messages={}", model, taskType,
                 messages.size());
 
         ChatResponse response;
@@ -92,15 +92,15 @@ public class LlmClient {
                     .retrieve()
                     .body(ChatResponse.class);
         } catch (Exception ex) {
-            throw new LlmException("HTTP call to LLM failed: " + ex.getMessage(), ex);
+            throw new AgentException("HTTP call to AGENT failed: " + ex.getMessage(), ex);
         }
 
         if (response == null || response.choices() == null || response.choices().isEmpty()) {
-            throw new LlmException("LLM returned an empty response for model: " + model);
+            throw new AgentException("AGENT returned an empty response for model: " + model);
         }
 
         String content = response.choices().getFirst().message().content();
-        logger.debug("Received LLM response — length={}", content == null ? 0 : content.length());
+        logger.debug("Received AGENT response — length={}", content == null ? 0 : content.length());
         return content != null ? content : "";
     }
 
@@ -114,7 +114,7 @@ public class LlmClient {
         String model = resolveModelForTask(taskType);
         ChatRequest request = new ChatRequest(model, messages, props.getMaxTokens(), true);
 
-        logger.info("Sending streaming chat request to LLM — model={}, taskType={}, messages={}", model, taskType,
+        logger.info("Sending streaming chat request to AGENT — model={}, taskType={}, messages={}", model, taskType,
                 messages.size());
 
         try {
@@ -143,7 +143,7 @@ public class LlmClient {
                         return null;
                     });
         } catch (Exception ex) {
-            throw new LlmException("Streaming HTTP call to LLM failed: " + ex.getMessage(), ex);
+            throw new AgentException("Streaming HTTP call to AGENT failed: " + ex.getMessage(), ex);
         }
     }
 
@@ -177,7 +177,7 @@ public class LlmClient {
                     .toBodilessEntity();
             return true;
         } catch (Exception ex) {
-            logger.warn("LLM health check failed: {}", ex.getMessage());
+            logger.warn("AGENT health check failed: {}", ex.getMessage());
             return false;
         }
     }
@@ -199,12 +199,12 @@ public class LlmClient {
     private record Choice(Message message) {
     }
 
-    public static class LlmException extends RuntimeException {
-        public LlmException(String message) {
+    public static class AgentException extends RuntimeException {
+        public AgentException(String message) {
             super(message);
         }
 
-        public LlmException(String message, Throwable cause) {
+        public AgentException(String message, Throwable cause) {
             super(message, cause);
         }
     }

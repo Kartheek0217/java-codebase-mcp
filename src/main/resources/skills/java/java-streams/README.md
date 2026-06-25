@@ -16,5 +16,5 @@ This guide establishes performance guidelines and advanced functional patterns f
 
 ## See also
 
-- [`SKILL.md`](./SKILL.md) — full LLM-facing instructions
+- [`SKILL.md`](./SKILL.md) — full AGENT-facing instructions
 - [Jcb README](../../README.md) — repo overview

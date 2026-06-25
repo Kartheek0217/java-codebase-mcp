@@ -28,7 +28,7 @@ src/main/java/com/mcp/
 ├── properties/             # Configuration Properties (Type-safe property mapping)
 ├── repository/             # Spring Data JPA repositories
 ├── service/                # Core logic (Indexing, Git, Playwright, Tasks, AI Skills, Topology)
-├── util/                   # Common utilities (CodeUtils, LLM Response Optimizer)
+├── util/                   # Common utilities (CodeUtils, AGENT Response Optimizer)
 └── web/                    # Web-related components and filtering
 ```
 
@@ -42,7 +42,7 @@ src/main/java/com/mcp/
 - **🌐 Advanced Browser Orchestration:** Managed Playwright sessions with automatic idle cleanup and resource limit enforcement.
 - **🐙 Integrated Git Workflows:** Inspect repository status, stage files, and commit changes directly through the MCP interface.
 - **📋 Task & Rule Engine:** Maintain project-specific implementation plans, nested task steps, and AI agent rules.
-- **📉 LLM Context Optimization:** Built-in compression and filtering of codebase context to maximize token efficiency for LLMs.
+- **📉 AGENT Context Optimization:** Built-in compression and filtering of codebase context to maximize token efficiency for AGENTs.
 
 ## 🚀 Performance & Tuning
 
