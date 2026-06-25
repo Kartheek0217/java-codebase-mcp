@@ -57,7 +57,7 @@ public class SessionController {
 		synchronized (sessionStore) {
 			expired = sessionStore.entrySet().stream()
 				.filter(e -> now - e.getValue().createdAt() > 3_600_000L)
-				.map(Map.Entry::getKey).toList();
+				.map(e -> e.getKey()).toList();
 			expired.forEach(sessionStore::remove);
 		}
 		expired.forEach(contextMemoryService::clearSession);

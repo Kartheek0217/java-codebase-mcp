@@ -242,34 +242,6 @@ public class LuceneIndexService {
 				opts.filePaths(), opts.limit(), opts.offset());
 	}
 
-	// ─── Backward-compatible overload shims ───────────────────────────────────
-
-	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
-	public List<ContentSearchResult> searchContent(Long projectId, String queryStr) {
-		return searchContent(projectId, SearchOptions.builder().query(queryStr).limit(50).build());
-	}
-
-	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
-	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, int limit) {
-		return searchContent(projectId, SearchOptions.builder().query(queryStr).limit(limit).build());
-	}
-
-	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
-	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, int limit,
-			int offset) {
-		return searchContent(projectId, SearchOptions.builder().query(queryStr).type(type).limit(limit).offset(offset).build());
-	}
-
-	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
-	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, Set<String> filePaths, int limit) {
-		return searchContent(projectId, SearchOptions.builder().query(queryStr).filePaths(filePaths).limit(limit).build());
-	}
-
-	/** @deprecated Use {@link #searchContent(Long, SearchOptions)} */
-	public List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site, int limit,
-			int offset) {
-		return searchContent(projectId, SearchOptions.builder().query(queryStr).type(type).site(site).limit(limit).offset(offset).build());
-	}
 
 	// ─── Core implementation ──────────────────────────────────────────────────
 	private List<ContentSearchResult> searchContent(Long projectId, String queryStr, String type, String site,

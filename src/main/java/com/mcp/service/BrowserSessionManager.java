@@ -136,7 +136,7 @@ public class BrowserSessionManager {
     public Map<String, BrowserContext> getActiveSessions() {
         return sessions.entrySet().stream()
                 .collect(java.util.stream.Collectors.toUnmodifiableMap(
-                        Map.Entry::getKey, e -> e.getValue().context()));
+                        e -> e.getKey(), e -> e.getValue().context()));
     }
 
     /**
@@ -149,7 +149,7 @@ public class BrowserSessionManager {
             // Evict the session with the oldest last-activity timestamp
             return lastActivity.entrySet().stream()
                     .min(Map.Entry.comparingByValue())
-                    .map(Map.Entry::getKey);
+                    .map(e -> e.getKey());
         }
         return java.util.Optional.empty();
     }
@@ -164,7 +164,7 @@ public class BrowserSessionManager {
         Instant cutoff = Instant.now().minusMillis(timeoutMs);
         lastActivity.entrySet().stream()
                 .filter(e -> e.getValue().isBefore(cutoff))
-                .map(Map.Entry::getKey)
+                .map(e -> e.getKey())
                 .toList() // snapshot to avoid ConcurrentModificationException
                 .forEach(this::closeSession);
     }

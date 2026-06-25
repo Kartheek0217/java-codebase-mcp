@@ -2,7 +2,7 @@
 
 This document outlines all the officially supported MCP tools exposed by the Java Codebase Agent, their corresponding REST endpoints, and usage instructions. These endpoints were recently de-multiplexed to ensure clear, single-purpose paths that perfectly align with OpenAPI generator specifications.
 
-Total official tools exposed: **64**
+Total official tools exposed: **65**
 
 ---
 
@@ -28,7 +28,7 @@ Total official tools exposed: **64**
 
 ---
 
-## 2. Agent & AI Interactions (22 Tools)
+## 2. Agent & AI Interactions (23 Tools)
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |
@@ -53,6 +53,7 @@ Total official tools exposed: **64**
 | `junit-test-cases` | Generate JUnit 5 test class with 100% branch coverage. Params: `filePath` |
 | `junit-test-cases-sync`| Make a POST request to /api/agent/junit-test-cases/sync |
 | `submit-agent-task` | Submit a background agent task. POST to /api/agent/task/submit/{action} |
+| `submit-batch-agent-task` | Submit batch of background agent tasks. POST to /api/agent/task/submit-batch |
 | `get-agent-task` | Retrieve the status and result of a background agent task. GET to /api/agent/task/{id} |
 
 ---

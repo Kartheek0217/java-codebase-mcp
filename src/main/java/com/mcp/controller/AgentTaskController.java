@@ -15,9 +15,13 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.mcp.dto.BatchTaskRequest;
+import com.mcp.dto.BatchTaskResponse;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -131,6 +135,42 @@ public class AgentTaskController {
         response.put("taskId", task.getId());
         response.put("status", task.getStatus());
         return response;
+    }
+
+    @PostMapping(value = "/submit-batch", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Submit batch async tasks", description = "Submit multiple agent actions to run in the background in parallel. Returns a list of taskIds.")
+    public List<BatchTaskResponse> submitBatchTasks(@RequestBody List<BatchTaskRequest> requests) {
+        List<BatchTaskResponse> responses = new ArrayList<>();
+        for (BatchTaskRequest item : requests) {
+            if (item.action() == null || item.projectId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "action and projectId are required for all tasks in batch");
+            }
+            AgentActionRequest mergedReq = validateAndMergeParameters(
+                    item.projectId(),
+                    item.action(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    item.request());
+
+            String reqJson = "{}";
+            try {
+                reqJson = objectMapper.writeValueAsString(mergedReq);
+            } catch (JsonProcessingException e) {
+                // ignore
+            }
+
+            AgentTask task = new AgentTask(item.projectId(), item.action().toLowerCase(), reqJson);
+            task = agentTaskRepository.save(task);
+
+            agentAsyncService.executeAsyncTask(task.getId(), item.projectId(), item.action(), mergedReq);
+
+            responses.add(new BatchTaskResponse(task.getId(), item.action(), task.getStatus().toString()));
+        }
+        return responses;
     }
 
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

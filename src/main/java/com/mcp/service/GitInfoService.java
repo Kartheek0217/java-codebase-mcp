@@ -267,7 +267,7 @@ public class GitInfoService {
 
     @PreDestroy
     public void closeAllRepositories() {
-        repositoryCache.values().forEach(Repository::close);
+        repositoryCache.values().forEach(repo -> repo.close());
         repositoryCache.clear();
     }
 

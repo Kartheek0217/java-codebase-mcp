@@ -235,7 +235,7 @@ public class FileIndexerService {
 			ParseResult<CompilationUnit> parseResult = javaParser.parse(content);
 			if (!parseResult.isSuccessful()) {
 				logger.error("JavaParser failed for file: {}. Problems: {}", path,
-						parseResult.getProblems().stream().map(Object::toString).toList());
+						parseResult.getProblems().stream().map(p -> p.toString()).toList());
 				return new JavaAnalysisResult(new ArrayList<>(), new ArrayList<>(), "");
 			}
 			CompilationUnit cu = parseResult.getResult().get();
