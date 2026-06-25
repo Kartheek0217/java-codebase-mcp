@@ -58,17 +58,16 @@ public class EndpointAnalysisService {
         List<Symbol> controllerSymbols = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,
                 methodName, Pageable.unpaged());
         Symbol entrySymbol = controllerSymbols.stream()
-                .filter(s -> s.getFilePath().contains(controllerName))
+                .filter(s -> s.getFilePath() != null && s.getFilePath().contains(controllerName))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException(
                         "Endpoint method not found in controller: " + controllerName + "." + methodName));
 
-        Set<Long> visitedSymbols = new HashSet<>();
         Map<String, String> componentCode = new LinkedHashMap<>();
         List<String> relationships = new ArrayList<>();
         StringBuilder treeReport = new StringBuilder();
 
-        traceFlow(projectId, entrySymbol, 0, 5, visitedSymbols, componentCode, treeReport, relationships);
+        traceFlow(projectId, project.getRootPath(), entrySymbol, 0, 5, new HashSet<>(), componentCode, treeReport, relationships);
 
         StringBuilder report = new StringBuilder();
         report.append("# Endpoint Analysis: ").append(controllerName).append(".").append(methodName).append("\n\n");
@@ -103,13 +102,14 @@ public class EndpointAnalysisService {
         return skillRepository.save(skill);
     }
 
-    private void traceFlow(Long projectId, Symbol symbol, int depth, int maxDepth,
-            Set<Long> visited, Map<String, String> componentCode, StringBuilder treeReport,
+    private void traceFlow(Long projectId, String projectRoot, Symbol symbol, int depth, int maxDepth,
+            Set<Long> pathVisited, Map<String, String> componentCode, StringBuilder treeReport,
             List<String> relationships) {
-        if (depth >= maxDepth || visited.contains(symbol.getId())) {
+        if (depth >= maxDepth || pathVisited.contains(symbol.getId())) {
             return;
         }
-        visited.add(symbol.getId());
+        Set<Long> currentPath = new HashSet<>(pathVisited);
+        currentPath.add(symbol.getId());
 
         String role = identifyRole(symbol.getFilePath());
         String displayName = role + ": " + symbol.getName();
@@ -118,7 +118,7 @@ public class EndpointAnalysisService {
         treeReport.append("  ".repeat(depth)).append("- ").append(displayName).append("\n");
 
         // Add code if not already present
-        if (!componentCode.containsKey(symbol.getFilePath())) {
+        if (symbol.getFilePath() != null && !componentCode.containsKey(symbol.getFilePath())) {
             try {
                 String content = Files.readString(Paths.get(symbol.getFilePath()));
                 String structure = codeSummarizerService.extractStructure(content);
@@ -134,15 +134,13 @@ public class EndpointAnalysisService {
             List<Symbol> callees = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,
                     call.getCalleeName(), Pageable.unpaged());
             for (Symbol callee : callees) {
-                // Heuristic: only trace callees that are part of the project's source (not
-                // JDK/libraries)
-                if (callee.getFilePath() != null && callee.getFilePath()
-                        .startsWith(symbol.getFilePath().substring(0, symbol.getFilePath().indexOf("src")))) {
+                // Heuristic: only trace callees that are part of the project's source (not JDK/libraries)
+                if (callee.getFilePath() != null && projectRoot != null && callee.getFilePath().startsWith(projectRoot)) {
                     String calleeRole = identifyRole(callee.getFilePath());
                     String calleeSafeId = "node_" + callee.getId();
                     relationships.add(safeId + "[\"" + displayName + "\"] --> " + calleeSafeId + "[\"" + calleeRole
                             + ": " + callee.getName() + "\"]");
-                    traceFlow(projectId, callee, depth + 1, maxDepth, visited, componentCode, treeReport,
+                    traceFlow(projectId, projectRoot, callee, depth + 1, maxDepth, currentPath, componentCode, treeReport,
                             relationships);
                 }
             }

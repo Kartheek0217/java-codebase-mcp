@@ -33,8 +33,10 @@ public class AgentClient {
 
     @PostConstruct
     void init() {
-        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(java.time.Duration.ofSeconds(props.getTimeoutSeconds()));
+        var httpClient = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(props.getTimeoutSeconds()))
+                .build();
+        var factory = new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(java.time.Duration.ofSeconds(props.getTimeoutSeconds()));
 
         restClient = RestClient.builder()
@@ -91,7 +93,7 @@ public class AgentClient {
                     .body(request)
                     .retrieve()
                     .body(ChatResponse.class);
-        } catch (Exception ex) {
+        } catch (org.springframework.web.client.RestClientException ex) {
             throw new AgentException("HTTP call to AGENT failed: " + ex.getMessage(), ex);
         }
 
@@ -142,7 +144,7 @@ public class AgentClient {
                         }
                         return null;
                     });
-        } catch (Exception ex) {
+        } catch (org.springframework.web.client.RestClientException ex) {
             throw new AgentException("Streaming HTTP call to AGENT failed: " + ex.getMessage(), ex);
         }
     }

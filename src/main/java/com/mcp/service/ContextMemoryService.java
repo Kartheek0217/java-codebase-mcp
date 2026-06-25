@@ -14,52 +14,50 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 @Service
 public class ContextMemoryService {
 
+	private record SessionState(Set<String> files, Map<String, String> checksums) {}
+
 	// Fix P: Replace unbounded ConcurrentHashMap with Caffeine caches.
 	// 1-hour TTL (expireAfterAccess) + 1000 max sessions prevents memory leaks
 	// in long-running deployments. Sessions are ephemeral — lost on restart is
 	// acceptable.
-	private final Cache<String, Set<String>> sessionFiles = Caffeine.newBuilder()
-			.expireAfterAccess(1, TimeUnit.HOURS)
-			.maximumSize(1000)
-			.build();
-
-	private final Cache<String, Map<String, String>> sessionFileChecksums = Caffeine.newBuilder()
+	private final Cache<String, SessionState> sessions = Caffeine.newBuilder()
 			.expireAfterAccess(1, TimeUnit.HOURS)
 			.maximumSize(1000)
 			.build();
 
 	public void recordAccess(String sessionId, String filePath, String checksum) {
-		if (sessionId == null)
+		if (sessionId == null || filePath == null)
 			return;
-		sessionFiles.asMap().computeIfAbsent(sessionId, k -> ConcurrentHashMap.newKeySet()).add(filePath);
+		SessionState state = sessions.get(sessionId, k -> new SessionState(ConcurrentHashMap.newKeySet(), new ConcurrentHashMap<>()));
+		state.files().add(filePath);
 		if (checksum != null) {
-			sessionFileChecksums.asMap().computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>()).put(filePath,
-					checksum);
+			state.checksums().put(filePath, checksum);
 		}
 	}
 
 	public boolean hasBeenViewed(String sessionId, String filePath) {
-		if (sessionId == null)
+		if (sessionId == null || filePath == null)
 			return false;
-		Set<String> files = sessionFiles.getIfPresent(sessionId);
-		return files != null && files.contains(filePath);
+		SessionState state = sessions.getIfPresent(sessionId);
+		return state != null && state.files().contains(filePath);
 	}
 
 	public String getLastChecksum(String sessionId, String filePath) {
-		if (sessionId == null)
+		if (sessionId == null || filePath == null)
 			return null;
-		Map<String, String> checksums = sessionFileChecksums.getIfPresent(sessionId);
-		return checksums != null ? checksums.get(filePath) : null;
+		SessionState state = sessions.getIfPresent(sessionId);
+		return state != null ? state.checksums().get(filePath) : null;
 	}
 
 	public void clearSession(String sessionId) {
-		sessionFiles.invalidate(sessionId);
-		sessionFileChecksums.invalidate(sessionId);
+		if (sessionId == null) return;
+		sessions.invalidate(sessionId);
 	}
 
 	public Set<String> getSessionFiles(String sessionId) {
-		Set<String> files = sessionFiles.getIfPresent(sessionId);
-		return files != null ? files : Collections.emptySet();
+		if (sessionId == null) return Collections.emptySet();
+		SessionState state = sessions.getIfPresent(sessionId);
+		return state != null ? Set.copyOf(state.files()) : Collections.emptySet();
 	}
 
 }

@@ -11,6 +11,8 @@ import com.mcp.dto.AgentActionRequest;
 @Service
 public class AgentStreamingService {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
     private final AgentClient agentClient;
     private final AgentPromptBuilder promptBuilder;
     private final BrowserSessionManager browserSessionManager;
@@ -29,6 +31,9 @@ public class AgentStreamingService {
     public SseEmitter streamResponse(Long projectId, String action, AgentActionRequest req) {
         SseEmitter emitter = new SseEmitter(180000L); // 3-minute timeout
 
+        emitter.onTimeout(emitter::complete);
+        emitter.onError(e -> emitter.completeWithError(e));
+
         Thread.startVirtualThread(() -> {
             try {
                 streamAgentAction(projectId, action, req, req.symbolId(), req.filePath(), req.query(), req.url(), req.diff(), chunk -> {
@@ -41,10 +46,11 @@ public class AgentStreamingService {
                 emitter.complete();
             } catch (Exception ex) {
                 try {
-                    emitter.send(SseEmitter.event().name("error")
-                        .data("{\"error\":\"AGENT action failed: " + ex.getMessage().replace("\"", "\\\"") + "\"}"));
+                    String safeMsg = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
+                    String json = OBJECT_MAPPER.writeValueAsString(java.util.Map.of("error", "AGENT action failed: " + safeMsg));
+                    emitter.send(SseEmitter.event().name("error").data(json));
                 } catch (IOException ignored) {}
-                emitter.complete();
+                emitter.completeWithError(ex);
             }
         });
 
@@ -54,68 +60,66 @@ public class AgentStreamingService {
     public void streamAgentAction(Long projectId, String action, AgentActionRequest req,
                                  Long symbolId, String filePath, String query, String url, String diff,
                                  java.util.function.Consumer<String> chunkConsumer) throws IOException {
-        String taskType = switch (action.toLowerCase()) {
-            case "explain-symbol" -> "code-analyse";
-            case "explain-file" -> "code-analyse";
-            case "ask" -> "code-analyse";
-            case "code-review" -> "code-review";
-            case "code-refactor", "code-optimise" -> "code-refactor";
-            case "web-search" -> "web-search";
-            case "code-commit" -> "code-commit";
-            case "java-doc" -> "java-doc";
-            case "junit-test-cases" -> "junit-test-cases";
-            default -> throw new IllegalArgumentException("Unknown action: " + action);
-        };
+        String taskType;
+        List<AgentClient.Message> messages;
 
-        if ("web-search".equalsIgnoreCase(action)) {
-            String sessionId = null;
-            try {
-                sessionId = browserSessionManager.createSession(new com.mcp.dto.browser.BrowserSessionRequest("chromium", true, null, null, projectId));
-                String q = query != null ? query : req.query();
-                String u = url != null ? url : req.url();
-                String pageText = webSearchOrchestrator.fetchWebSearchContent(q, u, sessionId);
-                List<AgentClient.Message> messages = promptBuilder.buildWebSearchMessages(projectId, q, u, pageText);
-                agentClient.streamChat(messages, taskType, chunkConsumer);
-            } finally {
-                if (sessionId != null) {
-                    browserSessionManager.closeSession(sessionId);
-                }
-            }
-            return;
-        }
-
-        List<AgentClient.Message> messages = switch (action.toLowerCase()) {
+        switch (action.toLowerCase()) {
             case "explain-symbol" -> {
+                taskType = "code-analyse";
                 Long sId = symbolId != null ? symbolId : req.symbolId();
-                yield promptBuilder.buildExplainSymbolMessages(projectId, sId);
+                messages = promptBuilder.buildExplainSymbolMessages(projectId, sId);
             }
             case "explain-file" -> {
+                taskType = "code-analyse";
                 String path = filePath != null ? filePath : req.filePath();
-                yield promptBuilder.buildExplainFileMessages(projectId, path);
+                messages = promptBuilder.buildExplainFileMessages(projectId, path);
             }
-            case "ask" -> promptBuilder.buildAskCodebaseMessages(projectId, req.question());
+            case "ask" -> {
+                taskType = "code-analyse";
+                messages = promptBuilder.buildAskCodebaseMessages(projectId, req.question());
+            }
             case "code-review" -> {
+                taskType = "code-review";
                 String path = filePath != null ? filePath : req.filePath();
-                yield promptBuilder.buildCodeReviewMessages(projectId, path);
+                messages = promptBuilder.buildCodeReviewMessages(projectId, path);
             }
             case "code-refactor", "code-optimise" -> {
+                taskType = "code-refactor";
                 String path = filePath != null ? filePath : req.filePath();
-                yield promptBuilder.buildCodeRefactorMessages(projectId, path);
+                messages = promptBuilder.buildCodeRefactorMessages(projectId, path);
+            }
+            case "web-search" -> {
+                taskType = "web-search";
+                String sessionId = null;
+                try {
+                    sessionId = browserSessionManager.createSession(new com.mcp.dto.browser.BrowserSessionRequest("chromium", true, null, null, projectId));
+                    String q = query != null ? query : req.query();
+                    String u = url != null ? url : req.url();
+                    String pageText = webSearchOrchestrator.fetchWebSearchContent(q, u, sessionId);
+                    messages = promptBuilder.buildWebSearchMessages(projectId, q, u, pageText);
+                } finally {
+                    if (sessionId != null) {
+                        browserSessionManager.closeSession(sessionId);
+                    }
+                }
             }
             case "code-commit" -> {
+                taskType = "code-commit";
                 String d = diff != null ? diff : req.diff();
-                yield promptBuilder.buildCodeCommitMessages(projectId, d);
+                messages = promptBuilder.buildCodeCommitMessages(projectId, d);
             }
             case "java-doc" -> {
+                taskType = "java-doc";
                 String path = filePath != null ? filePath : req.filePath();
-                yield promptBuilder.buildJavaDocMessages(projectId, path);
+                messages = promptBuilder.buildJavaDocMessages(projectId, path);
             }
             case "junit-test-cases" -> {
+                taskType = "junit-test-cases";
                 String path = filePath != null ? filePath : req.filePath();
-                yield promptBuilder.buildJunitTestCasesMessages(projectId, path);
+                messages = promptBuilder.buildJunitTestCasesMessages(projectId, path);
             }
             default -> throw new IllegalArgumentException("Unknown action: " + action);
-        };
+        }
 
         agentClient.streamChat(messages, taskType, chunkConsumer);
     }

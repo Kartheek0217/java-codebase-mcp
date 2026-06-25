@@ -25,7 +25,7 @@ public class BrowserSessionManager {
     private static final Logger log = LoggerFactory.getLogger(BrowserSessionManager.class);
 
     private final BrowserProperties properties;
-    private Playwright playwright;
+    private volatile Playwright playwright;
     private final Map<String, SessionState> sessions = new ConcurrentHashMap<>();
     private final ReentrantLock sessionLock = new ReentrantLock();
 
@@ -38,26 +38,31 @@ public class BrowserSessionManager {
         this.properties = properties;
     }
 
+    static {
+        System.setProperty("playwright.skip.browser.download", "true");
+    }
+
     private void ensurePlaywrightInitialized() {
-        sessionLock.lock();
-        try {
-            if (playwright == null) {
-                System.setProperty("playwright.skip.browser.download", "true");
-                playwright = Playwright.create();
+        if (playwright == null) {
+            sessionLock.lock();
+            try {
+                if (playwright == null) {
+                    playwright = Playwright.create();
+                }
+            } finally {
+                sessionLock.unlock();
             }
-        } finally {
-            sessionLock.unlock();
         }
     }
 
     // Lock-protected: enforceSessionLimit() check + ensurePlaywrightInitialized() +
     // session creation must be atomic to prevent TOCTOU races under concurrent calls.
     public String createSession(com.mcp.dto.browser.BrowserSessionRequest request) {
-        java.util.Optional<String> evictedId = enforceSessionLimit();
-        evictedId.ifPresent(this::closeSession);
-
         sessionLock.lock();
         try {
+            java.util.Optional<String> evictedId = enforceSessionLimit();
+            evictedId.ifPresent(this::closeSession);
+
             ensurePlaywrightInitialized();
             String sessionId = UUID.randomUUID().toString();
             
@@ -92,28 +97,38 @@ public class BrowserSessionManager {
     }
 
     public BrowserContext getSession(String sessionId) {
-        SessionState state = sessions.get(sessionId);
-        if (state != null) {
-            lastActivity.computeIfPresent(sessionId, (k, v) -> Instant.now()); // refresh on access
-            return state.context();
+        sessionLock.lock();
+        try {
+            SessionState state = sessions.get(sessionId);
+            if (state != null) {
+                lastActivity.computeIfPresent(sessionId, (k, v) -> Instant.now()); // refresh on access
+                return state.context();
+            }
+            return null;
+        } finally {
+            sessionLock.unlock();
         }
-        return null;
     }
 
     public void closeSession(String sessionId) {
-        SessionState state = sessions.remove(sessionId);
-        lastActivity.remove(sessionId);
-        if (state != null) {
-            try {
-                state.context().close();
-            } catch (Exception e) {
-                log.warn("Error closing browser context", e);
+        sessionLock.lock();
+        try {
+            SessionState state = sessions.remove(sessionId);
+            lastActivity.remove(sessionId);
+            if (state != null) {
+                try {
+                    state.context().close();
+                } catch (Exception e) {
+                    log.warn("Error closing browser context", e);
+                }
+                try {
+                    state.browser().close();
+                } catch (Exception e) {
+                    log.warn("Error closing browser", e);
+                }
             }
-            try {
-                state.browser().close();
-            } catch (Exception e) {
-                log.warn("Error closing browser", e);
-            }
+        } finally {
+            sessionLock.unlock();
         }
     }
 

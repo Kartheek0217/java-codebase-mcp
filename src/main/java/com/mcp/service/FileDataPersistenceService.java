@@ -58,24 +58,24 @@ public class FileDataPersistenceService {
 				s.setFilePath(filePath);
 				s.setLastModified(now);
 			}
-			symbolRepository.saveAll(symbols);
-			symbolCache.put(projectId + ":" + filePath, symbols);
+			List<Symbol> savedSymbols = symbolRepository.saveAll(symbols);
+			symbolCache.put(projectId + ":" + filePath, new ArrayList<>(savedSymbols));
 
 			if (calls != null && !calls.isEmpty()) {
-				List<SymbolCall> symbolCalls = new ArrayList<>();
-				for (FileIndexerService.CallInfo ci : calls) {
-					symbols.stream()
-							.filter(s -> s.getName().equals(ci.callerName()) && s.getType() == SymbolType.METHOD)
-							.findFirst()
-							.ifPresent(caller -> {
-								SymbolCall sc = new SymbolCall();
-								sc.setProjectId(projectId);
-								sc.setCallerId(caller.getId());
-								sc.setCallerFilePath(filePath);
-								sc.setCalleeName(ci.calleeName());
-								symbolCalls.add(sc);
-							});
-				}
+				List<SymbolCall> symbolCalls = calls.stream()
+						.flatMap(ci -> savedSymbols.stream()
+								.filter(s -> s.getName().equals(ci.callerName()) && s.getType() == SymbolType.METHOD)
+								.findFirst()
+								.stream()
+								.map(caller -> {
+									SymbolCall sc = new SymbolCall();
+									sc.setProjectId(projectId);
+									sc.setCallerId(caller.getId());
+									sc.setCallerFilePath(filePath);
+									sc.setCalleeName(ci.calleeName());
+									return sc;
+								}))
+						.toList();
 				symbolCallRepository.saveAll(symbolCalls);
 			}
 		}

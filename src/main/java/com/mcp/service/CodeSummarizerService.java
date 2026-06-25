@@ -29,8 +29,13 @@ public class CodeSummarizerService {
      * Keeps declarations but replaces method bodies with empty blocks '{ }'.
      */
     public String extractStructure(String content) {
-        if (content == null)
-            return null;
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        if (content.length() > 200000) {
+            logger.warn("File too large for AST parsing, skipping structure extraction");
+            return content;
+        }
         try {
             ParseResult<CompilationUnit> parseResult = javaParser.parse(content);
             if (!parseResult.isSuccessful() || parseResult.getResult().isEmpty()) {
@@ -43,7 +48,11 @@ public class CodeSummarizerService {
                     m.setBody(new BlockStmt());
                 }
             });
-            cu.findAll(ConstructorDeclaration.class).forEach(c -> c.setBody(new BlockStmt()));
+            cu.findAll(ConstructorDeclaration.class).forEach(c -> {
+                if (c.getBody() != null) {
+                    c.setBody(new BlockStmt());
+                }
+            });
 
             return cu.toString();
         } catch (Exception e) {
@@ -57,8 +66,12 @@ public class CodeSummarizerService {
      * Javadocs.
      */
     public String createIntelligentSummary(String content) {
-        if (content == null)
-            return null;
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        if (content.length() > 200000) {
+            return "File too large to summarize.";
+        }
 
         StringBuilder summary = new StringBuilder();
         try {

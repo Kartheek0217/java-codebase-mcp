@@ -62,7 +62,7 @@ eliminate fluff.
 
 **Rules & Skills:** `list_rules`, `create_rule`, `delete_rule`, `clear_rules`, `get_skills`, `learn_skill_from_url`, `learn_skill_from_file`, `clear_skills`.
 
-**Agent & AI (Asynchronous):** `explain_symbol`, `explain_file`, `ask_question`, `code_review`, `code_refactor`, `code_optimise`, `web_search`, `code_commit`, `java_doc`, `junit_test_cases`.
+**Agent:** `explain_symbol`, `explain_file`, `ask_question`, `code_review`, `code_refactor`, `code_optimise`, `web_search`, `code_commit`, `java_doc`, `junit_test_cases`, `submit_agent_task`, `get_agent_task`.
 
 **Session Management:** `lst-sessions`, `crt-session`, `get-session-state`, `browser`, `close-session`, `get-session`.
 
