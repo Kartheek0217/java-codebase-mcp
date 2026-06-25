@@ -10,7 +10,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +24,8 @@ import com.mcp.properties.AgentProperties;
 import com.mcp.repository.AgentTaskRepository;
 import com.mcp.service.AgentClient.Message;
 
+import jakarta.annotation.PreDestroy;
+
 @Service
 public class AgentAsyncService {
 
@@ -36,6 +38,7 @@ public class AgentAsyncService {
     private final AgentProperties props;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final ThreadPoolTaskExecutor executor;
 
     public AgentAsyncService(AgentTaskRepository agentTaskRepository,
             AgentPromptBuilder promptBuilder,
@@ -52,10 +55,24 @@ public class AgentAsyncService {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(props.getTimeoutSeconds()))
                 .build();
+        this.executor = new ThreadPoolTaskExecutor();
+        this.executor.setCorePoolSize(4);
+        this.executor.setMaxPoolSize(4);
+        this.executor.setQueueCapacity(1000);
+        this.executor.setThreadNamePrefix("agent-task-");
+        this.executor.initialize();
     }
 
-    @Async
+    @PreDestroy
+    public void shutdown() {
+        executor.shutdown();
+    }
+
     public void executeAsyncTask(Long taskId, Long projectId, String action, AgentActionRequest req) {
+        executor.submit(() -> executeAsyncTaskInternal(taskId, projectId, action, req));
+    }
+
+    private void executeAsyncTaskInternal(Long taskId, Long projectId, String action, AgentActionRequest req) {
         AgentTask task = agentTaskRepository.findById(taskId).orElse(null);
         if (task == null) {
             logger.error("AgentTask not found: {}", taskId);

@@ -30,7 +30,7 @@ Services (Core)
 
 Services (AGENT)
     ├── AgentService                  → facade
-    ├── AgentClient / OllamaClient    → HTTP clients
+    ├── AgentClient                  → HTTP client
     ├── AgentPromptBuilder            → prompt construction
     ├── AgentStreamingService         → SSE streaming
     └── WebSearchOrchestrator + HeadlessBrowserService

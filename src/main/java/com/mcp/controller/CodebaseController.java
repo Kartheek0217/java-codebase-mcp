@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 
 import com.mcp.dto.ContextDTO;
@@ -71,6 +73,7 @@ public class CodebaseController {
 	private final EndpointAnalysisService endpointAnalysisService;
 	private final CodebaseProperties codebaseProperties;
 	private final CodebaseQueryFacade codebaseQueryFacade;
+	private final ObjectMapper objectMapper;
 
 	public CodebaseController(FileIndexerService fileIndexerService,
 			LuceneIndexService luceneIndexService,
@@ -83,7 +86,8 @@ public class CodebaseController {
 			CodeSummarizerService codeSummarizerService,
 			EndpointAnalysisService endpointAnalysisService,
 			CodebaseProperties codebaseProperties,
-			CodebaseQueryFacade codebaseQueryFacade) {
+			CodebaseQueryFacade codebaseQueryFacade,
+			ObjectMapper objectMapper) {
 		this.fileIndexerService = fileIndexerService;
 		this.luceneIndexService = luceneIndexService;
 		this.projectService = projectService;
@@ -96,6 +100,7 @@ public class CodebaseController {
 		this.endpointAnalysisService = endpointAnalysisService;
 		this.codebaseProperties = codebaseProperties;
 		this.codebaseQueryFacade = codebaseQueryFacade;
+		this.objectMapper = objectMapper;
 	}
 
 
@@ -233,7 +238,26 @@ public class CodebaseController {
 	@Operation(summary = "batch_read_files", description = "Fetch content for multiple files in parallel.")
 	public Object batchReadFiles(
 			@Parameter(description = "Numeric Project ID") @PathVariable Long projectId,
-			@Parameter(description = "List of relative file paths") @RequestBody List<String> filePaths) throws IOException {
+			@RequestBody String rawPayload) throws IOException {
+		List<String> filePaths;
+		try {
+			JsonNode rawInput = objectMapper.readTree(rawPayload);
+			if (rawInput.isArray()) {
+				filePaths = objectMapper.readerForListOf(String.class).readValue(rawInput);
+			} else if (rawInput.isObject() && rawInput.has("body")) {
+				JsonNode bodyNode = rawInput.get("body");
+				if (bodyNode.isArray()) {
+					filePaths = objectMapper.readerForListOf(String.class).readValue(bodyNode);
+				} else {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body property must be an array");
+				}
+			} else {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid batch request format: expected array or object with body array");
+			}
+		} catch (IOException e) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse batch request: " + e.getMessage(), e);
+		}
+
 		if (filePaths == null || filePaths.isEmpty())
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body must be a non-empty list of file paths");
 		return codebaseQueryFacade.getBatchContext(projectId, filePaths,

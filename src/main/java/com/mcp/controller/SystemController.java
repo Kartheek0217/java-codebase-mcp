@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.mcp.properties.OllamaProperties; // Refresh IDE
+import com.mcp.properties.AgentProperties;
 import com.mcp.repository.ProjectRepository;
+import com.mcp.service.AgentClient;
 import com.mcp.service.GitInfoService;
-import com.mcp.service.OllamaClient;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -27,17 +27,17 @@ public class SystemController {
 
 	private final ProjectRepository projectRepository;
 	private final GitInfoService gitInfoService;
-	private final OllamaClient ollamaClient;
-	private final OllamaProperties ollamaProperties;
+	private final AgentClient agentClient;
+	private final AgentProperties agentProperties;
 
 	public SystemController(ProjectRepository projectRepository,
 			GitInfoService gitInfoService,
-			OllamaClient ollamaClient,
-			OllamaProperties ollamaProperties) {
+			AgentClient agentClient,
+			AgentProperties agentProperties) {
 		this.projectRepository = projectRepository;
 		this.gitInfoService = gitInfoService;
-		this.ollamaClient = ollamaClient;
-		this.ollamaProperties = ollamaProperties;
+		this.agentClient = agentClient;
+		this.agentProperties = agentProperties;
 	}
 
 	/**
@@ -87,11 +87,11 @@ public class SystemController {
 			}
 			case "agent-status" -> {
 				Map<String, Object> status = new HashMap<>();
-				status.put("baseUrl", ollamaProperties.getBaseUrl());
-				status.put("model", ollamaProperties.getModel());
-				status.put("timeoutSeconds", ollamaProperties.getTimeoutSeconds());
-				status.put("maxTokens", ollamaProperties.getMaxTokens());
-				status.put("reachable", ollamaClient.isReachable());
+				status.put("baseUrl", agentProperties.getBaseUrl());
+				status.put("model", agentProperties.getDefaultModel());
+				status.put("timeoutSeconds", agentProperties.getTimeoutSeconds());
+				status.put("maxTokens", agentProperties.getMaxTokens());
+				status.put("reachable", agentClient.isReachable());
 				yield status;
 			}
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,

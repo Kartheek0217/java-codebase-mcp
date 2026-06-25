@@ -52,9 +52,9 @@ Total official tools exposed: **65**
 | `java-doc-sync` | Make a POST request to /api/agent/java-doc/sync |
 | `junit-test-cases` | Generate JUnit 5 test class with 100% branch coverage. Params: `filePath` |
 | `junit-test-cases-sync`| Make a POST request to /api/agent/junit-test-cases/sync |
-| `submit-agent-task` | Submit a background agent task. POST to /api/agent/task/submit/{action} |
-| `submit-batch-agent-task` | Submit batch of background agent tasks. POST to /api/agent/task/submit-batch |
-| `get-agent-task` | Retrieve the status and result of a background agent task. GET to /api/agent/task/{id} |
+| `submit-agent-task` | Submit a background agent task. POST to /api/agent/async-task/submit/{action} |
+| `submit-batch-agent-task` | Submit batch of background agent tasks. POST to /api/agent/async-task/batch-submit |
+| `get-agent-task` | Retrieve the status and result of a background agent task. GET to /api/agent/async-task/{id} |
 
 ---
 

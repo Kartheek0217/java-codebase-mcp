@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
 
 import com.mcp.dto.BatchTaskRequest;
 import com.mcp.dto.BatchTaskResponse;
@@ -25,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/agent/task")
+@RequestMapping("/api/agent/async-task")
 @Tag(name = "AGENT TASK", description = "Background asynchronous AGENT operations.")
 public class AgentTaskController {
 
@@ -139,7 +141,28 @@ public class AgentTaskController {
 
     @PostMapping(value = "/submit-batch", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Submit batch async tasks", description = "Submit multiple agent actions to run in the background in parallel. Returns a list of taskIds.")
-    public List<BatchTaskResponse> submitBatchTasks(@RequestBody List<BatchTaskRequest> requests) {
+    public List<BatchTaskResponse> submitBatchTasks(@RequestBody String rawPayload) {
+        List<BatchTaskRequest> requests;
+        try {
+            JsonNode rawInput = objectMapper.readTree(rawPayload);
+            if (rawInput.isArray()) {
+                requests = objectMapper.readerForListOf(BatchTaskRequest.class).readValue(rawInput);
+            } else if (rawInput.isObject() && rawInput.has("body")) {
+                JsonNode bodyNode = rawInput.get("body");
+                if (bodyNode.isArray()) {
+                    requests = objectMapper.readerForListOf(BatchTaskRequest.class).readValue(bodyNode);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body property must be an array");
+                }
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid batch request format: expected array or object with body array");
+            }
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Failed to parse batch request: " + e.getMessage(), e);
+        }
+
         List<BatchTaskResponse> responses = new ArrayList<>();
         for (BatchTaskRequest item : requests) {
             if (item.action() == null || item.projectId() == null) {
@@ -178,5 +201,11 @@ public class AgentTaskController {
     public AgentTask getTask(@PathVariable Long id) {
         return agentTaskRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AgentTask not found: " + id));
+    }
+
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Get tasks by project", description = "Retrieve all background tasks associated with a project.")
+    public List<AgentTask> getTasks(@Parameter(description = "Numeric Project ID") @RequestParam Long projectId) {
+        return agentTaskRepository.findByProjectId(projectId);
     }
 }
