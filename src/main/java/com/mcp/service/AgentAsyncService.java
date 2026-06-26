@@ -39,6 +39,20 @@ public class AgentAsyncService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final ThreadPoolTaskExecutor executor;
+    private long lastApiCallTime = 0;
+
+    private synchronized void enforceRateLimit() {
+        long now = System.currentTimeMillis();
+        long elapsed = now - lastApiCallTime;
+        if (elapsed < 10000) {
+            try {
+                Thread.sleep(10000 - Math.max(0, elapsed));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        lastApiCallTime = System.currentTimeMillis();
+    }
 
     public AgentAsyncService(AgentTaskRepository agentTaskRepository,
             AgentPromptBuilder promptBuilder,
@@ -160,6 +174,7 @@ public class AgentAsyncService {
                     .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
 
+            enforceRateLimit();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() >= 400) {
