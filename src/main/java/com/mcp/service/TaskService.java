@@ -94,7 +94,8 @@ public class TaskService {
 		stepRepository.save(step);
 
 		// Auto-update task status
-		ProjectTask task = step.getTask();
+		ProjectTask task = taskRepository.findByIdForUpdate(step.getTask().getId())
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found: " + step.getTask().getId()));
 		updateTaskStatusFromSteps(task);
 
 		return toDTO(taskRepository.save(task));

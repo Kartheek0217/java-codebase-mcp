@@ -28,7 +28,7 @@ public class ContextMemoryService {
 	public void recordAccess(String sessionId, String filePath, String checksum) {
 		if (sessionId == null || filePath == null)
 			return;
-		SessionState state = sessions.get(sessionId, k -> new SessionState(ConcurrentHashMap.newKeySet(), new ConcurrentHashMap<>()));
+		SessionState state = sessions.asMap().computeIfAbsent(sessionId, k -> new SessionState(ConcurrentHashMap.newKeySet(), new ConcurrentHashMap<>()));
 		state.files().add(filePath);
 		if (checksum != null) {
 			state.checksums().put(filePath, checksum);

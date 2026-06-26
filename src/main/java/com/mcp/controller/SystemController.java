@@ -1,7 +1,5 @@
 package com.mcp.controller;
 
-import java.util.HashMap;
-import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,10 +8,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.mcp.properties.AgentProperties;
-import com.mcp.repository.ProjectRepository;
-import com.mcp.service.AgentClient;
-import com.mcp.service.GitInfoService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -25,19 +19,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "System", description = "System health, git info, and AGENT configuration diagnostics.")
 public class SystemController {
 
-	private final ProjectRepository projectRepository;
-	private final GitInfoService gitInfoService;
-	private final AgentClient agentClient;
-	private final AgentProperties agentProperties;
+	private final com.mcp.service.SystemService systemService;
 
-	public SystemController(ProjectRepository projectRepository,
-			GitInfoService gitInfoService,
-			AgentClient agentClient,
-			AgentProperties agentProperties) {
-		this.projectRepository = projectRepository;
-		this.gitInfoService = gitInfoService;
-		this.agentClient = agentClient;
-		this.agentProperties = agentProperties;
+	public SystemController(com.mcp.service.SystemService systemService) {
+		this.systemService = systemService;
 	}
 
 	/**
@@ -62,38 +47,13 @@ public class SystemController {
 			@ApiResponse(responseCode = "400", description = "Unknown X-View value")
 		}
 	)
-	public Map<String, Object> getSystemStatus(
+	public com.mcp.dto.SystemStatusDTO getSystemStatus(
 			@Parameter(description = "View variant: 'health' (default) | 'info' | 'agent-status'")
 			@RequestHeader(value = "X-View", required = false, defaultValue = "health") String view) {
 		return switch (view.toLowerCase()) {
-			case "health" -> {
-				Map<String, Object> health = new HashMap<>();
-				health.put("status", "UP");
-				try {
-					projectRepository.count();
-					health.put("database", "connected");
-				} catch (Exception e) {
-					health.put("status", "DEGRADED");
-					health.put("database", "disconnected");
-				}
-				yield health;
-			}
-			case "info" -> {
-				Map<String, Object> info = new HashMap<>();
-				info.put("commit", gitInfoService.getCommitHash());
-				info.put("branch", gitInfoService.getBranchName());
-				info.put("available", gitInfoService.isGitAvailable());
-				yield info;
-			}
-			case "agent-status" -> {
-				Map<String, Object> status = new HashMap<>();
-				status.put("baseUrl", agentProperties.getBaseUrl());
-				status.put("model", agentProperties.getDefaultModel());
-				status.put("timeoutSeconds", agentProperties.getTimeoutSeconds());
-				status.put("maxTokens", agentProperties.getMaxTokens());
-				status.put("reachable", agentClient.isReachable());
-				yield status;
-			}
+			case "health" -> systemService.getHealthStatus();
+			case "info" -> systemService.getInfoStatus();
+			case "agent-status" -> systemService.getAgentStatus();
 			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 					"Unknown X-View value '" + view + "'. Allowed: health, info, agent-status");
 		};

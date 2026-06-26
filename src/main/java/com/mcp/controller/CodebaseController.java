@@ -292,8 +292,7 @@ public class CodebaseController {
 
 		Project project = projectService.getProject(projectId);
 
-		Path projectRoot = Paths.get(project.getRootPath());
-		Path fullPath = projectRoot.resolve(filePath).toAbsolutePath();
+		Path fullPath = com.mcp.util.PathSecurityUtil.validateAndNormalizePath(project.getRootPath(), filePath);
 
 		if (!Files.exists(fullPath))
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);

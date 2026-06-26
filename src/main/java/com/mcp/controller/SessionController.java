@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -53,14 +53,13 @@ public class SessionController {
 	@Scheduled(fixedDelay = 3_600_000)
 	public void cleanupExpiredSessions() {
 		long now = System.currentTimeMillis();
-		List<String> expired;
 		synchronized (sessionStore) {
-			expired = sessionStore.entrySet().stream()
+			List<String> expired = sessionStore.entrySet().stream()
 				.filter(e -> now - e.getValue().createdAt() > 3_600_000L)
 				.map(e -> e.getKey()).toList();
 			expired.forEach(sessionStore::remove);
+			expired.forEach(contextMemoryService::clearSession);
 		}
-		expired.forEach(contextMemoryService::clearSession);
 	}
 
 	/**
@@ -83,7 +82,7 @@ public class SessionController {
 			@ApiResponse(responseCode = "404", description = "Project not found")
 		}
 	)
-	public Map<String, String> startSession(@RequestParam Long projectId) {
+	public Map<String, String> startSession(@RequestHeader("projectId") Long projectId) {
 		projectRepository.findById(projectId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
 		String sessionId = UUID.randomUUID().toString();

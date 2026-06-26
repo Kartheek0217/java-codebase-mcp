@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface ProjectRuleRepository extends JpaRepository<ProjectRule, Long> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"project"})
     List<ProjectRule> findByProjectId(Long projectId);
     List<ProjectRule> findByProjectIdAndCategory(Long projectId, String category);
 

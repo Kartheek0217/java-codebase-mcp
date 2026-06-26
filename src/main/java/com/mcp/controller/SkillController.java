@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.entity.Skill;
-import com.mcp.repository.SkillRepository;
 import com.mcp.service.SkillService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,11 +29,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class SkillController {
 
 	private final SkillService skillService;
-	private final SkillRepository skillRepository;
 
-	public SkillController(SkillService skillService, SkillRepository skillRepository) {
+	public SkillController(SkillService skillService) {
 		this.skillService = skillService;
-		this.skillRepository = skillRepository;
 	}
 
 	/**
@@ -57,18 +55,13 @@ public class SkillController {
 		}
 	)
 	public List<Skill> getSkills(@RequestParam(required = false) Long projectId) {
-		List<Skill> globalSkills = skillRepository.findByProjectIdIsNull();
-		if (projectId == null) return globalSkills;
-		List<Skill> projectSkills = skillRepository.findByProjectId(projectId);
-		List<Skill> allSkills = new java.util.ArrayList<>(globalSkills);
-		allSkills.addAll(projectSkills);
-		return allSkills;
+		return skillService.getSkills(projectId);
 	}
 
 	@PostMapping("/skills/learn-url")
 	@Operation(summary = "learn_skill_from_url", description = "Fetch and learn a skill from a URL or built-in path. Query params: projectId (required), url (required).")
 	public Object learnSkillFromUrl(
-			@RequestParam Long projectId,
+			@RequestHeader("projectId") Long projectId,
 			@RequestParam String url) throws IOException {
 		if (url == null || url.isBlank())
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'url' is required");
@@ -79,7 +72,7 @@ public class SkillController {
 	@PostMapping("/skills/learn-file")
 	@Operation(summary = "learn_skill_from_file", description = "Learn a skill from a local file path. Query params: projectId (required), filePath (required).")
 	public Object learnSkillFromFile(
-			@RequestParam Long projectId,
+			@RequestHeader("projectId") Long projectId,
 			@RequestParam String filePath) throws IOException {
 		if (filePath == null || filePath.isBlank())
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'filePath' is required");
@@ -89,7 +82,7 @@ public class SkillController {
 
 	@DeleteMapping("/skills")
 	@Operation(summary = "clear_skills", description = "Remove all project-specific learned skills. Query param: projectId (required).")
-	public Object clearSkills(@RequestParam Long projectId) {
+	public Object clearSkills(@RequestHeader("projectId") Long projectId) {
 		skillService.deleteSkillsByProject(projectId);
 		return Map.of("status", "success", "message", "All project skills cleared for projectId=" + projectId);
 	}

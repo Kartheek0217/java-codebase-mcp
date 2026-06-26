@@ -88,17 +88,21 @@ public class ProjectService {
                 logger.info("Transaction committed for project {}. Starting initial scan in background...",
                         savedProject.getId());
                 // We use the executor to make it truly background
-                CompletableFuture.runAsync(() -> {
+                CompletableFuture<?> future = CompletableFuture.runAsync(() -> {
                     try {
                         fileScannerService.scanProject(savedProject.getId(), savedTask.getId());
                     } catch (Exception e) {
                         logger.error("Failed to start scan for new project {}", savedProject.getId(), e);
+                        savedTask.setStatus(com.mcp.model.TaskStatus.FAILED);
+                        projectTaskRepository.save(savedTask);
                     }
-                })
-                .orTimeout(10, TimeUnit.MINUTES)
-                .exceptionally(ex -> {
-                    logger.error("Async scan timed out or failed for project {}: {}",
-                            savedProject.getId(), ex.getMessage());
+                });
+
+                future.orTimeout(10, TimeUnit.MINUTES).exceptionally(ex -> {
+                    logger.error("Async scan timed out or failed for project {}: {}", savedProject.getId(), ex.getMessage());
+                    future.cancel(true); // Attempt to interrupt the task
+                    savedTask.setStatus(com.mcp.model.TaskStatus.FAILED);
+                    projectTaskRepository.save(savedTask);
                     return null;
                 });
             }
@@ -127,13 +131,18 @@ public class ProjectService {
         }
 
         // Run async without transaction — no DB writes needed
-        CompletableFuture.runAsync(() -> {
+        CompletableFuture<?> future = CompletableFuture.runAsync(() -> {
             logger.info("Starting partial scan for project {} based on Git changes...", id);
-            fileScannerService.scanChangedFiles(id, changedFiles);
-        })
-        .orTimeout(10, TimeUnit.MINUTES)
-        .exceptionally(ex -> {
+            try {
+                fileScannerService.scanChangedFiles(id, changedFiles);
+            } catch (Exception e) {
+                logger.error("Failed partial scan for project {}", id, e);
+            }
+        });
+
+        future.orTimeout(10, TimeUnit.MINUTES).exceptionally(ex -> {
             logger.error("Async re-index timed out or failed for project {}: {}", id, ex.getMessage());
+            future.cancel(true);
             return null;
         });
     }

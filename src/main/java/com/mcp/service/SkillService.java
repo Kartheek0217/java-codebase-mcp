@@ -23,7 +23,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -95,6 +94,16 @@ public class SkillService {
 		}
 	}
 
+	@Transactional(readOnly = true)
+	public java.util.List<Skill> getSkills(Long projectId) {
+		java.util.List<Skill> globalSkills = skillRepository.findByProjectIdIsNull();
+		if (projectId == null) return globalSkills;
+		java.util.List<Skill> projectSkills = skillRepository.findByProjectId(projectId);
+		java.util.List<Skill> allSkills = new java.util.ArrayList<>(globalSkills);
+		allSkills.addAll(projectSkills);
+		return allSkills;
+	}
+
 	/**
 	 * Handles {@link MarkdownFileIndexedEvent} published by {@code FileIndexerService}.
 	 * Extracts skill definitions from indexed Markdown files without requiring a direct
@@ -138,14 +147,7 @@ public class SkillService {
 		Project project = projectRepository.findById(projectId)
 				.orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
-		Path projectRoot = Paths.get(project.getRootPath()).toAbsolutePath().normalize();
-		Path absoluteFilePath = projectRoot.resolve(filePath).toAbsolutePath().normalize();
-
-		// Security check: ensure the file is within the project root
-		if (!absoluteFilePath.startsWith(projectRoot)) {
-			logger.error("Security violation: attempt to access file outside project root: {}", absoluteFilePath);
-			throw new SecurityException("Access denied: File is outside project root");
-		}
+		Path absoluteFilePath = com.mcp.util.PathSecurityUtil.validateAndNormalizePath(project.getRootPath(), filePath);
 
 		if (!Files.exists(absoluteFilePath)) {
 			logger.error("File not found: {}", absoluteFilePath);

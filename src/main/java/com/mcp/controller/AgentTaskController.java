@@ -10,6 +10,7 @@ import com.mcp.service.AgentAsyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -19,8 +20,6 @@ import java.io.IOException;
 
 import com.mcp.dto.BatchTaskRequest;
 import com.mcp.dto.BatchTaskResponse;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,11 +49,7 @@ public class AgentTaskController {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found: " + projectId))
                 .getRootPath();
-        Path root = Paths.get(rootPath).toAbsolutePath().normalize();
-        Path target = root.resolve(filePath).toAbsolutePath().normalize();
-        if (!target.startsWith(root)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path: path traversal detected");
-        }
+        com.mcp.util.PathSecurityUtil.validateAndNormalizePath(rootPath, filePath);
     }
 
     private AgentActionRequest validateAndMergeParameters(Long projectId, String action, Long symbolId, String filePath,
@@ -110,13 +105,13 @@ public class AgentTaskController {
     @Operation(summary = "Submit async task", description = "Submit an agent action to run in the background. Returns taskId.")
     public Map<String, Object> submitTask(
             @PathVariable String action,
-            @Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+            @Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
             @RequestParam(required = false) Long symbolId,
             @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
-            @RequestBody(required = false) AgentActionRequest request) {
+            @jakarta.validation.Valid @RequestBody(required = false) AgentActionRequest request) {
 
         AgentActionRequest mergedReq = validateAndMergeParameters(projectId, action, symbolId, filePath, query, url,
                 diff, request);
@@ -205,7 +200,7 @@ public class AgentTaskController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Get tasks by project", description = "Retrieve all background tasks associated with a project.")
-    public List<AgentTask> getTasks(@Parameter(description = "Numeric Project ID") @RequestParam Long projectId) {
+    public List<AgentTask> getTasks(@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId) {
         return agentTaskRepository.findByProjectId(projectId);
     }
 }

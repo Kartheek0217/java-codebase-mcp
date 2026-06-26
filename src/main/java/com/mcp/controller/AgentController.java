@@ -6,14 +6,13 @@ import com.mcp.service.AgentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Unified REST controller for all OpenAI-compatible / OpenAdapter AGENT
@@ -59,11 +58,7 @@ public class AgentController {
         String rootPath = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found: " + projectId))
                 .getRootPath();
-        Path root = Paths.get(rootPath).toAbsolutePath().normalize();
-        Path target = root.resolve(filePath).toAbsolutePath().normalize();
-        if (!target.startsWith(root)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path: path traversal detected");
-        }
+        com.mcp.util.PathSecurityUtil.validateAndNormalizePath(rootPath, filePath);
     }
 
     private AgentActionRequest validateAndMergeParameters(Long projectId, String action, Long symbolId, String filePath, String query, String url, String diff, AgentActionRequest request) {
@@ -158,7 +153,7 @@ public class AgentController {
 	@PostMapping(value = "/explain-symbol", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "explain_symbol", description = "Explain a code symbol in plain English. Params: symbolId")
 	public SseEmitter explainSymbol(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -171,7 +166,7 @@ public class AgentController {
 
 	@PostMapping(value = "/explain-symbol/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> explainSymbolSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -190,7 +185,7 @@ public class AgentController {
 	@PostMapping(value = "/explain-file", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "explain_file", description = "Explain what a source file does. Params: filePath")
 	public SseEmitter explainFile(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -203,7 +198,7 @@ public class AgentController {
 
 	@PostMapping(value = "/explain-file/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> explainFileSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -222,7 +217,7 @@ public class AgentController {
 	@PostMapping(value = "/ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "ask_question", description = "Ask a free-form question about the codebase. Body: {question}")
 	public SseEmitter askQuestion(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -235,7 +230,7 @@ public class AgentController {
 
 	@PostMapping(value = "/ask/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> askQuestionSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -254,7 +249,7 @@ public class AgentController {
 	@PostMapping(value = "/code-review", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "code_review", description = "Generate a code review for a file. Params: filePath")
 	public SseEmitter codeReview(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -267,7 +262,7 @@ public class AgentController {
 
 	@PostMapping(value = "/code-review/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> codeReviewSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -286,7 +281,7 @@ public class AgentController {
 	@PostMapping(value = "/code-refactor", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "code_refactor", description = "Suggest refactoring improvements for a file. Params: filePath")
 	public SseEmitter codeRefactor(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -299,7 +294,7 @@ public class AgentController {
 
 	@PostMapping(value = "/code-refactor/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> codeRefactorSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -318,7 +313,7 @@ public class AgentController {
 	@PostMapping(value = "/code-optimise", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "code_optimise", description = "Suggest performance optimisations for a file. Params: filePath")
 	public SseEmitter codeOptimise(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -331,7 +326,7 @@ public class AgentController {
 
 	@PostMapping(value = "/code-optimise/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> codeOptimiseSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -350,7 +345,7 @@ public class AgentController {
 	@PostMapping(value = "/web-search", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "web_search", description = "Search the web and summarise results. Params: query or url")
 	public SseEmitter webSearch(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -363,7 +358,7 @@ public class AgentController {
 
 	@PostMapping(value = "/web-search/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> webSearchSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -382,7 +377,7 @@ public class AgentController {
 	@PostMapping(value = "/code-commit", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "code_commit", description = "Generate a Conventional Commits message from a git diff. Params: diff")
 	public SseEmitter codeCommit(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -395,7 +390,7 @@ public class AgentController {
 
 	@PostMapping(value = "/code-commit/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> codeCommitSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -414,7 +409,7 @@ public class AgentController {
 	@PostMapping(value = "/java-doc", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "java_doc", description = "Generate Javadoc for all public methods in a file. Params: filePath")
 	public SseEmitter javaDoc(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -427,7 +422,7 @@ public class AgentController {
 
 	@PostMapping(value = "/java-doc/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> javaDocSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -446,7 +441,7 @@ public class AgentController {
 	@PostMapping(value = "/junit-test-cases", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	@Operation(summary = "junit_test_cases", description = "Generate JUnit 5 test class with 100% branch coverage. Params: filePath")
 	public SseEmitter junitTestCases(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,
@@ -459,7 +454,7 @@ public class AgentController {
 
 	@PostMapping(value = "/junit-test-cases/sync", produces = MediaType.APPLICATION_JSON_VALUE)
 	public java.util.Map<String, String> junitTestCasesSync(
-			@Parameter(description = "Numeric Project ID") @RequestParam Long projectId,
+			@Parameter(description = "Numeric Project ID") @RequestHeader("projectId") Long projectId,
 			@RequestParam(required = false) Long symbolId,
 			@RequestParam(required = false) String filePath,
 			@RequestParam(required = false) String query,

@@ -214,17 +214,22 @@ public class LuceneIndexService {
 	}
 
 	public void deleteFileContent(Long projectId, String filePath) {
+		deleteFilesContent(projectId, java.util.List.of(filePath));
+	}
+
+	public void deleteFilesContent(Long projectId, List<String> filePaths) {
 		try {
 			IndexWriter writer = writers.get(projectId);
 			if (writer != null) {
-				writer.deleteDocuments(new Term("path", filePath));
+				Term[] terms = filePaths.stream().map(path -> new Term("path", path)).toArray(Term[]::new);
+				writer.deleteDocuments(terms);
 				SearcherManager sm = searcherManagers.get(projectId);
 				if (sm != null) {
 					sm.maybeRefresh();
 				}
 			}
 		} catch (IOException e) {
-			logger.error("Error deleting content for file: {}", filePath, e);
+			logger.error("Error deleting content for {} files", filePaths.size(), e);
 		}
 	}
 

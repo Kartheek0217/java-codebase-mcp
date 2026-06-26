@@ -51,6 +51,13 @@ public class EndpointAnalysisService {
 
     @Transactional
     public Skill analyzeEndpoint(Long projectId, String controllerName, String methodName) throws IOException {
+        if (controllerName == null || !controllerName.matches("^[a-zA-Z0-9_]+$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid controllerName");
+        }
+        if (methodName == null || !methodName.matches("^[a-zA-Z0-9_]+$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid methodName");
+        }
+
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
 
@@ -67,7 +74,7 @@ public class EndpointAnalysisService {
         List<String> relationships = new ArrayList<>();
         StringBuilder treeReport = new StringBuilder();
 
-        traceFlow(projectId, project.getRootPath(), entrySymbol, 0, 5, new HashSet<>(), componentCode, treeReport, relationships);
+        traceFlow(projectId, project.getRootPath(), entrySymbol, 5, componentCode, treeReport, relationships);
 
         StringBuilder report = new StringBuilder();
         report.append("# Endpoint Analysis: ").append(controllerName).append(".").append(methodName).append("\n\n");
@@ -102,46 +109,63 @@ public class EndpointAnalysisService {
         return skillRepository.save(skill);
     }
 
-    private void traceFlow(Long projectId, String projectRoot, Symbol symbol, int depth, int maxDepth,
-            Set<Long> pathVisited, Map<String, String> componentCode, StringBuilder treeReport,
+    private void traceFlow(Long projectId, String projectRoot, Symbol startSymbol, int maxDepth,
+            Map<String, String> componentCode, StringBuilder treeReport,
             List<String> relationships) {
-        if (depth >= maxDepth || pathVisited.contains(symbol.getId())) {
-            return;
-        }
-        Set<Long> currentPath = new HashSet<>(pathVisited);
-        currentPath.add(symbol.getId());
 
-        String role = identifyRole(symbol.getFilePath());
-        String displayName = role + ": " + symbol.getName();
-        String safeId = "node_" + symbol.getId();
-
-        treeReport.append("  ".repeat(depth)).append("- ").append(displayName).append("\n");
-
-        // Add code if not already present
-        if (symbol.getFilePath() != null && !componentCode.containsKey(symbol.getFilePath())) {
-            try {
-                String content = Files.readString(Paths.get(symbol.getFilePath()));
-                String structure = codeSummarizerService.extractStructure(content);
-                componentCode.put(symbol.getFilePath(), structure);
-            } catch (IOException e) {
-                logger.warn("Could not read file for symbol: {}", symbol.getFilePath());
+        class Node {
+            Symbol symbol;
+            int depth;
+            Set<Long> path;
+            Node(Symbol symbol, int depth, Set<Long> path) {
+                this.symbol = symbol; this.depth = depth; this.path = path;
             }
         }
+        java.util.Deque<Node> stack = new java.util.ArrayDeque<>();
+        stack.push(new Node(startSymbol, 0, new HashSet<>()));
 
-        List<SymbolCall> calls = symbolCallRepository.findByCallerId(symbol.getId());
-        for (SymbolCall call : calls) {
-            // Find callee symbols by name in the same project
-            List<Symbol> callees = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,
-                    call.getCalleeName(), Pageable.unpaged());
-            for (Symbol callee : callees) {
-                // Heuristic: only trace callees that are part of the project's source (not JDK/libraries)
-                if (callee.getFilePath() != null && projectRoot != null && callee.getFilePath().startsWith(projectRoot)) {
-                    String calleeRole = identifyRole(callee.getFilePath());
-                    String calleeSafeId = "node_" + callee.getId();
-                    relationships.add(safeId + "[\"" + displayName + "\"] --> " + calleeSafeId + "[\"" + calleeRole
-                            + ": " + callee.getName() + "\"]");
-                    traceFlow(projectId, projectRoot, callee, depth + 1, maxDepth, currentPath, componentCode, treeReport,
-                            relationships);
+        while (!stack.isEmpty()) {
+            Node current = stack.pop();
+            Symbol symbol = current.symbol;
+            int depth = current.depth;
+            Set<Long> pathVisited = current.path;
+
+            if (depth >= maxDepth || pathVisited.contains(symbol.getId())) {
+                continue;
+            }
+            pathVisited.add(symbol.getId());
+
+            String role = identifyRole(symbol.getFilePath());
+            String displayName = role + ": " + symbol.getName();
+            String safeId = "node_" + symbol.getId();
+
+            treeReport.append("  ".repeat(depth)).append("- ").append(displayName).append("\n");
+
+            if (symbol.getFilePath() != null && !componentCode.containsKey(symbol.getFilePath())) {
+                try {
+                    String content = Files.readString(Paths.get(symbol.getFilePath()));
+                    String structure = codeSummarizerService.extractStructure(content);
+                    componentCode.put(symbol.getFilePath(), structure);
+                } catch (IOException e) {
+                    logger.warn("Could not read file for symbol: {}", symbol.getFilePath());
+                }
+            }
+
+            List<SymbolCall> calls = symbolCallRepository.findByCallerId(symbol.getId());
+            // Reverse iteration to maintain DFS order
+            for (int i = calls.size() - 1; i >= 0; i--) {
+                SymbolCall call = calls.get(i);
+                List<Symbol> callees = symbolRepository.findByProjectIdAndNameContainingIgnoreCase(projectId,
+                        call.getCalleeName(), Pageable.unpaged());
+                for (int j = callees.size() - 1; j >= 0; j--) {
+                    Symbol callee = callees.get(j);
+                    if (callee.getFilePath() != null && projectRoot != null && callee.getFilePath().startsWith(projectRoot)) {
+                        String calleeRole = identifyRole(callee.getFilePath());
+                        String calleeSafeId = "node_" + callee.getId();
+                        relationships.add(safeId + "[\"" + displayName + "\"] --> " + calleeSafeId + "[\"" + calleeRole
+                                + ": " + callee.getName() + "\"]");
+                        stack.push(new Node(callee, depth + 1, new HashSet<>(pathVisited)));
+                    }
                 }
             }
         }

@@ -30,9 +30,18 @@ public class AgentStreamingService {
 
     public SseEmitter streamResponse(Long projectId, String action, AgentActionRequest req) {
         SseEmitter emitter = new SseEmitter(180000L); // 3-minute timeout
+        java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
 
-        emitter.onTimeout(emitter::complete);
-        emitter.onError(e -> emitter.completeWithError(e));
+        emitter.onTimeout(() -> {
+            if (completed.compareAndSet(false, true)) {
+                emitter.complete();
+            }
+        });
+        emitter.onError(e -> {
+            if (completed.compareAndSet(false, true)) {
+                emitter.completeWithError(e);
+            }
+        });
 
         Thread.startVirtualThread(() -> {
             try {
@@ -43,14 +52,19 @@ public class AgentStreamingService {
                         throw new RuntimeException("SSE emitter send failed", e);
                     }
                 });
-                emitter.complete();
             } catch (Exception ex) {
                 try {
                     String safeMsg = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
                     String json = OBJECT_MAPPER.writeValueAsString(java.util.Map.of("error", "AGENT action failed: " + safeMsg));
                     emitter.send(SseEmitter.event().name("error").data(json));
                 } catch (IOException ignored) {}
-                emitter.completeWithError(ex);
+                if (completed.compareAndSet(false, true)) {
+                    emitter.completeWithError(ex);
+                }
+            } finally {
+                if (completed.compareAndSet(false, true)) {
+                    emitter.complete();
+                }
             }
         });
 

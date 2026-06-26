@@ -50,19 +50,34 @@ public class ReconciliationService {
 			fileIndexerService.getSymbolRepository().deleteByProjectIdAndFilePathIn(projectId, orphanedPaths);
 			// Batch delete metadata
 			fileMetadataRepository.deleteByProjectIdAndFilePathIn(projectId, orphanedPaths);
-			// Delete from Lucene
-			for (String filePath : orphanedPaths) {
-				fileIndexerService.getLuceneIndexService().deleteFileContent(projectId, filePath);
-			}
+
+			org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+				@Override
+				public void afterCommit() {
+					// Delete from Lucene
+					fileIndexerService.getLuceneIndexService().deleteFilesContent(projectId, orphanedPaths);
+					
+					// 2. Trigger full scan to catch missing/changed files
+					try {
+						fileScannerService.scanProject(projectId);
+					} catch (Exception e) {
+						logger.error("Error during reconciliation scan for project {}", projectId, e);
+					}
+				}
+			});
+		} else {
+			org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+				@Override
+				public void afterCommit() {
+					try {
+						fileScannerService.scanProject(projectId);
+					} catch (Exception e) {
+						logger.error("Error during reconciliation scan for project {}", projectId, e);
+					}
+				}
+			});
 		}
 
-		// 2. Trigger full scan to catch missing/changed files
-		try {
-			fileScannerService.scanProject(projectId);
-		} catch (Exception e) {
-			logger.error("Error during reconciliation scan for project {}", projectId, e);
-		}
-
-		logger.info("Reconciliation for project {} completed.", projectId);
+		logger.info("Reconciliation for project {} transaction prepared.", projectId);
 	}
 }

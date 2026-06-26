@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -48,7 +49,7 @@ public class TaskManagerController {
 
 	@GetMapping("/tasks")
 	@Operation(summary = "list_tasks", description = "Retrieve all tasks for a project. Query param: projectId (Long, required).")
-	public List<TaskDTO> getTasks(@RequestParam Long projectId) {
+	public List<TaskDTO> getTasks(@RequestHeader("projectId") Long projectId) {
 		return taskService.getTasksByProject(projectId);
 	}
 
@@ -107,7 +108,7 @@ public class TaskManagerController {
 
 	@GetMapping("/rules")
 	@Operation(summary = "list_rules", description = "Retrieve all coding rules associated with a project. Query param: projectId (Long, required).")
-	public List<RuleDTO> getRules(@RequestParam Long projectId) {
+	public List<RuleDTO> getRules(@RequestHeader("projectId") Long projectId) {
 		return ruleService.getRulesByProject(projectId);
 	}
 
@@ -137,7 +138,7 @@ public class TaskManagerController {
 
 	@DeleteMapping("/rules")
 	@Operation(summary = "clear_rules", description = "Delete all rules for a project. Query param: projectId.")
-	public Object clearRules(@RequestParam Long projectId) {
+	public Object clearRules(@RequestHeader("projectId") Long projectId) {
 		if (projectId == null)
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'projectId' is required");
 		ruleService.deleteRulesByProject(projectId);

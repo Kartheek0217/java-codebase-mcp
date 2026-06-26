@@ -20,7 +20,8 @@ public class WebSearchOrchestrator {
             String host = uri.getHost();
             if (host == null || host.equals("localhost") || host.startsWith("127.") ||
                     host.startsWith("169.254.") || host.startsWith("10.") ||
-                    host.startsWith("192.168.") || host.matches("172\\.(1[6-9]|2[0-9]|3[0-1])\\..*")) {
+                    host.startsWith("192.168.") || host.matches("172\\.(1[6-9]|2[0-9]|3[0-1])\\..*") ||
+                    host.contains("::1") || host.toLowerCase().startsWith("fc") || host.toLowerCase().startsWith("fd") || host.toLowerCase().startsWith("fe80")) {
                 throw new SecurityException("Invalid or blocked host for web search");
             }
             if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
@@ -41,8 +42,8 @@ public class WebSearchOrchestrator {
             String bodyText = headlessBrowserService.getContent(sessionId);
             pageText = "URL: " + url + "\nTitle: " + title + "\nContent:\n" + bodyText;
         } else if (query != null && !query.isBlank()) {
-            String searchUrl = "https://html.duckduckgo.com/html/?q="
-                    + java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
+            String encodedQuery = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+            String searchUrl = "https://html.duckduckgo.com/html/?q=" + encodedQuery;
             logger.info("R&D Web Search - Searching DuckDuckGo for: {}", query);
             headlessBrowserService.navigate(sessionId, searchUrl);
             String bodyText = headlessBrowserService.getContent(sessionId);
