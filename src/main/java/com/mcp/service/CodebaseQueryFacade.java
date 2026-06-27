@@ -39,6 +39,7 @@ import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
 import com.mcp.util.CodeUtils;
 import com.mcp.util.AgentResponseOptimizer;
+import java.util.LinkedHashMap;
 
 /**
  * Facade that encapsulates all repository-level read operations previously
@@ -204,7 +205,7 @@ public class CodebaseQueryFacade {
                 }, BATCH_EXECUTOR))
                 .toList();
 
-        java.util.LinkedHashMap<String, Object> result = new java.util.LinkedHashMap<>();
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
         try {
             for (CompletableFuture<Map.Entry<String, Object>> f : futures) {
                 Map.Entry<String, Object> entry = f.join();

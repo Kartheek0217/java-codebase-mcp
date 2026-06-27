@@ -42,6 +42,7 @@ import com.mcp.entity.SymbolType;
 import com.mcp.event.MarkdownFileIndexedEvent;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.SymbolRepository;
+import java.util.HexFormat;
 
 @Service
 public class FileIndexerService {
@@ -382,7 +383,7 @@ public class FileIndexerService {
 			}
 
 			byte[] hash = digest.digest();
-			String checksum = java.util.HexFormat.of().formatHex(hash);
+			String checksum = HexFormat.of().formatHex(hash);
 			String content = bos.toString(StandardCharsets.UTF_8);
 
 			return new ReadResult(content, checksum, bos.size());

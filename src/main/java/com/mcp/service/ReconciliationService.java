@@ -11,6 +11,10 @@ import org.springframework.stereotype.Service;
 
 import com.mcp.entity.FileMetadata;
 import com.mcp.repository.FileMetadataRepository;
+import java.util.ArrayList;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class ReconciliationService {
@@ -27,13 +31,13 @@ public class ReconciliationService {
 		this.fileIndexerService = fileIndexerService;
 	}
 
-	@org.springframework.transaction.annotation.Transactional
+	@Transactional
 	public void reconcileProject(Long projectId) {
 		logger.info("Starting reconciliation for project {}...", projectId);
 
 		// 1. Identify orphaned records (in DB but file deleted)
 		List<FileMetadata> allMetadata = fileMetadataRepository.findByProjectId(projectId);
-		List<String> orphanedPaths = new java.util.ArrayList<>();
+		List<String> orphanedPaths = new ArrayList<>();
 
 		for (FileMetadata metadata : allMetadata) {
 			Path path = Paths.get(metadata.getFilePath());
@@ -51,7 +55,7 @@ public class ReconciliationService {
 			// Batch delete metadata
 			fileMetadataRepository.deleteByProjectIdAndFilePathIn(projectId, orphanedPaths);
 
-			org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 				@Override
 				public void afterCommit() {
 					// Delete from Lucene
@@ -66,7 +70,7 @@ public class ReconciliationService {
 				}
 			});
 		} else {
-			org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 				@Override
 				public void afterCommit() {
 					try {

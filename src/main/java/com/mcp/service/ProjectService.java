@@ -27,6 +27,8 @@ import com.mcp.repository.ProjectTaskRepository;
 import com.mcp.repository.SkillRepository;
 import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
+import java.util.LinkedHashMap;
+import java.util.Set;
 
 @Service
 public class ProjectService {
@@ -164,7 +166,7 @@ public class ProjectService {
         Project project = getProject(id);
         logger.info("Triggering manual Git-based re-index for project: {}", project.getName());
 
-        java.util.Set<String> changedFiles = gitInfoService.getChangedFilePaths(id);
+        Set<String> changedFiles = gitInfoService.getChangedFilePaths(id);
         if (changedFiles.isEmpty()) {
             logger.info("No changed files detected by Git for project: {}", project.getName());
             return;
@@ -212,7 +214,7 @@ public class ProjectService {
     }
 
     public Map<String, Object> buildProjectOpResponse(Long projectId, String op, Project projectOverride) {
-        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "success");
         if (op != null) {
             response.put("op", op);

@@ -5,14 +5,18 @@ import com.mcp.model.TaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 
 public interface ProjectTaskRepository extends JpaRepository<ProjectTask, Long> {
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"steps"})
+    @EntityGraph(attributePaths = {"steps"})
     List<ProjectTask> findByProjectIdOrderByCreatedAtDesc(Long projectId);
     
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @org.springframework.data.jpa.repository.Query("SELECT t FROM ProjectTask t WHERE t.id = :id")
-    java.util.Optional<ProjectTask> findByIdForUpdate(Long id);
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM ProjectTask t WHERE t.id = :id")
+    Optional<ProjectTask> findByIdForUpdate(Long id);
     
     List<ProjectTask> findByProjectIdAndStatus(Long projectId, TaskStatus status);
     void deleteByProjectId(Long projectId);

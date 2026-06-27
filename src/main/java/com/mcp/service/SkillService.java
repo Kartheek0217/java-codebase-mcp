@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class SkillService {
@@ -97,11 +99,11 @@ public class SkillService {
 	}
 
 	@Transactional(readOnly = true)
-	public java.util.List<Skill> getSkills(Long projectId) {
-		java.util.List<Skill> globalSkills = skillRepository.findByProjectIdIsNull();
+	public List<Skill> getSkills(Long projectId) {
+		List<Skill> globalSkills = skillRepository.findByProjectIdIsNull();
 		if (projectId == null) return globalSkills;
-		java.util.List<Skill> projectSkills = skillRepository.findByProjectId(projectId);
-		java.util.List<Skill> allSkills = new java.util.ArrayList<>(globalSkills);
+		List<Skill> projectSkills = skillRepository.findByProjectId(projectId);
+		List<Skill> allSkills = new ArrayList<>(globalSkills);
 		allSkills.addAll(projectSkills);
 		return allSkills;
 	}

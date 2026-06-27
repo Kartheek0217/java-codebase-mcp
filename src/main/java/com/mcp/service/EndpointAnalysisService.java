@@ -26,6 +26,8 @@ import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SkillRepository;
 import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 @Service
 public class EndpointAnalysisService {
@@ -121,7 +123,7 @@ public class EndpointAnalysisService {
                 this.symbol = symbol; this.depth = depth; this.path = path;
             }
         }
-        java.util.Deque<Node> stack = new java.util.ArrayDeque<>();
+        Deque<Node> stack = new ArrayDeque<>();
         stack.push(new Node(startSymbol, 0, new HashSet<>()));
 
         while (!stack.isEmpty()) {

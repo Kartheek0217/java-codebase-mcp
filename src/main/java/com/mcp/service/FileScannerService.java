@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 import com.mcp.entity.Project;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.ProjectTaskRepository;
+import java.util.ArrayList;
+import java.util.concurrent.Semaphore;
+import java.util.Set;
 
 @Service
 public class FileScannerService {
@@ -27,7 +30,7 @@ public class FileScannerService {
 	private final ProjectTaskRepository projectTaskRepository;
 	private final FileIndexerService fileIndexerService;
 	private final Executor applicationTaskExecutor;
-	private final java.util.concurrent.Semaphore indexingSemaphore = new java.util.concurrent.Semaphore(12);
+	private final Semaphore indexingSemaphore = new Semaphore(12);
 
 	private static final List<String> INDEXABLE_EXTENSIONS = List.of(".java", ".ts", ".tsx", ".vue", ".js", ".jsx",
 			".html", ".css", ".json", ".md", ".yaml", ".yml", ".properties", ".sql");
@@ -48,7 +51,7 @@ public class FileScannerService {
 	// This is safe because it is backed by newVirtualThreadPerTaskExecutor()
 	// (unbounded virtual threads) — the outer task blocking on .join() cannot
 	// starve inner tasks since carrier threads are never held by blocked virtuals.
-	public void scanChangedFiles(Long projectId, java.util.Set<String> changedPaths) {
+	public void scanChangedFiles(Long projectId, Set<String> changedPaths) {
 		CompletableFuture.runAsync(() -> {
 			Project project = projectRepository.findById(projectId).orElseThrow();
 			Path root = Paths.get(project.getRootPath()).toAbsolutePath();
@@ -140,7 +143,7 @@ public class FileScannerService {
 					}
 				}
 
-				List<Path> filesToIndex = new java.util.ArrayList<>();
+				List<Path> filesToIndex = new ArrayList<>();
 				try {
 					Files.walkFileTree(root, new java.nio.file.SimpleFileVisitor<Path>() {
 						@Override

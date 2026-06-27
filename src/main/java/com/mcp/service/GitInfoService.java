@@ -26,6 +26,8 @@ import com.mcp.repository.ProjectRepository;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.HashSet;
 
 @Service
 public class GitInfoService {
@@ -35,8 +37,8 @@ public class GitInfoService {
     private final ProjectRepository projectRepository;
     private final Map<Long, Repository> repositoryCache = new ConcurrentHashMap<>();
     private final Map<Long, Long> lastAccessTimes = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Long, java.util.concurrent.locks.ReentrantLock> projectLocks = new ConcurrentHashMap<>();
-    private final java.util.concurrent.locks.ReentrantLock cleanupLock = new java.util.concurrent.locks.ReentrantLock();
+    private final ConcurrentHashMap<Long, ReentrantLock> projectLocks = new ConcurrentHashMap<>();
+    private final ReentrantLock cleanupLock = new ReentrantLock();
 
     // volatile: written once in @PostConstruct, read from any thread thereafter
     private volatile String commitHash;
@@ -98,7 +100,7 @@ public class GitInfoService {
             lastAccessTimes.put(projectId, System.currentTimeMillis());
             return existing;
         }
-        var lock = projectLocks.computeIfAbsent(projectId, k -> new java.util.concurrent.locks.ReentrantLock());
+        var lock = projectLocks.computeIfAbsent(projectId, k -> new ReentrantLock());
         lock.lock();
         try {
             return repositoryCache.computeIfAbsent(projectId, this::openRepository);
@@ -182,7 +184,7 @@ public class GitInfoService {
             Repository repository = getRepository(projectId);
             try (Git git = new Git(repository)) {
                 Status status = git.status().call();
-                Set<String> changedFiles = new java.util.HashSet<>();
+                Set<String> changedFiles = new HashSet<>();
                 changedFiles.addAll(status.getModified());
                 changedFiles.addAll(status.getAdded());
                 changedFiles.addAll(status.getRemoved());
@@ -193,7 +195,7 @@ public class GitInfoService {
             }
         } catch (Exception e) {
             logger.error("Error getting changed files for project {}: {}", projectId, e.getMessage());
-            return java.util.Set.of();
+            return Set.of();
         }
     }
 

@@ -25,6 +25,7 @@ import com.microsoft.playwright.Playwright;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Optional;
 
 @Service
 public class BrowserSessionManager {
@@ -74,7 +75,7 @@ public class BrowserSessionManager {
     public BrowserSession createSessionEntity(BrowserSessionRequest request) {
         sessionLock.lock();
         try {
-            java.util.Optional<String> evictedId = enforceSessionLimit();
+            Optional<String> evictedId = enforceSessionLimit();
             evictedId.ifPresent(this::closeSession);
 
             ensurePlaywrightInitialized();
@@ -162,7 +163,7 @@ public class BrowserSessionManager {
     /** Returns a read-only snapshot of active sessions. Callers must not mutate it. */
     public Map<String, BrowserContext> getActiveSessions() {
         return sessions.entrySet().stream()
-                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                .collect(Collectors.toUnmodifiableMap(
                         e -> e.getKey(), e -> e.getValue().context()));
     }
 
@@ -188,7 +189,7 @@ public class BrowserSessionManager {
      * Enforces the max-sessions limit by closing the oldest session when the cap is
      * reached.
      */
-    private java.util.Optional<String> enforceSessionLimit() {
+    private Optional<String> enforceSessionLimit() {
         int max = properties.getMaxSessions();
         if (sessions.size() >= max) {
             // Evict the session with the oldest last-activity timestamp
@@ -196,7 +197,7 @@ public class BrowserSessionManager {
                     .min(Map.Entry.comparingByValue())
                     .map(e -> e.getKey());
         }
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
     /**
@@ -218,7 +219,7 @@ public class BrowserSessionManager {
     public void cleanup() {
         sessionLock.lock();
         try {
-            java.util.List.copyOf(sessions.keySet()).forEach(this::closeSession);
+            List.copyOf(sessions.keySet()).forEach(this::closeSession);
             if (playwright != null) {
                 playwright.close();
                 playwright = null;

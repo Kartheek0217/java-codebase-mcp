@@ -19,6 +19,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
+
 @Configuration
 public class JacksonConfig {
 
@@ -33,7 +34,7 @@ public class JacksonConfig {
 		// Do not write dates as timestamps
 		mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-		// Configure custom format for java.util.Date
+		// Configure custom format for Date
 		mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
 
 		// Configure Java 8 date/time types format (no milliseconds)

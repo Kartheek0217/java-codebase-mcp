@@ -7,11 +7,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.mcp.dto.AgentActionRequest;
+import java.util.function.Consumer;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class AgentStreamingService {
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final AgentClient agentClient;
     private final AgentPromptBuilder promptBuilder;
@@ -30,7 +34,7 @@ public class AgentStreamingService {
 
     public SseEmitter streamResponse(Long projectId, String action, AgentActionRequest req) {
         SseEmitter emitter = new SseEmitter(180000L); // 3-minute timeout
-        java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        AtomicBoolean completed = new AtomicBoolean(false);
 
         emitter.onTimeout(() -> {
             if (completed.compareAndSet(false, true)) {
@@ -55,7 +59,7 @@ public class AgentStreamingService {
             } catch (Exception ex) {
                 try {
                     String safeMsg = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
-                    String json = OBJECT_MAPPER.writeValueAsString(java.util.Map.of("error", "AGENT action failed: " + safeMsg));
+                    String json = OBJECT_MAPPER.writeValueAsString(Map.of("error", "AGENT action failed: " + safeMsg));
                     emitter.send(SseEmitter.event().name("error").data(json));
                 } catch (IOException ignored) {}
                 if (completed.compareAndSet(false, true)) {
@@ -73,7 +77,7 @@ public class AgentStreamingService {
 
     public void streamAgentAction(Long projectId, String action, AgentActionRequest req,
                                  Long symbolId, String filePath, String query, String url, String diff,
-                                 java.util.function.Consumer<String> chunkConsumer) throws IOException {
+                                 Consumer<String> chunkConsumer) throws IOException {
         String taskType;
         List<AgentClient.Message> messages;
 

@@ -1,4 +1,5 @@
 package com.mcp.dto;
+import java.util.Set;
 
 /**
  * Options for Lucene full-text search, replacing the 6 overloaded
@@ -24,7 +25,7 @@ public record SearchOptions(
         String query,
         String type,
         String site,
-        java.util.Set<String> filePaths,
+        Set<String> filePaths,
         int limit,
         int offset) {
 
@@ -39,7 +40,7 @@ public record SearchOptions(
         private String query;
         private String type;
         private String site;
-        private java.util.Set<String> filePaths;
+        private Set<String> filePaths;
         private int limit = DEFAULT_LIMIT;
         private int offset = 0;
 
@@ -48,7 +49,7 @@ public record SearchOptions(
         public Builder query(String query)                        { this.query = query;         return this; }
         public Builder type(String type)                          { this.type = type;           return this; }
         public Builder site(String site)                          { this.site = site;           return this; }
-        public Builder filePaths(java.util.Set<String> filePaths) { this.filePaths = filePaths; return this; }
+        public Builder filePaths(Set<String> filePaths) { this.filePaths = filePaths; return this; }
         public Builder limit(int limit)                           { this.limit = limit;         return this; }
         public Builder offset(int offset)                         { this.offset = offset;       return this; }
 

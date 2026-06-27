@@ -46,6 +46,8 @@ import com.mcp.dto.SearchOptions;
 import com.mcp.properties.LuceneProperties;
 
 import jakarta.annotation.PreDestroy;
+import java.util.stream.Stream;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class LuceneIndexService {
@@ -53,10 +55,10 @@ public class LuceneIndexService {
 	private static final Logger logger = LoggerFactory.getLogger(LuceneIndexService.class);
 	// Resolve to absolute path at class-load time so the index location is stable
 	// regardless of which directory the JVM is launched from.
-	@org.springframework.beans.factory.annotation.Value("${lucene.indexDir:${user.dir}/data/indices}")
+	@Value("${lucene.indexDir:${user.dir}/data/indices}")
 	private String baseIndexDir;
 
-	@org.springframework.beans.factory.annotation.Value("${lucene.searchTimeoutMs:2000}")
+	@Value("${lucene.searchTimeoutMs:2000}")
 	private long searchTimeoutMs;
 
 	private final Map<Long, IndexWriter> writers = new ConcurrentHashMap<>();
@@ -214,7 +216,7 @@ public class LuceneIndexService {
 	}
 
 	public void deleteFileContent(Long projectId, String filePath) {
-		deleteFilesContent(projectId, java.util.List.of(filePath));
+		deleteFilesContent(projectId, List.of(filePath));
 	}
 
 	public void deleteFilesContent(Long projectId, List<String> filePaths) {
@@ -426,7 +428,7 @@ public class LuceneIndexService {
 
 	private void deleteDirectory(Path path) throws IOException {
 		if (Files.isDirectory(path)) {
-			try (java.util.stream.Stream<Path> entries = Files.list(path)) {
+			try (Stream<Path> entries = Files.list(path)) {
 				entries.forEach(entry -> {
 					try {
 						deleteDirectory(entry);

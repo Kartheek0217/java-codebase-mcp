@@ -13,6 +13,7 @@ import com.mcp.entity.Project;
 import com.mcp.entity.ProjectRule;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.ProjectRuleRepository;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -53,8 +54,8 @@ public class ProjectRuleService {
 		if (body == null)
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body is required");
 		Object actualBody = body;
-		if (body instanceof java.util.Map) {
-			java.util.Map<?, ?> map = (java.util.Map<?, ?>) body;
+		if (body instanceof Map) {
+			Map<?, ?> map = (Map<?, ?>) body;
 			if (map.containsKey("body")) {
 				actualBody = map.get("body");
 			}

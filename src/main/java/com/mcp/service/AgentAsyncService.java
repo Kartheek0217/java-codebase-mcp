@@ -30,6 +30,11 @@ import com.mcp.repository.AgentTaskRepository;
 import com.mcp.service.AgentClient.Message;
 
 import jakarta.annotation.PreDestroy;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import java.util.HashMap;
 
 @Service
 public class AgentAsyncService {
@@ -231,14 +236,16 @@ public class AgentAsyncService {
         return "";
     }
 
-    public Map<String, Object> submitTask(String action, Long projectId, Long symbolId, String filePath, String query, String url, String diff, AgentActionRequest request) {
-        AgentActionRequest mergedReq = agentService.validateAndMergeParameters(projectId, action, symbolId, filePath, query, url,
+    public Map<String, Object> submitTask(String action, Long projectId, Long symbolId, String filePath, String query,
+            String url, String diff, AgentActionRequest request) {
+        AgentActionRequest mergedReq = agentService.validateAndMergeParameters(projectId, action, symbolId, filePath,
+                query, url,
                 diff, request);
 
         String reqJson = "{}";
         try {
             reqJson = objectMapper.writeValueAsString(mergedReq);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             // ignore
         }
 
@@ -247,7 +254,7 @@ public class AgentAsyncService {
 
         executeAsyncTask(task.getId(), projectId, action, mergedReq);
 
-        Map<String, Object> response = new java.util.HashMap<>();
+        Map<String, Object> response = new HashMap<>();
         response.put("taskId", task.getId());
         response.put("status", task.getStatus());
         return response;
@@ -256,29 +263,29 @@ public class AgentAsyncService {
     public List<BatchTaskResponse> submitBatchTasks(String rawPayload) {
         List<BatchTaskRequest> requests;
         try {
-            com.fasterxml.jackson.databind.JsonNode rawInput = objectMapper.readTree(rawPayload);
+            JsonNode rawInput = objectMapper.readTree(rawPayload);
             if (rawInput.isArray()) {
                 requests = objectMapper.readerForListOf(BatchTaskRequest.class).readValue(rawInput);
             } else if (rawInput.isObject() && rawInput.has("body")) {
-                com.fasterxml.jackson.databind.JsonNode bodyNode = rawInput.get("body");
+                JsonNode bodyNode = rawInput.get("body");
                 if (bodyNode.isArray()) {
                     requests = objectMapper.readerForListOf(BatchTaskRequest.class).readValue(bodyNode);
                 } else {
-                    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "body property must be an array");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body property must be an array");
                 }
             } else {
-                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Invalid batch request format: expected array or object with body array");
             }
         } catch (IOException e) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Failed to parse batch request: " + e.getMessage(), e);
         }
 
         List<BatchTaskResponse> responses = new ArrayList<>();
         for (BatchTaskRequest item : requests) {
             if (item.action() == null || item.projectId() == null) {
-                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "action and projectId are required for all tasks in batch");
             }
             AgentActionRequest mergedReq = agentService.validateAndMergeParameters(
@@ -294,7 +301,7 @@ public class AgentAsyncService {
             String reqJson = "{}";
             try {
                 reqJson = objectMapper.writeValueAsString(mergedReq);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            } catch (JsonProcessingException e) {
                 // ignore
             }
 
@@ -310,10 +317,10 @@ public class AgentAsyncService {
 
     public AgentTask getTask(Long id) {
         return agentTaskRepository.findById(id)
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "AgentTask not found: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AgentTask not found: " + id));
     }
 
-    public List<AgentTask> getTasks(Long projectId) {
+    public List<AgentTask> getTasksByProjectId(Long projectId) {
         return agentTaskRepository.findByProjectId(projectId);
     }
 }

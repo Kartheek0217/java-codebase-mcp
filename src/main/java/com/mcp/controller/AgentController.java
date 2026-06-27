@@ -439,6 +439,6 @@ public class AgentController {
     @ResponseEnvelope
     public List<AgentTask> getTasks(
             @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId) {
-        return agentAsyncService.getTasks(projectId);
+        return agentAsyncService.getTasksByProjectId(projectId);
     }
 }

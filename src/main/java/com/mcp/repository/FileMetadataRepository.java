@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, FileMetadataId> {
 	List<FileMetadata> findByProjectId(Long projectId);
@@ -14,7 +15,7 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, File
 	List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query);
 
 	List<FileMetadata> findByProjectIdAndFilePathContainingIgnoreCase(Long projectId, String query,
-			org.springframework.data.domain.Pageable pageable);
+			Pageable pageable);
 
 	@Modifying
 	@Transactional

@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 @RestControllerAdvice
 public class McpGlobalExceptionHandler {
@@ -40,8 +42,8 @@ public class McpGlobalExceptionHandler {
 	}
 
 	@ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-	@ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
-	public Map<String, String> handleMediaTypeNotSupported(org.springframework.web.HttpMediaTypeNotSupportedException ex) {
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	public Map<String, String> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
 		Map<String, String> error = new HashMap<>();
 		error.put("error", "Unsupported Media Type: " + ex.getMessage());
 		error.put("type", ex.getClass().getName());
@@ -49,8 +51,8 @@ public class McpGlobalExceptionHandler {
 	}
 
 	@ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
-	@ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
-	public Map<String, String> handleMethodNotSupported(org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public Map<String, String> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
 		Map<String, String> error = new HashMap<>();
 		error.put("error", "Method Not Allowed: " + ex.getMessage());
 		error.put("type", ex.getClass().getName());

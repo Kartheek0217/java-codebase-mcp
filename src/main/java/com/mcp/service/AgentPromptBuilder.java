@@ -21,6 +21,7 @@ import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolRepository;
 
 import jakarta.annotation.PostConstruct;
+import java.util.ArrayList;
 
 @Service
 public class AgentPromptBuilder {
@@ -58,7 +59,7 @@ public class AgentPromptBuilder {
     }
 
     private List<String> detectProjectTypes(String rootPath) {
-        List<String> types = new java.util.ArrayList<>();
+        List<String> types = new ArrayList<>();
         if (rootPath == null || rootPath.isBlank()) {
             return types;
         }

@@ -2,10 +2,13 @@ package com.mcp.entity;
 
 import jakarta.persistence.*;
 import java.util.Objects;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.data.annotation.CreatedDate;
 
 @Entity
 @Table(name = "project_rules")
-@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
+@EntityListeners(AuditingEntityListener.class)
 public class ProjectRule {
 
     @Id
@@ -28,11 +31,11 @@ public class ProjectRule {
     @Column(length = 1000)
     private String description;
 
-    @org.springframework.data.annotation.CreatedDate
+    @CreatedDate
     @Column(name = "created_at", updatable = false)
     private java.time.LocalDateTime createdAt;
 
-    @org.springframework.data.annotation.LastModifiedDate
+    @LastModifiedDate
     @Column(name = "updated_at")
     private java.time.LocalDateTime updatedAt;
 

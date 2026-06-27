@@ -14,6 +14,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mcp.properties.AgentProperties;
 
 import jakarta.annotation.PostConstruct;
+import java.util.function.Consumer;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Low-level HTTP client for OpenAI-compatible chat completions endpoint
@@ -36,7 +39,7 @@ public class AgentClient {
         var httpClient = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(java.time.Duration.ofSeconds(props.getTimeoutSeconds()))
                 .build();
-        var factory = new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
+        var factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(java.time.Duration.ofSeconds(props.getTimeoutSeconds()));
 
         restClient = RestClient.builder()
@@ -93,7 +96,7 @@ public class AgentClient {
                     .body(request)
                     .retrieve()
                     .body(ChatResponse.class);
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             throw new AgentException("HTTP call to AGENT failed: " + ex.getMessage(), ex);
         }
 
@@ -112,7 +115,7 @@ public class AgentClient {
      * Sends a list of chat messages using the specified task-specific model and
      * streams the response chunks.
      */
-    public void streamChat(List<Message> messages, String taskType, java.util.function.Consumer<String> chunkConsumer) {
+    public void streamChat(List<Message> messages, String taskType, Consumer<String> chunkConsumer) {
         String model = resolveModelForTask(taskType);
         ChatRequest request = new ChatRequest(model, messages, props.getMaxTokens(), true);
 
@@ -144,7 +147,7 @@ public class AgentClient {
                         }
                         return null;
                     });
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             throw new AgentException("Streaming HTTP call to AGENT failed: " + ex.getMessage(), ex);
         }
     }

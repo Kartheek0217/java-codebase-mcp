@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.mcp.entity.Skill;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface SkillRepository extends JpaRepository<Skill, Long> {
 	List<Skill> findByProjectId(Long projectId);
@@ -16,7 +18,7 @@ public interface SkillRepository extends JpaRepository<Skill, Long> {
 
 	Optional<Skill> findByProjectIdIsNullAndName(String name);
 
-	@org.springframework.data.jpa.repository.Modifying
-	@org.springframework.transaction.annotation.Transactional
+	@Modifying
+	@Transactional
 	void deleteByProjectId(Long projectId);
 }

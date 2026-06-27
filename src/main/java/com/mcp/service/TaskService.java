@@ -19,6 +19,8 @@ import com.mcp.model.TaskStatus;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.ProjectTaskRepository;
 import com.mcp.repository.TaskStepRepository;
+import java.util.Map;
+import java.util.Arrays;
 
 @Service
 @Transactional
@@ -72,9 +74,9 @@ public class TaskService {
 
 	@Transactional
 	public TaskDTO createTask(Object body) {
-		if (!(body instanceof java.util.Map))
+		if (!(body instanceof Map))
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body must be a CreateTaskRequest");
-		java.util.Map<?, ?> map = (java.util.Map<?, ?>) body;
+		Map<?, ?> map = (Map<?, ?>) body;
 		Object actualBody = map.containsKey("body") ? map.get("body") : body;
 		CreateTaskRequest req = convertBody(actualBody, CreateTaskRequest.class);
 		return createTask(req);
@@ -135,7 +137,7 @@ public class TaskService {
 		try {
 			taskStatus = TaskStatus.valueOf(status.toUpperCase());
 		} catch (IllegalArgumentException e) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status '" + status + "'. Allowed: " + java.util.Arrays.toString(TaskStatus.values()));
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status '" + status + "'. Allowed: " + Arrays.toString(TaskStatus.values()));
 		}
 		return updateStepStatus(taskId, stepId, taskStatus);
 	}
@@ -187,8 +189,8 @@ public class TaskService {
 	}
 
 	private Object unwrapBody(Object body) {
-		if (body instanceof java.util.Map) {
-			java.util.Map<?, ?> map = (java.util.Map<?, ?>) body;
+		if (body instanceof Map) {
+			Map<?, ?> map = (Map<?, ?>) body;
 			if (map.containsKey("body")) {
 				return map.get("body");
 			}
