@@ -3,23 +3,19 @@ package com.mcp.controller;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
+import java.nio.file.Paths;
 import java.util.Map;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
-import com.mcp.entity.Project;
-import com.mcp.service.GitInfoService;
 import com.mcp.service.ProjectService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,17 +23,35 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import com.mcp.entity.Project;
+import com.mcp.dto.ProjectOperationResponse;
+import com.mcp.dto.VcsOperationResponse;
+import io.github.overrridee.annotation.ResponseEnvelope;
+import io.github.overrridee.annotation.IgnoreEnvelope;
+
 @RestController
 @RequestMapping("/api/projects")
+@Validated
+@ResponseEnvelope
 @Tag(name = "Projects", description = "Manage codebases/projects. Each project defines a unique root directory to index.")
 public class ProjectController {
 
 	private final ProjectService projectService;
-	private final GitInfoService gitInfoService;
 
-	public ProjectController(ProjectService projectService, GitInfoService gitInfoService) {
+	public ProjectController(ProjectService projectService) {
 		this.projectService = projectService;
-		this.gitInfoService = gitInfoService;
+	}
+
+	@ExceptionHandler(IOException.class)
+	public ResponseEntity<ProjectOperationResponse> handleIOException(IOException ex) {
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+				.body(new ProjectOperationResponse(null, "ERROR", ex.getMessage(), null));
 	}
 
 	// ─── Collection endpoints ─────────────────────────────────────────────────
@@ -59,21 +73,23 @@ public class ProjectController {
 					@ApiResponse(responseCode = "200", description = "Project created and indexing started"),
 					@ApiResponse(responseCode = "400", description = "rootPath missing, not a directory, or not readable")
 			})
-	public Object createProject(
-			@Parameter(description = "Human-readable project name") @RequestParam String name,
-			@Parameter(description = "Absolute path to the project root on the local filesystem. Examples: 'C:\\path\\to\\project' (Windows), '/path/to/project' (Linux/macOS)") @RequestParam String rootPath)
+	public Project createProject(
+			@Parameter(description = "Human-readable project name") @RequestParam @NotBlank String name,
+			@Parameter(description = "Absolute path to the project root on the local filesystem. Examples: 'C:\\path\\to\\project' (Windows), '/path/to/project' (Linux/macOS)") @RequestParam @NotBlank String rootPath)
 			throws IOException {
-		Path path = Path.of(rootPath);
-		if (!Files.exists(path))
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path does not exist: " + rootPath);
-
-		path = path.toRealPath();
-		if (!Files.isDirectory(path))
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not a directory: " + path);
-		if (!Files.isReadable(path))
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not readable: " + path);
-		Project project = projectService.createProject(name, path.toString());
-		return projectService.buildProjectOpResponse(project.getId(), "create", project);
+		Path path = Paths.get(rootPath).toAbsolutePath().normalize();
+		if (path.toString().contains("..")) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid rootPath: path traversal detected");
+		}
+		if (!Files.exists(path) || !Files.isDirectory(path)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Invalid rootPath: directory does not exist or is not readable");
+		}
+		try {
+			return (Project) projectService.createProjectAndIndex(name, path.toString());
+		} catch (ClassCastException e) {
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Service returned unexpected type", e);
+		}
 	}
 
 	/**
@@ -87,13 +103,10 @@ public class ProjectController {
 	@GetMapping
 	@Operation(summary = "list_projects", description = "Retrieve project list. Optional view parameter can be 'list' or 'summary'.")
 	public Object getProjects(
-			@Parameter(description = "View variant: 'list' (default) | 'summary'") @RequestParam(required = false, defaultValue = "list") String view) {
-		return switch (view.toLowerCase()) {
-			case "list" -> projectService.getAllProjects();
-			case "summary" -> projectService.getAllProjectSummaries();
-			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown view value '" + view + "'. Allowed: list, summary");
-		};
+			@Parameter(description = "View variant: 'list' (default) | 'summary'", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {
+					"list",
+					"summary" })) @RequestParam(required = false, defaultValue = "list") @NotBlank String view) {
+		return projectService.getProjects(view);
 	}
 
 	// ─── Project-scoped read ──────────────────────────────────────────────────
@@ -109,15 +122,11 @@ public class ProjectController {
 	@GetMapping("/{id}")
 	@Operation(summary = "get_project_details", description = "Read project data. Optional view parameter can be 'detail', 'stats', or 'git-status'.")
 	public Object getProject(
-			@PathVariable Long id,
-			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'") @RequestParam(required = false, defaultValue = "detail") String view) {
-		return switch (view.toLowerCase()) {
-			case "detail" -> projectService.getProject(id);
-			case "stats" -> projectService.getProjectStats(id);
-			case "git-status" -> gitInfoService.getProjectStatus(id);
-			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown view value '" + view + "'. Allowed: detail, stats, git-status");
-		};
+			@PathVariable @NotNull Long id,
+			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {
+					"detail", "stats",
+					"git-status" })) @RequestParam(required = false, defaultValue = "detail") @NotBlank String view) {
+		return projectService.getProject(id, view);
 	}
 
 	// ─── Project-scoped write operations ─────────────────────────────────────
@@ -126,45 +135,39 @@ public class ProjectController {
 	 * {@code POST /api/projects/{id}} : Execute a project-scoped write operation.
 	 * Operation selected via endpoint path.
 	 *
-	 * @param id          Project ID
-	 * @param op          Operation name
-	 * @param requestBody Optional body used by stage/discard
-	 * @param message     Commit message (required when op=commit)
+	 * @param id Project ID
 	 * @return Operation result map or void
 	 */
 	@PostMapping("/{id}/reindex")
 	@Operation(summary = "reindex_project", description = "Trigger a full re-index of all project files.")
-	public Object reindexProject(@PathVariable Long id) {
+	public ProjectOperationResponse reindexProject(@PathVariable @NotNull Long id) {
 		projectService.reindexProject(id);
-		return projectService.buildProjectOpResponse(id, "reindex", null);
+		Map<String, Object> res = projectService.buildProjectOpResponse(id, "reindex", null);
+		@SuppressWarnings("unchecked")
+		Map<String, Object> stats = (Map<String, Object>) res.get("stats");
+		return new ProjectOperationResponse(
+				id,
+				(String) res.get("op"),
+				(String) res.get("status"),
+				stats);
 	}
 
 	@PostMapping("/{id}/vcs")
 	@Operation(summary = "manage_project_vcs", description = "Execute a VCS operation (stage, discard, commit) on a project.")
-	public Object manageProjectVcs(
-			@PathVariable Long id,
-			@Parameter(description = "Action: 'stage' | 'discard' | 'commit'") @RequestParam String action,
+	public VcsOperationResponse manageProjectVcs(
+			@PathVariable @NotNull Long id,
+			@Parameter(description = "Action: 'stage' | 'discard' | 'commit'", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {
+					"stage", "discard", "commit" })) @RequestParam @NotBlank String action,
 			@RequestBody(required = false) Object requestBody,
 			@RequestParam(required = false) String message) {
-		return switch (action.toLowerCase()) {
-			case "stage" -> {
-				gitInfoService.stageFiles(id, parsePatterns(requestBody));
-				yield Map.of("status", "success", "op", "stage");
-			}
-			case "discard" -> {
-				gitInfoService.discardChanges(id, parsePatterns(requestBody));
-				yield Map.of("status", "success", "op", "discard");
-			}
-			case "commit" -> {
-				if (message == null || message.isBlank())
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-							"Query param 'message' is required for action=commit");
-				String hash = gitInfoService.commit(id, message);
-				yield Map.of("status", "success", "op", "commit", "commitHash", hash);
-			}
-			default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Unknown action '" + action + "'. Allowed: stage, discard, commit");
-		};
+		@SuppressWarnings("unchecked")
+		Map<String, Object> res = (Map<String, Object>) projectService.manageProjectVcs(id, action,
+				requestBody, message);
+		return new VcsOperationResponse(
+				id,
+				(String) res.get("action"),
+				(String) res.get("status"),
+				(String) res.get("commitHash"));
 	}
 
 	// ─── Delete ───────────────────────────────────────────────────────────────
@@ -182,22 +185,9 @@ public class ProjectController {
 					@ApiResponse(responseCode = "204", description = "Project deleted"),
 					@ApiResponse(responseCode = "404", description = "Project not found")
 			})
-	public void deleteProject(@PathVariable Long id) {
+	@IgnoreEnvelope(reason = "204 No Content")
+	public ResponseEntity<Void> deleteProject(@PathVariable @NotNull Long id) {
 		projectService.deleteProject(id);
-	}
-
-	// ─── Helpers ──────────────────────────────────────────────────────────────
-
-	@SuppressWarnings("unchecked")
-	private List<String> parsePatterns(Object requestBody) {
-		if (requestBody instanceof List<?> list)
-			return (List<String>) list;
-		if (requestBody instanceof java.util.Map<?, ?> map) {
-			Object bodyVal = map.get("body");
-			if (bodyVal instanceof List<?> list)
-				return (List<String>) list;
-		}
-		throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-				"Body must be a list of file patterns or {\"body\": [\"pattern\"]}");
+		return ResponseEntity.noContent().build();
 	}
 }

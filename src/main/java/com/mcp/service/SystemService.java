@@ -1,6 +1,8 @@
 package com.mcp.service;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.dto.SystemStatusDTO;
 import com.mcp.properties.AgentProperties;
@@ -22,6 +24,19 @@ public class SystemService {
         this.gitInfoService = gitInfoService;
         this.agentClient = agentClient;
         this.agentProperties = agentProperties;
+    }
+
+    public SystemStatusDTO getSystemStatus(String view) {
+        if (view == null) {
+            view = "health";
+        }
+        return switch (view.toLowerCase()) {
+            case "health" -> getHealthStatus();
+            case "info" -> getInfoStatus();
+            case "agent-status" -> getAgentStatus();
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unknown X-View value '" + view + "'. Allowed: health, info, agent-status");
+        };
     }
 
     public SystemStatusDTO getHealthStatus() {

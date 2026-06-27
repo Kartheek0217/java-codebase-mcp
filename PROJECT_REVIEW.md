@@ -11,10 +11,10 @@
 ```
 Controllers (REST/MCP)
     ├── CodebaseController   → file indexing, search, symbols, topology, batch
-    ├── TaskManagerController→ tasks, rules
+    ├── TaskManagerController→ project tasks, rules
     ├── SessionController    → sessions
     ├── SkillController      → skills
-    ├── AgentController        → AGENT actions (explain, review, refactor, test-gen)
+    ├── AgentController      → background agent tasks, SSE streaming, sync actions
     ├── ProjectController    → CRUD, reindex, git-status, stage/commit
     ├── BrowserController    → Playwright headless browser sessions
     └── SystemController     → health, AGENT status

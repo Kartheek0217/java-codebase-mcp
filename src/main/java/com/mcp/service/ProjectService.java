@@ -111,12 +111,52 @@ public class ProjectService {
         return savedProject;
     }
 
+    @Transactional
+    public Object createProjectAndIndex(String name, String rootPath) throws IOException {
+        java.nio.file.Path path = java.nio.file.Path.of(rootPath);
+        if (!java.nio.file.Files.exists(path))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path does not exist: " + rootPath);
+
+        path = path.toRealPath();
+        if (!java.nio.file.Files.isDirectory(path))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not a directory: " + path);
+        if (!java.nio.file.Files.isReadable(path))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Root path is not readable: " + path);
+        Project project = createProject(name, path.toString());
+        return buildProjectOpResponse(project.getId(), "create", project);
+    }
+
     public List<Project> getAllProjects() {
         return projectRepository.findAll();
     }
 
+    public Object getProjects(String view) {
+        if (view == null) {
+            view = "list";
+        }
+        return switch (view.toLowerCase()) {
+            case "list" -> getAllProjects();
+            case "summary" -> getAllProjectSummaries();
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unknown view value '" + view + "'. Allowed: list, summary");
+        };
+    }
+
     public Project getProject(Long id) {
         return projectRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
+    }
+
+    public Object getProject(Long id, String view) {
+        if (view == null) {
+            view = "detail";
+        }
+        return switch (view.toLowerCase()) {
+            case "detail" -> getProject(id);
+            case "stats" -> getProjectStats(id);
+            case "git-status" -> gitInfoService.getProjectStatus(id);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unknown view value '" + view + "'. Allowed: detail, stats, git-status");
+        };
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -222,5 +262,44 @@ public class ProjectService {
         projectRepository.delete(project);
 
         logger.info("Project {} deleted successfully with all associated data.", id);
+    }
+
+    @Transactional
+    public Object manageProjectVcs(Long id, String action, Object requestBody, String message) {
+        if (action == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Action is required");
+        }
+        return switch (action.toLowerCase()) {
+            case "stage" -> {
+                gitInfoService.stageFiles(id, parsePatterns(requestBody));
+                yield Map.of("status", "success", "op", "stage");
+            }
+            case "discard" -> {
+                gitInfoService.discardChanges(id, parsePatterns(requestBody));
+                yield Map.of("status", "success", "op", "discard");
+            }
+            case "commit" -> {
+                if (message == null || message.isBlank())
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Query param 'message' is required for action=commit");
+                String hash = gitInfoService.commit(id, message);
+                yield Map.of("status", "success", "op", "commit", "commitHash", hash);
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unknown action '" + action + "'. Allowed: stage, discard, commit");
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> parsePatterns(Object requestBody) {
+        if (requestBody instanceof List<?> list)
+            return (List<String>) list;
+        if (requestBody instanceof Map<?, ?> map) {
+            Object bodyVal = map.get("body");
+            if (bodyVal instanceof List<?> list)
+                return (List<String>) list;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Body must be a list of file patterns or {\"body\": [\"pattern\"]}");
     }
 }

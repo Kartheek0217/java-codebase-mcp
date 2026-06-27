@@ -54,11 +54,14 @@ eliminate fluff.
 
 ## Tools Reference
 
-- **Tasks**: `crt-task` (create task), `get-tasks` (list by `projectId`), `get-task` (status by `id`), `upd-task` (update by `id`), `del-task` (delete by `id`), `upd-task-step` (update step `id`, `stepId`, `status`).
+- **Project Tasks (TaskManager)**: `crt-task` (create project task), `get-tasks` (list by `projectId`), `get-task` (status by `id`), `upd-task` (update by `id`), `del-task` (delete by `id`), `upd-task-step` (update step `id`, `stepId`, `status`). These manage project-specific goals and rules.
 - **Projects**: `crt-project` (create, `name`, `rootPath`), `get-projects` (list, `view=list|summary`), `get-project` (details, `id`, `view=detail|stats|git-status`), `del-project` (delete, `id`), `reindex-project` (re-index, `id`), `mng-project-vcs` (git stage/discard/commit), `scan-project` (find new/changed/deleted files), `reconcile-index` (sync index), `get-project-topology` (dependency structure).
 - **Skills & Rules**: `learn-skill-url` (`projectId`, `url`), `learn-skill-file` (`projectId`, `filePath`), `get-skills` (list, `projectId`), `clear-skills` (`projectId`), `get-rules` (`projectId`), `crt-rule` (add), `del-rule` (`id`), `clear-rules` (`projectId`).
 - **Sessions**: `start-session` (create agent session, `projectId`), `get-session` (metadata, `sessionId`), `lst-sessions` (list, `projectId`), `crt-session` (new browser, `projectId`, `browserType`, `headless`, `viewport`), `get-session-state` (HTML/state, `X-View=content`), `browser` (interaction, `X-Action=navigate|screenshot|click|fill|type|select|wait|evaluate|extract-locators`), `close-session` (close context, `sessionId`).
-- **Agent/AI**: `submit-task` / `batch-submit-tasks` (run action/batch in background, returns `taskId`), `explain-symbol`/`-sync` (`symbolId`), `explain-file`/`-sync` (`filePath`), `ask-question`/`-sync` (`question`), `code-review`/`-sync` (`filePath`), `code-refactor`/`-sync` (`filePath`), `code-optimise`/`-sync` (`filePath`), `web-search`/`-sync` (`query`/`url`), `code-commit`/`-sync` (`diff`), `java-doc`/`-sync` (`filePath`), `junit-test-cases`/`-sync` (`filePath`).
+- **Agent Tasks (AgentController)**: 
+  - **Background**: `submit-agent-task` (run action in background, returns `taskId`), `get-agent-tasks` (list by `projectId`).
+  - **Streaming (SSE - No Envelope)**: `explain-symbol`, `explain-file`, `ask-question`, `code-review`, `code-refactor`, `code-optimise`, `web-search`, `code-commit`, `java-doc`, `junit-test-cases`.
+  - **Synchronous (JSON Envelope)**: `explain-symbol/sync`, `explain-file/sync`, `ask-question/sync`, `code-review/sync`, `code-refactor/sync`, `code-optimise/sync`, `web-search/sync`, `code-commit/sync`, `java-doc/sync`, `junit-test-cases/sync`.
 - **Codebase Discovery**: `read-file` (read with symbols), `batch-read-files` (multiple files), `suggest-context` (symbol+content hits), `search-content` (Lucene query), `search-changed-content` (Lucene uncommitted), `search-symbols` (find by name, `type=CLASS|METHOD|FIELD|CONSTRUCTOR`), `find-files` (find paths), `get-session-history` (accessed paths), `summarize-file` (AI file summary), `analyze` (controller endpoint trace), `get-symbol-detail` (details by `id`), `get-call-hierarchy` (call tree by `id`).
 - **System**: `get-system-status` (read state, `X-View=health|info|agent-status`).
 

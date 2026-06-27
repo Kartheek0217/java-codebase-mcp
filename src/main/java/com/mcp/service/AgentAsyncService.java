@@ -1,12 +1,15 @@
 package com.mcp.service;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +20,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mcp.dto.AgentActionRequest;
+import com.mcp.dto.BatchTaskRequest;
+import com.mcp.dto.BatchTaskResponse;
 import com.mcp.dto.browser.BrowserSessionRequest;
 import com.mcp.entity.AgentTask;
 import com.mcp.model.AgentTaskStatus;
@@ -39,6 +44,7 @@ public class AgentAsyncService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final ThreadPoolTaskExecutor executor;
+    private final AgentService agentService;
     private long lastApiCallTime = 0;
 
     private synchronized void enforceRateLimit() {
@@ -59,13 +65,15 @@ public class AgentAsyncService {
             WebSearchOrchestrator webSearchOrchestrator,
             BrowserSessionManager browserSessionManager,
             AgentProperties props,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AgentService agentService) {
         this.agentTaskRepository = agentTaskRepository;
         this.promptBuilder = promptBuilder;
         this.webSearchOrchestrator = webSearchOrchestrator;
         this.browserSessionManager = browserSessionManager;
         this.props = props;
         this.objectMapper = objectMapper;
+        this.agentService = agentService;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(props.getTimeoutSeconds()))
                 .build();
@@ -221,5 +229,91 @@ public class AgentAsyncService {
             logger.error("Failed to parse response JSON", e);
         }
         return "";
+    }
+
+    public Map<String, Object> submitTask(String action, Long projectId, Long symbolId, String filePath, String query, String url, String diff, AgentActionRequest request) {
+        AgentActionRequest mergedReq = agentService.validateAndMergeParameters(projectId, action, symbolId, filePath, query, url,
+                diff, request);
+
+        String reqJson = "{}";
+        try {
+            reqJson = objectMapper.writeValueAsString(mergedReq);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            // ignore
+        }
+
+        AgentTask task = new AgentTask(projectId, action.toLowerCase(), reqJson);
+        task = agentTaskRepository.save(task);
+
+        executeAsyncTask(task.getId(), projectId, action, mergedReq);
+
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("taskId", task.getId());
+        response.put("status", task.getStatus());
+        return response;
+    }
+
+    public List<BatchTaskResponse> submitBatchTasks(String rawPayload) {
+        List<BatchTaskRequest> requests;
+        try {
+            com.fasterxml.jackson.databind.JsonNode rawInput = objectMapper.readTree(rawPayload);
+            if (rawInput.isArray()) {
+                requests = objectMapper.readerForListOf(BatchTaskRequest.class).readValue(rawInput);
+            } else if (rawInput.isObject() && rawInput.has("body")) {
+                com.fasterxml.jackson.databind.JsonNode bodyNode = rawInput.get("body");
+                if (bodyNode.isArray()) {
+                    requests = objectMapper.readerForListOf(BatchTaskRequest.class).readValue(bodyNode);
+                } else {
+                    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "body property must be an array");
+                }
+            } else {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "Invalid batch request format: expected array or object with body array");
+            }
+        } catch (IOException e) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Failed to parse batch request: " + e.getMessage(), e);
+        }
+
+        List<BatchTaskResponse> responses = new ArrayList<>();
+        for (BatchTaskRequest item : requests) {
+            if (item.action() == null || item.projectId() == null) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "action and projectId are required for all tasks in batch");
+            }
+            AgentActionRequest mergedReq = agentService.validateAndMergeParameters(
+                    item.projectId(),
+                    item.action(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    item.request());
+
+            String reqJson = "{}";
+            try {
+                reqJson = objectMapper.writeValueAsString(mergedReq);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                // ignore
+            }
+
+            AgentTask task = new AgentTask(item.projectId(), item.action().toLowerCase(), reqJson);
+            task = agentTaskRepository.save(task);
+
+            executeAsyncTask(task.getId(), item.projectId(), item.action(), mergedReq);
+
+            responses.add(new BatchTaskResponse(task.getId(), item.action(), task.getStatus().toString()));
+        }
+        return responses;
+    }
+
+    public AgentTask getTask(Long id) {
+        return agentTaskRepository.findById(id)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "AgentTask not found: " + id));
+    }
+
+    public List<AgentTask> getTasks(Long projectId) {
+        return agentTaskRepository.findByProjectId(projectId);
     }
 }

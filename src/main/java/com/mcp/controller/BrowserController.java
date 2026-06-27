@@ -2,36 +2,42 @@ package com.mcp.controller;
 
 import com.mcp.dto.browser.*;
 import com.mcp.entity.BrowserSession;
-import com.mcp.repository.BrowserSessionRepository;
 import com.mcp.service.BrowserSessionManager;
 import com.mcp.service.HeadlessBrowserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import io.github.overrridee.annotation.ResponseEnvelope;
+import io.github.overrridee.annotation.IgnoreEnvelope;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/browser")
+@Validated
+@ResponseEnvelope
 @Tag(name = "Browser", description = "Headless browser automation for UI testing and web page interaction.")
 public class BrowserController {
 
+    public enum SessionStatus { ACTIVE, CLOSED }
+
+
     private final BrowserSessionManager sessionManager;
     private final HeadlessBrowserService browserService;
-    private final BrowserSessionRepository repository;
 
-    public BrowserController(BrowserSessionManager sessionManager, HeadlessBrowserService browserService,
-            BrowserSessionRepository repository) {
+    public BrowserController(BrowserSessionManager sessionManager, HeadlessBrowserService browserService) {
         this.sessionManager = sessionManager;
         this.browserService = browserService;
-        this.repository = repository;
     }
 
     // ─── Session lifecycle ────────────────────────────────────────────────────
@@ -54,22 +60,11 @@ public class BrowserController {
             @ApiResponse(responseCode = "200", description = "Session created, returns {sessionId, status, currentUrl, createdAt}")
         }
     )
-    public ResponseEntity<BrowserSessionResponse> createSession(@RequestBody BrowserSessionRequest request) {
-        String sessionId = sessionManager.createSession(request);
-
-        BrowserSession entity = new BrowserSession();
-        entity.setSessionId(sessionId);
-        entity.setProjectId(request.projectId());
-        entity.setBrowserType(request.browserType() != null ? request.browserType() : "chromium");
-        entity.setHeadless(request.headless() != null ? request.headless() : true);
-        if (request.viewportWidth() != null) entity.setViewportWidth(request.viewportWidth());
-        if (request.viewportHeight() != null) entity.setViewportHeight(request.viewportHeight());
-
-        repository.save(entity);
-
-        return ResponseEntity.ok(new BrowserSessionResponse(
-                sessionId, "ACTIVE", null, entity.getCreatedAt()));
-    }
+	public BrowserSessionResponse createSession(@RequestBody @Valid BrowserSessionRequest request) {
+		BrowserSession entity = sessionManager.createSessionEntity(request);
+		return new BrowserSessionResponse(
+				entity.getSessionId(), SessionStatus.ACTIVE.name(), entity.getCurrentUrl(), entity.getCreatedAt());
+	}
 
     /**
      * {@code GET /api/browser/session} : List all browser sessions.
@@ -88,17 +83,11 @@ public class BrowserController {
             @ApiResponse(responseCode = "200", description = "Session list returned")
         }
     )
-    public ResponseEntity<List<BrowserSessionResponse>> listSessions(
-            @Parameter(description = "Filter by project ID (optional)")
-            @RequestParam(required = false) Long projectId) {
-        List<BrowserSession> entities = projectId != null
-                ? repository.findByProjectId(projectId)
-                : repository.findAll();
-        return ResponseEntity.ok(entities.stream()
-                .map(e -> new BrowserSessionResponse(
-                        e.getSessionId(), e.getStatus(), e.getCurrentUrl(), e.getCreatedAt()))
-                .collect(Collectors.toList()));
-    }
+	public List<BrowserSessionResponse> listSessions(
+			@Parameter(description = "Filter by project ID (optional)")
+			@RequestParam(required = false) Long projectId) {
+		return sessionManager.listSessions(projectId);
+	}
 
     /**
      * {@code DELETE /api/browser/session/{sessionId}} : Close and clean up a browser session.
@@ -117,14 +106,15 @@ public class BrowserController {
             @ApiResponse(responseCode = "404", description = "Session not found")
         }
     )
-    public ResponseEntity<Void> closeSession(@PathVariable String sessionId) {
-        sessionManager.closeSession(sessionId);
-        repository.findBySessionId(sessionId).ifPresent(e -> {
-            e.setStatus("CLOSED");
-            repository.save(e);
-        });
-        return ResponseEntity.noContent().build();
-    }
+	@IgnoreEnvelope(reason = "204 No Content")
+	public ResponseEntity<Void> closeSession(@PathVariable @NotBlank String sessionId) {
+		try {
+			sessionManager.closeSession(sessionId);
+			return ResponseEntity.noContent().build();
+		} catch (Exception e) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found", e);
+		}
+	}
 
     // ─── Session actions (POST) ───────────────────────────────────────────────
 
@@ -140,17 +130,17 @@ public class BrowserController {
     @PostMapping("/session/{sessionId}")
     @Operation(
         summary = "browser-action",
-        description = "Perform a browser interaction within an active session. Select the action with the X-Action header:\n\n" +
-            "• X-Action: navigate — Navigate to a URL. Body: {url: string}. Updates session's currentUrl.\n\n" +
+        description = "Perform a browser interaction within an active session. Select the action with the X-Action header:\\n\\n" +
+            "• X-Action: navigate — Navigate to a URL. Body: {url: string}. Updates session's currentUrl.\\n\\n" +
             "• X-Action: screenshot — Capture current page screenshot. No body needed. " +
-                "Returns {base64: string} (PNG image encoded as base64).\n\n" +
-            "• X-Action: click — Click an element. Body: {selector: string} (CSS selector or XPath).\n\n" +
-            "• X-Action: fill — Set the value of an input field instantly. Body: {selector: string, value: string}.\n\n" +
-            "• X-Action: type — Type text keystroke-by-keystroke (simulates real typing). Body: {selector: string, text: string}.\n\n" +
-            "• X-Action: select — Choose an option in a <select> dropdown. Body: {selector: string, value: string}.\n\n" +
-            "• X-Action: wait — Wait until a DOM element appears. Body: {selector: string}. Blocks until visible.\n\n" +
+                "Returns {base64: string} (PNG image encoded as base64).\\n\\n" +
+            "• X-Action: click — Click an element. Body: {selector: string} (CSS selector or XPath).\\n\\n" +
+            "• X-Action: fill — Set the value of an input field instantly. Body: {selector: string, value: string}.\\n\\n" +
+            "• X-Action: type — Type text keystroke-by-keystroke (simulates real typing). Body: {selector: string, text: string}.\\n\\n" +
+            "• X-Action: select — Choose an option in a <select> dropdown. Body: {selector: string, value: string}.\\n\\n" +
+            "• X-Action: wait — Wait until a DOM element appears. Body: {selector: string}. Blocks until visible.\\n\\n" +
             "• X-Action: evaluate — Execute arbitrary JavaScript in page context. Body: {script: string}. " +
-                "Returns {result: any} with the script's return value.\n\n" +
+                "Returns {result: any} with the script's return value.\\n\\n" +
             "• X-Action: extract-locators — Navigate to a URL and extract all interactive elements. " +
                 "Body: {url: string}. Returns {locators: [{type, selector, label}]} for all clickable, " +
                 "fillable, and selectable elements on the page.",
@@ -160,72 +150,17 @@ public class BrowserController {
             @ApiResponse(responseCode = "404", description = "Session not found")
         }
     )
-    public ResponseEntity<Object> browserAction(
-            @PathVariable String sessionId,
-            @Parameter(description = "Action: navigate | screenshot | click | fill | type | select | wait | evaluate | extract-locators")
-            @RequestHeader(value = "X-Action") String action,
-            @RequestBody(required = false) java.util.Map<String, Object> body) {
-
-        String selector = body != null ? (String) body.get("selector") : null;
-        String value    = body != null ? (String) body.get("value")    : null;
-        String url      = body != null ? (String) body.get("url")      : null;
-        String text     = body != null ? (String) body.get("text")     : null;
-        String script   = body != null ? (String) body.get("script")   : null;
-
-        return switch (action.toLowerCase()) {
-            case "navigate" -> {
-                requireField(url, "url", "navigate");
-                browserService.navigate(sessionId, url);
-                updateSession(sessionId, url);
-                yield ResponseEntity.ok().build();
-            }
-            case "screenshot" -> {
-                String base64 = browserService.screenshot(sessionId);
-                yield ResponseEntity.ok(new ScreenshotResponse(base64));
-            }
-            case "click" -> {
-                requireField(selector, "selector", "click");
-                browserService.click(sessionId, selector);
-                yield ResponseEntity.ok().build();
-            }
-            case "fill" -> {
-                requireField(selector, "selector", "fill");
-                requireField(value, "value", "fill");
-                browserService.fill(sessionId, selector, value);
-                yield ResponseEntity.ok().build();
-            }
-            case "type" -> {
-                requireField(selector, "selector", "type");
-                requireField(text, "text", "type");
-                browserService.type(sessionId, selector, text);
-                yield ResponseEntity.ok().build();
-            }
-            case "select" -> {
-                requireField(selector, "selector", "select");
-                requireField(value, "value", "select");
-                browserService.selectOption(sessionId, selector, value);
-                yield ResponseEntity.ok().build();
-            }
-            case "wait" -> {
-                requireField(selector, "selector", "wait");
-                browserService.waitForSelector(sessionId, selector);
-                yield ResponseEntity.ok().build();
-            }
-            case "evaluate" -> {
-                requireField(script, "script", "evaluate");
-                Object result = browserService.evaluate(sessionId, script);
-                yield ResponseEntity.ok(new EvaluateResponse(result));
-            }
-            case "extract-locators" -> {
-                requireField(url, "url", "extract-locators");
-                List<LocatorInfo> locators = browserService.extractLocators(sessionId, url);
-                updateSession(sessionId, url);
-                yield ResponseEntity.ok(new ExtractLocatorsResponse(locators));
-            }
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Unknown X-Action value '" + action + "'. Allowed: navigate, screenshot, click, fill, type, select, wait, evaluate, extract-locators");
-        };
-    }
+	public Object browserAction(
+			@PathVariable @NotBlank String sessionId,
+			@Parameter(description = "Action: navigate | screenshot | click | fill | type | select | wait | evaluate | extract-locators", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {"navigate", "screenshot", "click", "fill", "type", "select", "wait", "evaluate", "extract-locators"}))
+			@RequestHeader(value = "X-Action") @NotBlank @Pattern(regexp = "^(navigate|screenshot|click|fill|type|select|wait|evaluate|extract-locators)$", message = "Invalid X-Action header value") String action,
+			@RequestBody(required = false) Map<String, Object> body) {
+		Object response = browserService.executeBrowserAction(sessionId, action, body);
+		if (response == null) {
+			return new Object();
+		}
+		return response;
+	}
 
     // ─── Session read (GET) ───────────────────────────────────────────────────
 
@@ -239,7 +174,7 @@ public class BrowserController {
     @GetMapping("/session/{sessionId}")
     @Operation(
         summary = "get-session-state",
-        description = "Read the current state of the browser page within a session. Select the view with X-View:\n\n" +
+        description = "Read the current state of the browser page within a session. Select the view with X-View:\\n\\n" +
             "• X-View: content (default) — retrieve current page URL, title, and full HTML content. " +
                 "Returns {url, title, content (HTML string)}. " +
                 "Use this after navigation or actions to inspect the rendered page before further interactions.",
@@ -249,35 +184,10 @@ public class BrowserController {
             @ApiResponse(responseCode = "404", description = "Session not found")
         }
     )
-    public ResponseEntity<Object> getSessionState(
-            @PathVariable String sessionId,
-            @Parameter(description = "View variant: 'content' (default)")
-            @RequestHeader(value = "X-View", required = false, defaultValue = "content") String view) {
-        return switch (view.toLowerCase()) {
-            case "content" -> {
-                String url     = browserService.getUrl(sessionId);
-                String title   = browserService.getTitle(sessionId);
-                String content = browserService.getContent(sessionId);
-                yield ResponseEntity.ok(new PageContentResponse(url, title, content));
-            }
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Unknown X-View value '" + view + "'. Allowed: content");
-        };
-    }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    private void updateSession(String sessionId, String url) {
-        repository.findBySessionId(sessionId).ifPresent(e -> {
-            e.setCurrentUrl(url);
-            e.setLastActive(LocalDateTime.now());
-            repository.save(e);
-        });
-    }
-
-    private void requireField(String value, String field, String action) {
-        if (value == null || value.isBlank())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Body field '" + field + "' is required for X-Action=" + action);
-    }
+	public Object getSessionState(
+			@PathVariable @NotBlank String sessionId,
+			@Parameter(description = "View variant: 'content' (default)", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {"content"}))
+			@RequestHeader(value = "X-View", required = false, defaultValue = "content") @NotBlank @Pattern(regexp = "^(content)$", message = "Invalid X-View header value") String view) {
+		return browserService.getSessionState(sessionId, view);
+	}
 }

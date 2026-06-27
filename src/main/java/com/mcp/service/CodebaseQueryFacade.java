@@ -1,33 +1,44 @@
 package com.mcp.service;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mcp.dto.ContentSearchResult;
+import com.mcp.dto.ContextDTO;
 import com.mcp.dto.FileMetadataDTO;
 import com.mcp.dto.SearchOptions;
 import com.mcp.dto.SymbolDTO;
 import com.mcp.entity.FileMetadata;
 import com.mcp.entity.FileMetadataId;
+import com.mcp.entity.Project;
 import com.mcp.entity.Symbol;
 import com.mcp.entity.SymbolCall;
 import com.mcp.entity.SymbolType;
+import com.mcp.properties.CodebaseProperties;
 import com.mcp.repository.FileMetadataRepository;
 import com.mcp.repository.ProjectRepository;
 import com.mcp.repository.SymbolCallRepository;
 import com.mcp.repository.SymbolRepository;
+import com.mcp.util.CodeUtils;
+import com.mcp.util.AgentResponseOptimizer;
 
 /**
  * Facade that encapsulates all repository-level read operations previously
@@ -54,19 +65,39 @@ public class CodebaseQueryFacade {
     private final FileMetadataRepository fileMetadataRepository;
     private final ProjectRepository projectRepository;
     private final LuceneIndexService luceneIndexService;
+    private final GitInfoService gitInfoService;
+    private final CodeSummarizerService codeSummarizerService;
+    private final FileIndexerService fileIndexerService;
+    private final ContextMemoryService contextMemoryService;
+    private final CodebaseProperties codebaseProperties;
+    private final ObjectMapper objectMapper;
 
     public CodebaseQueryFacade(
             SymbolRepository symbolRepository,
             SymbolCallRepository symbolCallRepository,
             FileMetadataRepository fileMetadataRepository,
             ProjectRepository projectRepository,
-            LuceneIndexService luceneIndexService) {
+            LuceneIndexService luceneIndexService,
+            GitInfoService gitInfoService,
+            CodeSummarizerService codeSummarizerService,
+            FileIndexerService fileIndexerService,
+            ContextMemoryService contextMemoryService,
+            CodebaseProperties codebaseProperties,
+            ObjectMapper objectMapper) {
         this.symbolRepository = symbolRepository;
         this.symbolCallRepository = symbolCallRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.projectRepository = projectRepository;
         this.luceneIndexService = luceneIndexService;
+        this.gitInfoService = gitInfoService;
+        this.codeSummarizerService = codeSummarizerService;
+        this.fileIndexerService = fileIndexerService;
+        this.contextMemoryService = contextMemoryService;
+        this.codebaseProperties = codebaseProperties;
+        this.objectMapper = objectMapper;
     }
+
+    public record FileContextResult(int statusCode, String checksum, Object body) {}
 
     // ─── Symbol search ────────────────────────────────────────────────────────
 
@@ -196,6 +227,40 @@ public class CodebaseQueryFacade {
         Object load(Long projectId, String filePath) throws IOException;
     }
 
+    public Object getBatchContextParsed(Long projectId, String rawPayload) throws IOException {
+        List<String> filePaths;
+        try {
+            JsonNode rawInput = objectMapper.readTree(rawPayload);
+            if (rawInput.isArray()) {
+                filePaths = objectMapper.readerForListOf(String.class).readValue(rawInput);
+            } else if (rawInput.isObject() && rawInput.has("body")) {
+                JsonNode bodyNode = rawInput.get("body");
+                if (bodyNode.isArray()) {
+                    filePaths = objectMapper.readerForListOf(String.class).readValue(bodyNode);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body property must be an array");
+                }
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid batch request format: expected array or object with body array");
+            }
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse batch request: " + e.getMessage(), e);
+        }
+
+        if (filePaths == null || filePaths.isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body must be a non-empty list of file paths");
+            
+        return getBatchContext(projectId, filePaths,
+                (pid, fp) -> {
+                    try {
+                        FileContextResult result = getFileContext(pid, fp, null, "full", null);
+                        return result.body();
+                    } catch(IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+    }
+
     // ─── Suggest (symbol + content combined) ──────────────────────────────────
 
     /**
@@ -223,6 +288,25 @@ public class CodebaseQueryFacade {
         return luceneIndexService.searchContent(projectId, opts);
     }
 
+    public Object searchChangedContent(Long projectId, String query, Integer limit) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
+        Set<String> changed = gitInfoService.getChangedFilePaths(projectId);
+        Set<String> absPaths = changed.stream()
+                .map(rel -> Paths.get(project.getRootPath()).resolve(rel).toAbsolutePath().toString())
+                .collect(Collectors.toSet());
+        SearchOptions opts = SearchOptions.builder()
+                .query(query)
+                .filePaths(absPaths)
+                .limit(limit)
+                .build();
+        return luceneIndexService.searchContent(projectId, opts);
+    }
+
+    public Set<String> getSessionHistory(String sessionId) {
+        return contextMemoryService.getSessionFiles(sessionId);
+    }
+
     // ─── File metadata lookup ─────────────────────────────────────────────────
 
     /**
@@ -234,6 +318,75 @@ public class CodebaseQueryFacade {
     public FileMetadataDTO getFileMetadata(Long projectId, String absolutePath) {
         FileMetadataId id = new FileMetadataId(projectId, absolutePath);
         return fileMetadataRepository.findById(id).map(this::toMetadataDTO).orElse(null);
+    }
+
+    public FileContextResult getFileContext(Long projectId, String filePath, String sessionId, String format,
+            String ifNoneMatch) throws IOException {
+        if (filePath == null || filePath.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'filePath' is required");
+        }
+
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
+
+        Path fullPath = com.mcp.util.PathSecurityUtil.validateAndNormalizePath(project.getRootPath(), filePath);
+
+        if (!Files.exists(fullPath))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + filePath);
+
+        // Auto-downgrade to structure for large files to prevent massive token payloads
+        long fileBytes = Files.size(fullPath);
+        long maxBytes = (long) codebaseProperties.getMaxFileSizeKb() * 1024;
+        if (fileBytes > maxBytes && "full".equalsIgnoreCase(format))
+            format = "structure";
+
+        List<Symbol> symbols = fileIndexerService.getSymbols(projectId, fullPath.toString());
+        String content = Files.readString(fullPath);
+        String finalContent;
+        String summary = null;
+
+        if ("structure".equalsIgnoreCase(format)) {
+            String structureContent = codeSummarizerService.extractStructure(content);
+            finalContent = CodeUtils.stripJavaImports(structureContent);
+        } else if ("summary".equalsIgnoreCase(format)) {
+            summary = codeSummarizerService.createIntelligentSummary(content);
+            finalContent = null;
+        } else if ("numbered".equalsIgnoreCase(format)) {
+            finalContent = CodeUtils.addLineNumbers(content);
+        } else {
+            finalContent = content;
+        }
+
+        var metaDTO = getFileMetadata(projectId, fullPath.toString());
+        String currentChecksum = metaDTO != null ? metaDTO.checksum() : null;
+
+        if (ifNoneMatch != null && currentChecksum != null && ifNoneMatch.equals("\"" + currentChecksum + "\""))
+            return new FileContextResult(304, currentChecksum, null);
+
+        ContextDTO contextDTO = new ContextDTO(filePath, finalContent, summary, format,
+                symbols.stream().map(s -> toSymbolDTO(s, null)).toList(), metaDTO, null, false,
+                false);
+
+        if ("markdown".equalsIgnoreCase(format))
+            return new FileContextResult(200, currentChecksum, Map.of("type", "markdown", "content", AgentResponseOptimizer.toMarkdown(contextDTO)));
+
+        if (sessionId != null)
+            contextMemoryService.recordAccess(sessionId, filePath, currentChecksum);
+
+        return new FileContextResult(200, currentChecksum, Map.of("type", "context", "data", contextDTO));
+    }
+
+    public Object summarizeFile(Long projectId, String filePath) throws IOException {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found"));
+        Path full = Paths.get(project.getRootPath()).resolve(filePath);
+        String content = Files.readString(full);
+        String summary = codeSummarizerService.createIntelligentSummary(content);
+        List<Symbol> symbols = fileIndexerService.getSymbols(projectId, full.toString());
+        return Map.of(
+                "filePath", filePath,
+                "summary", summary,
+                "symbols", symbols.stream().map(s -> toSymbolDTO(s, null)).toList());
     }
 
     // ─── DTO mappers ──────────────────────────────────────────────────────────

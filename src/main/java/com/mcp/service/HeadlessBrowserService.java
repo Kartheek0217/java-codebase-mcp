@@ -8,9 +8,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.mcp.dto.browser.LocatorInfo;
+import com.mcp.dto.browser.ScreenshotResponse;
+import com.mcp.dto.browser.EvaluateResponse;
+import com.mcp.dto.browser.ExtractLocatorsResponse;
+import com.mcp.dto.browser.PageContentResponse;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.LoadState;
@@ -98,6 +104,93 @@ public class HeadlessBrowserService {
 
     public String extractText(String sessionId, String selector) {
         return (String) getOrCreatePage(sessionId).evalOnSelector(selector, "el => el.innerText");
+    }
+
+    public Object executeBrowserAction(String sessionId, String action, Map<String, Object> body) {
+        if (action == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Action header is required");
+        }
+        String selector = body != null ? (String) body.get("selector") : null;
+        String value    = body != null ? (String) body.get("value")    : null;
+        String url      = body != null ? (String) body.get("url")      : null;
+        String text     = body != null ? (String) body.get("text")     : null;
+        String script   = body != null ? (String) body.get("script")   : null;
+
+        return switch (action.toLowerCase()) {
+            case "navigate" -> {
+                requireField(url, "url", "navigate");
+                navigate(sessionId, url);
+                sessionManager.updateSession(sessionId, url);
+                yield null;
+            }
+            case "screenshot" -> {
+                String base64 = screenshot(sessionId);
+                yield new ScreenshotResponse(base64);
+            }
+            case "click" -> {
+                requireField(selector, "selector", "click");
+                click(sessionId, selector);
+                yield null;
+            }
+            case "fill" -> {
+                requireField(selector, "selector", "fill");
+                requireField(value, "value", "fill");
+                fill(sessionId, selector, value);
+                yield null;
+            }
+            case "type" -> {
+                requireField(selector, "selector", "type");
+                requireField(text, "text", "type");
+                type(sessionId, selector, text);
+                yield null;
+            }
+            case "select" -> {
+                requireField(selector, "selector", "select");
+                requireField(value, "value", "select");
+                selectOption(sessionId, selector, value);
+                yield null;
+            }
+            case "wait" -> {
+                requireField(selector, "selector", "wait");
+                waitForSelector(sessionId, selector);
+                yield null;
+            }
+            case "evaluate" -> {
+                requireField(script, "script", "evaluate");
+                Object result = evaluate(sessionId, script);
+                yield new EvaluateResponse(result);
+            }
+            case "extract-locators" -> {
+                requireField(url, "url", "extract-locators");
+                List<LocatorInfo> locators = extractLocators(sessionId, url);
+                sessionManager.updateSession(sessionId, url);
+                yield new ExtractLocatorsResponse(locators);
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unknown X-Action value '" + action + "'. Allowed: navigate, screenshot, click, fill, type, select, wait, evaluate, extract-locators");
+        };
+    }
+
+    public PageContentResponse getSessionState(String sessionId, String view) {
+        if (view == null) {
+            view = "content";
+        }
+        return switch (view.toLowerCase()) {
+            case "content" -> {
+                String url     = getUrl(sessionId);
+                String title   = getTitle(sessionId);
+                String content = getContent(sessionId);
+                yield new PageContentResponse(url, title, content);
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unknown X-View value '" + view + "'. Allowed: content");
+        };
+    }
+
+    private void requireField(String value, String field, String action) {
+        if (value == null || value.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Body field '" + field + "' is required for X-Action=" + action);
     }
 
     @SuppressWarnings("unchecked")
@@ -219,16 +312,16 @@ public class HeadlessBrowserService {
                         // 2. Role + Name (accessible roles / ARIA)
                         if (!locator) {
                             const role = el.getAttribute('role') ||
-                                        (el.tagName === 'BUTTON' ? 'button' :
-                                         el.tagName === 'A' ? 'link' :
-                                         el.tagName === 'INPUT' ? (['checkbox', 'radio'].includes(el.type) ? el.type : 'textbox') :
-                                         el.tagName === 'SELECT' ? 'combobox' :
-                                         el.tagName === 'TEXTAREA' ? 'textbox' : '');
+                                         (el.tagName === 'BUTTON' ? 'button' :
+                                          el.tagName === 'A' ? 'link' :
+                                          el.tagName === 'INPUT' ? (['checkbox', 'radio'].includes(el.type) ? el.type : 'textbox') :
+                                          el.tagName === 'SELECT' ? 'combobox' :
+                                          el.tagName === 'TEXTAREA' ? 'textbox' : '');
 
                             const ariaName = (el.getAttribute('aria-label') || el.innerText.trim() || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim();
 
                             if (role && ariaName && ariaName.length > 0 && ariaName.length < 60) {
-                                locator = `role=${role}[name="${ariaName.replace(/"/g, '\\"')}"]`;
+                                locator = `role=${role}[name="${ariaName.replace(/"/g, '\\\\\"')}"]`;
                             }
                         }
 
@@ -236,7 +329,7 @@ public class HeadlessBrowserService {
                         if (!locator && (el.tagName === 'BUTTON' || el.tagName === 'A')) {
                             const text = el.innerText.trim().replace(/\\s+/g, ' ');
                             if (text && text.length > 0 && text.length < 40) {
-                                locator = `${el.tagName.toLowerCase()}:has-text("${text.replace(/"/g, '\\"')}")`;
+                                locator = `${el.tagName.toLowerCase()}:has-text("${text.replace(/"/g, '\\\\\"')}")`;
                             }
                         }
 

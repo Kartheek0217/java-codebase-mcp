@@ -1,15 +1,22 @@
 package com.mcp.service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.mcp.dto.browser.BrowserSessionRequest;
+import com.mcp.dto.browser.BrowserSessionResponse;
+import com.mcp.entity.BrowserSession;
 import com.mcp.properties.BrowserProperties;
+import com.mcp.repository.BrowserSessionRepository;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
@@ -25,6 +32,7 @@ public class BrowserSessionManager {
     private static final Logger log = LoggerFactory.getLogger(BrowserSessionManager.class);
 
     private final BrowserProperties properties;
+    private final BrowserSessionRepository repository;
     private volatile Playwright playwright;
     private final Map<String, SessionState> sessions = new ConcurrentHashMap<>();
     private final ReentrantLock sessionLock = new ReentrantLock();
@@ -34,8 +42,9 @@ public class BrowserSessionManager {
 
     private record SessionState(Browser browser, BrowserContext context) {}
 
-    public BrowserSessionManager(BrowserProperties properties) {
+    public BrowserSessionManager(BrowserProperties properties, BrowserSessionRepository repository) {
         this.properties = properties;
+        this.repository = repository;
     }
 
     static {
@@ -55,9 +64,14 @@ public class BrowserSessionManager {
         }
     }
 
+    public String createSession(BrowserSessionRequest request) {
+        BrowserSession entity = createSessionEntity(request);
+        return entity.getSessionId();
+    }
+
     // Lock-protected: enforceSessionLimit() check + ensurePlaywrightInitialized() +
     // session creation must be atomic to prevent TOCTOU races under concurrent calls.
-    public String createSession(com.mcp.dto.browser.BrowserSessionRequest request) {
+    public BrowserSession createSessionEntity(BrowserSessionRequest request) {
         sessionLock.lock();
         try {
             java.util.Optional<String> evictedId = enforceSessionLimit();
@@ -90,7 +104,16 @@ public class BrowserSessionManager {
             
             sessions.put(sessionId, new SessionState(browser, context));
             lastActivity.put(sessionId, Instant.now());
-            return sessionId;
+
+            BrowserSession entity = new BrowserSession();
+            entity.setSessionId(sessionId);
+            entity.setProjectId(request.projectId());
+            entity.setBrowserType(request.browserType() != null ? request.browserType() : "chromium");
+            entity.setHeadless(request.headless() != null ? request.headless() : true);
+            if (request.viewportWidth() != null) entity.setViewportWidth(request.viewportWidth());
+            if (request.viewportHeight() != null) entity.setViewportHeight(request.viewportHeight());
+
+            return repository.save(entity);
         } finally {
             sessionLock.unlock();
         }
@@ -127,6 +150,10 @@ public class BrowserSessionManager {
                     log.warn("Error closing browser", e);
                 }
             }
+            repository.findBySessionId(sessionId).ifPresent(e -> {
+                e.setStatus("CLOSED");
+                repository.save(e);
+            });
         } finally {
             sessionLock.unlock();
         }
@@ -137,6 +164,24 @@ public class BrowserSessionManager {
         return sessions.entrySet().stream()
                 .collect(java.util.stream.Collectors.toUnmodifiableMap(
                         e -> e.getKey(), e -> e.getValue().context()));
+    }
+
+    public void updateSession(String sessionId, String url) {
+        repository.findBySessionId(sessionId).ifPresent(e -> {
+            e.setCurrentUrl(url);
+            e.setLastActive(LocalDateTime.now());
+            repository.save(e);
+        });
+    }
+
+    public List<BrowserSessionResponse> listSessions(Long projectId) {
+        List<BrowserSession> entities = projectId != null
+                ? repository.findByProjectId(projectId)
+                : repository.findAll();
+        return entities.stream()
+                .map(e -> new BrowserSessionResponse(
+                        e.getSessionId(), e.getStatus(), e.getCurrentUrl(), e.getCreatedAt()))
+                .collect(Collectors.toList());
     }
 
     /**

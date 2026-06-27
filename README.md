@@ -71,7 +71,8 @@ The system is engineered for low-latency and high-throughput operation:
 | **Projects** | Registration, Scanning, Topology, Stats |
 | **Codebase** | Search, Symbols, Summarization, Endpoint Analysis |
 | **Browser** | Navigation, Content Extraction, Screenshots, Interactions |
-| **Agent** | Task Management, Step Updates, Skill Learning, Rules |
+| **Agent** | Synchronous Prompt Execution, Streaming Responses, Background Agent Tasks |
+| **Task Manager** | Project-specific Tasks, Steps, Rules, and AI Skill Definitions |
 
 ## 💻 Getting Started
 

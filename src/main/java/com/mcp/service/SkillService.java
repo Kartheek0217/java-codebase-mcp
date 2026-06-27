@@ -11,8 +11,10 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -141,6 +143,14 @@ public class SkillService {
 	}
 
 	@Transactional
+	public Map<String, String> learnSkillFromUrl(Long projectId, String url) throws IOException {
+		if (url == null || url.isBlank())
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'url' is required");
+		learnFromUrl(projectId, url);
+		return Map.of("status", "success", "message", "Skill learned from: " + url);
+	}
+
+	@Transactional
 	public void learnFromFile(Long projectId, String filePath) throws IOException {
 		logger.info("Learning skill from file: {} for project: {}", filePath, projectId);
 
@@ -161,6 +171,14 @@ public class SkillService {
 
 		String content = Files.readString(absoluteFilePath);
 		learnSkillFromMarkdown(projectId, content, filePath);
+	}
+
+	@Transactional
+	public Map<String, String> learnSkillFromFile(Long projectId, String filePath) throws IOException {
+		if (filePath == null || filePath.isBlank())
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query param 'filePath' is required");
+		learnFromFile(projectId, filePath);
+		return Map.of("status", "success", "message", "Skill learned from file: " + filePath);
 	}
 
 	@Transactional
@@ -191,6 +209,12 @@ public class SkillService {
 	public void deleteSkillsByProject(Long projectId) {
 		logger.info("Deleting all skills for project: {}", projectId);
 		skillRepository.deleteByProjectId(projectId);
+	}
+
+	@Transactional
+	public Map<String, String> clearSkills(Long projectId) {
+		deleteSkillsByProject(projectId);
+		return Map.of("status", "success", "message", "All project skills cleared for projectId=" + projectId);
 	}
 
 	private Map<String, String> parseFrontmatter(String content) {
