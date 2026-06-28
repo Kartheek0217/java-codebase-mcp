@@ -7,7 +7,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
-
+import java.util.List;
 @Entity
 @Table(name = "agent_tasks")
 @EntityListeners(AuditingEntityListener.class)
@@ -43,6 +43,10 @@ public class AgentTask {
     private LocalDateTime updatedAt;
 
     private LocalDateTime completedAt;
+
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @JoinColumn(name = "mainTaskId", referencedColumnName = "id", insertable = false, updatable = false)
+    private List<AgentSubTask> subTasks;
 
     public AgentTask() {
     }
@@ -126,5 +130,13 @@ public class AgentTask {
 
     public void setCompletedAt(LocalDateTime completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public List<AgentSubTask> getSubTasks() {
+        return subTasks;
+    }
+
+    public void setSubTasks(List<AgentSubTask> subTasks) {
+        this.subTasks = subTasks;
     }
 }

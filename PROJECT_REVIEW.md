@@ -1,7 +1,7 @@
 # Project Review — `java-codebase-mcp`
 
-> **Reviewed**: 2026-06-11  
-> **Stats**: 153 files · 906 symbols · Spring Boot 4.0 · JDK 25  
+> **Reviewed**: 2026-06-28  
+> **Stats**: 117 source files · 1038 symbols · Spring Boot 4.0 · JDK 25  
 > **Session**: `aafc93e5-28f1-4167-9ee6-5b6c187c7ea2`
 
 ---
@@ -83,31 +83,43 @@ Prevents runaway Lucene queries from blocking virtual threads. Good defensive de
 
 ## Issues & Recommendations 🔴
 
-### 1. In-Memory `sessionStore` in `SessionController` *(High Priority)*
-
-**Problem**: Sessions are stored in a bounded `LinkedHashMap` — lost on restart, not shareable across instances, no durable TTL enforcement.
-
+### 1. Incomplete Path Traversal Protections *(High Priority)*
+**Problem**: Naive check `path.toString().contains("..")` or string checks in [SkillController](file:///src/main/java/com/mcp/controller/SkillController.java) and [CodebaseController](file:///src/main/java/com/mcp/controller/CodebaseController.java) are bypassable. Standard normalization resolves dots prior to some validations, allowing directory escape.
+**Fix**: Resolve paths to absolute representations and strictly verify that they start with the target safe base directory:
 ```java
-// SessionController.java
-private final Map<String, Session> sessionStore; // ← in-memory only
+Path base = Paths.get("/app/skills").toAbsolutePath().normalize();
+Path target = base.resolve(filePath).normalize();
+if (!target.startsWith(base)) {
+    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path");
+}
 ```
 
-**Fix**: Persist sessions to the DB (the `BrowserSession` entity is an existing pattern to follow) or use a Redis store. At minimum, document the single-instance constraint explicitly in the README.
+### 2. SSRF / Unsafe URL Input *(High Priority)*
+**Problem**: [SkillController](file:///src/main/java/com/mcp/controller/SkillController.java) and [BrowserController](file:///src/main/java/com/mcp/controller/BrowserController.java) accept query URLs only checked for scheme prefix. Loops, private IP blocks, or protocols like `file://` / `javascript:` are not restricted, introducing Server-Side Request Forgery risks.
+**Fix**: Restrict URL schemas via `java.net.URI` validation and block loopback/private subnet IPs.
 
----
+### 3. Controller Parameter Validation Misuse *(Medium Priority)*
+**Problem**: Request parameters and header variables are annotated with `@NotBlank`, `@NotNull`, or `@Pattern` without activating method-level validation. Thus, Spring MVC silently ignores these validations.
+**Fix**: Ensure `@Validated` is correctly activated and annotated on classes, and validation DTOs cascade using `@Valid`.
 
-### 2. Zero Test Coverage *(High Priority)*
+### 4. Overly Broad Exception Handling & Weak Casts *(Medium Priority)*
+**Problem**: Broad catch clauses like `catch (Exception e)` or `@ExceptionHandler(IOException.class)` swallow critical errors (OOM, database crashes) and throw misleading HTTP 404/500 responses.
+Furthermore, unsafe casts like `(Project) projectService.createProjectAndIndex(...)` (which returned a `Map` instead of `Project`) were present, crashing the endpoint.
+**Fix**: Return typed DTOs from services to eliminate ClassCastException issues, and write narrow exception handlers via a global `@ControllerAdvice`.
 
-**Problem**: `src/test/resources` is empty; no test classes exist anywhere. Core services like `FileIndexerService` and `LuceneIndexService` carry significant logic with no safety net.
+### 5. RPC-over-POST REST Semantics Violations *(Medium Priority)*
+**Problem**: [BrowserController](file:///src/main/java/com/mcp/controller/BrowserController.java) routes browser commands (click, navigate, screenshot) on a single `POST /session/{id}` endpoint using an custom `X-Action` header. This bypasses caching, preflights, and standards.
+**Fix**: Deconstruct into dedicated resource endpoints (e.g. `POST /session/{sessionId}/navigate`).
 
-**Fix**: Add at minimum:
+### 6. Duplicated SSE Streaming Boilerplate *(Low Priority)*
+**Problem**: [AgentController](file:///src/main/java/com/mcp/controller/AgentController.java) SSE streaming endpoints (`/explain-file`, `/ask`, `/code-review`, etc.) replicate identical parameter parsing and stream-negotiation boilerplate.
+**Fix**: Consolidate stream routing or delegate to a unified handler passing an enum-typed action parameter.
 
-| Test Class | Scope |
-|---|---|
-| `FileIndexerServiceTest` | Parse a sample `.java` file, assert correct symbols extracted |
-| `LuceneIndexServiceTest` | Index + search round-trip with real on-disk index |
-| `ProjectServiceTest` | Project create/delete lifecycle via `@DataJpaTest` |
-| `CodebaseControllerTest` | `@WebMvcTest` for each `X-Op` value |
+### 7. Pagination & Resource Sweeping *(Medium Priority)*
+**Problem**:
+- Unbounded GET queries on `/skills` or `/tasks` do not support pagination, posing OOM risks.
+- Headless browser sessions created by `BrowserController` persist indefinitely without an idle TTL cleanup, causing memory leaks.
+**Fix**: Introduce pagination using `Pageable` parameters and enforce idle browser session cleanup using a background `@Scheduled` sweeper task.
 
 ---
 
@@ -115,11 +127,15 @@ private final Map<String, Session> sessionStore; // ← in-memory only
 
 | # | Issue | Area | Priority |
 |---|-------|------|----------|
-| 1 | In-memory `sessionStore` (not restart-safe) | Reliability | 🔴 High |
-| 2 | Zero test coverage | Quality | 🔴 High |
+| 1 | Incomplete Path Traversal guards in `Skill` & `Codebase` Controllers | Security | 🔴 High |
+| 2 | SSRF vulnerabilities via unsafe URL inputs | Security | 🔴 High |
+| 3 | Ineffective Spring method validation annotations | Correctness | 🟠 Medium |
+| 4 | Overly broad Exception Handlers and ClassCastExceptions | Reliability | 🟠 Medium |
+| 5 | Lack of pagination and idle browser session cleanup | Performance | 🟠 Medium |
+| 6 | Duplicated SSE stream endpoints | Maintainability | 🟢 Low |
 
 ---
 
 ## Overall Assessment
 
-The project is **architecturally sound** with several well-made engineering decisions. The remaining concerns are **operability** (in-memory sessions) and **quality assurance** (zero tests). Addressing these items will ensure the system scales efficiently and is robust under concurrent AI agent workflows.
+While the backend exhibits **excellent architecture layering**, **virtual-thread usage**, and a **precise dual indexing pipeline**, the controller layer carries critical security concerns (path traversal, SSRF) and validation bugs. Remediation of path resolution safety, parameter validation bindings, and explicit controller contract definitions will make the system highly robust and ready to host secure, high-concurrency AI workflows.

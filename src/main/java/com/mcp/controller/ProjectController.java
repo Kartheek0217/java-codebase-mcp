@@ -86,7 +86,9 @@ public class ProjectController {
 					"Invalid rootPath: directory does not exist or is not readable");
 		}
 		try {
-			return (Project) projectService.createProjectAndIndex(name, path.toString());
+			@SuppressWarnings("unchecked")
+			Map<String, Object> res = (Map<String, Object>) projectService.createProjectAndIndex(name, path.toString());
+			return (Project) res.get("project");
 		} catch (ClassCastException e) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Service returned unexpected type", e);
 		}
