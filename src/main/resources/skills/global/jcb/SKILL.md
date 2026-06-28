@@ -59,9 +59,8 @@ eliminate fluff.
 - **Skills & Rules**: `learn-skill-url` (`projectId`, `url`), `learn-skill-file` (`projectId`, `filePath`), `get-skills` (list, `projectId`), `clear-skills` (`projectId`), `get-rules` (`projectId`), `crt-rule` (add), `del-rule` (`id`), `clear-rules` (`projectId`).
 - **Sessions**: `start-session` (create agent session, `projectId`), `get-session` (metadata, `sessionId`), `lst-sessions` (list, `projectId`), `crt-session` (new browser, `projectId`, `browserType`, `headless`, `viewport`), `get-session-state` (HTML/state, `X-View=content`), `browser` (interaction, `X-Action=navigate|screenshot|click|fill|type|select|wait|evaluate|extract-locators`), `close-session` (close context, `sessionId`).
 - **Agent Tasks (AgentController)**: 
-  - **Background**: `submit-agent-task` (run action in background, returns `taskId`), `get-agent-tasks` (list by `projectId`).
+  - **Background**: `submit-agent-task` (Unified submit for single and batch actions in background, orchestrates subtasks, returns main `taskId`), `get-agent-tasks` (list by `projectId`).
   - **Streaming (SSE - No Envelope)**: `explain-symbol`, `explain-file`, `ask-question`, `code-review`, `code-refactor`, `code-optimise`, `web-search`, `code-commit`, `java-doc`, `junit-test-cases`.
-  - **Synchronous (JSON Envelope)**: `explain-symbol/sync`, `explain-file/sync`, `ask-question/sync`, `code-review/sync`, `code-refactor/sync`, `code-optimise/sync`, `web-search/sync`, `code-commit/sync`, `java-doc/sync`, `junit-test-cases/sync`.
 - **Codebase Discovery**: `read-file` (read with symbols), `batch-read-files` (multiple files), `suggest-context` (symbol+content hits), `search-content` (Lucene query), `search-changed-content` (Lucene uncommitted), `search-symbols` (find by name, `type=CLASS|METHOD|FIELD|CONSTRUCTOR`), `find-files` (find paths), `get-session-history` (accessed paths), `summarize-file` (AI file summary), `analyze` (controller endpoint trace), `get-symbol-detail` (details by `id`), `get-call-hierarchy` (call tree by `id`).
 - **System**: `get-system-status` (read state, `X-View=health|info|agent-status`).
 
