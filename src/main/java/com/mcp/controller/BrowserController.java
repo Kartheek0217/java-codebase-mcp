@@ -107,7 +107,7 @@ public class BrowserController {
         }
     )
 	@IgnoreEnvelope(reason = "204 No Content")
-	public ResponseEntity<Void> closeSession(@PathVariable @NotBlank String sessionId) {
+	public ResponseEntity<Void> closeSession(@Parameter(description = "Session ID", required = true) @PathVariable @NotBlank String sessionId) {
 		try {
 			sessionManager.closeSession(sessionId);
 			return ResponseEntity.noContent().build();
@@ -151,7 +151,7 @@ public class BrowserController {
         }
     )
 	public Object browserAction(
-			@PathVariable @NotBlank String sessionId,
+			@Parameter(description = "Session ID", required = true) @PathVariable @NotBlank String sessionId,
 			@Parameter(description = "Action: navigate | screenshot | click | fill | type | select | wait | evaluate | extract-locators", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {"navigate", "screenshot", "click", "fill", "type", "select", "wait", "evaluate", "extract-locators"}))
 			@RequestHeader(value = "X-Action") @NotBlank @Pattern(regexp = "^(navigate|screenshot|click|fill|type|select|wait|evaluate|extract-locators)$", message = "Invalid X-Action header value") String action,
 			@RequestBody(required = false) Map<String, Object> body) {
@@ -185,7 +185,7 @@ public class BrowserController {
         }
     )
 	public Object getSessionState(
-			@PathVariable @NotBlank String sessionId,
+			@Parameter(description = "Session ID", required = true) @PathVariable @NotBlank String sessionId,
 			@Parameter(description = "View variant: 'content' (default)", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {"content"}))
 			@RequestHeader(value = "X-View", required = false, defaultValue = "content") @NotBlank @Pattern(regexp = "^(content)$", message = "Invalid X-View header value") String view) {
 		return browserService.getSessionState(sessionId, view);

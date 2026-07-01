@@ -45,14 +45,15 @@ import java.util.LinkedHashMap;
  * Facade that encapsulates all repository-level read operations previously
  * leaked directly into {@code CodebaseController}.
  *
- * <p>Responsibilities:
+ * <p>
+ * Responsibilities:
  * <ul>
- *   <li>Symbol search (with optional type filter)
- *   <li>File metadata search by path fragment
- *   <li>File metadata lookup by exact composite key
- *   <li>Call-hierarchy graph construction
- *   <li>Parallel batch file context loading
- *   <li>DTO mapping utilities (symbol path relativization, metadata DTO)
+ * <li>Symbol search (with optional type filter)
+ * <li>File metadata search by path fragment
+ * <li>File metadata lookup by exact composite key
+ * <li>Call-hierarchy graph construction
+ * <li>Parallel batch file context loading
+ * <li>DTO mapping utilities (symbol path relativization, metadata DTO)
  * </ul>
  */
 @Service
@@ -98,7 +99,8 @@ public class CodebaseQueryFacade {
         this.objectMapper = objectMapper;
     }
 
-    public record FileContextResult(int statusCode, String checksum, Object body) {}
+    public record FileContextResult(int statusCode, String checksum, Object body) {
+    }
 
     // ─── Symbol search ────────────────────────────────────────────────────────
 
@@ -134,9 +136,9 @@ public class CodebaseQueryFacade {
 
     /**
      * @implNote Searches file paths by fragment match.
-     * @param projectId  Target project
-     * @param query      Path fragment (case-insensitive)
-     * @param limit      Maximum results
+     * @param projectId Target project
+     * @param query     Path fragment (case-insensitive)
+     * @param limit     Maximum results
      * @return List of FileMetadataDTO
      */
     public List<FileMetadataDTO> searchFiles(Long projectId, String query, int limit) {
@@ -149,7 +151,8 @@ public class CodebaseQueryFacade {
     // ─── Symbol hierarchy ─────────────────────────────────────────────────────
 
     /**
-     * @implNote Builds call hierarchy for a symbol: outgoing (calls made) and incoming (callers).
+     * @implNote Builds call hierarchy for a symbol: outgoing (calls made) and
+     *           incoming (callers).
      * @param symbol The target symbol
      * @return Map with keys: symbol, outgoing, incoming
      */
@@ -187,8 +190,8 @@ public class CodebaseQueryFacade {
     /**
      * @implNote Parallel virtual-thread batch file context fetch.
      *           Uses BATCH_EXECUTOR (VT-per-task). Fails fast on first error.
-     * @param projectId Project context
-     * @param filePaths List of relative file paths
+     * @param projectId         Project context
+     * @param filePaths         List of relative file paths
      * @param fileContextLoader Callback to load a single file context
      * @return Map of filePath → context result
      */
@@ -234,29 +237,45 @@ public class CodebaseQueryFacade {
             JsonNode rawInput = objectMapper.readTree(rawPayload);
             if (rawInput.isArray()) {
                 filePaths = objectMapper.readerForListOf(String.class).readValue(rawInput);
-            } else if (rawInput.isObject() && rawInput.has("body")) {
-                JsonNode bodyNode = rawInput.get("body");
-                if (bodyNode.isArray()) {
-                    filePaths = objectMapper.readerForListOf(String.class).readValue(bodyNode);
+            } else if (rawInput.isObject()) {
+                JsonNode arrayNode = null;
+                if (rawInput.has("filePaths")) {
+                    arrayNode = rawInput.get("filePaths");
+                } else if (rawInput.has("files")) {
+                    arrayNode = rawInput.get("files");
+                } else if (rawInput.has("body")) {
+                    arrayNode = rawInput.get("body");
+                }
+
+                if (arrayNode != null) {
+                    if (arrayNode.isArray()) {
+                        filePaths = objectMapper.readerForListOf(String.class).readValue(arrayNode);
+                    } else {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Array property (filePaths/files/body) must be an array");
+                    }
                 } else {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "body property must be an array");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Invalid batch request format: expected array or object with filePaths/body array");
                 }
             } else {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid batch request format: expected array or object with body array");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Invalid batch request format: expected array or object");
             }
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse batch request: " + e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Failed to parse batch request: " + e.getMessage(), e);
         }
 
         if (filePaths == null || filePaths.isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Body must be a non-empty list of file paths");
-            
+
         return getBatchContext(projectId, filePaths,
                 (pid, fp) -> {
                     try {
                         FileContextResult result = getFileContext(pid, fp, null, "full", null);
                         return result.body();
-                    } catch(IOException e) {
+                    } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 });
@@ -311,7 +330,8 @@ public class CodebaseQueryFacade {
     // ─── File metadata lookup ─────────────────────────────────────────────────
 
     /**
-     * @implNote Retrieves file metadata by exact composite key (projectId + absolutePath).
+     * @implNote Retrieves file metadata by exact composite key (projectId +
+     *           absolutePath).
      * @param projectId    Target project
      * @param absolutePath Absolute file path as stored in the index
      * @return FileMetadataDTO or null if not indexed
@@ -369,7 +389,8 @@ public class CodebaseQueryFacade {
                 false);
 
         if ("markdown".equalsIgnoreCase(format))
-            return new FileContextResult(200, currentChecksum, Map.of("type", "markdown", "content", AgentResponseOptimizer.toMarkdown(contextDTO)));
+            return new FileContextResult(200, currentChecksum,
+                    Map.of("type", "markdown", "content", AgentResponseOptimizer.toMarkdown(contextDTO)));
 
         if (sessionId != null)
             contextMemoryService.recordAccess(sessionId, filePath, currentChecksum);
@@ -405,7 +426,8 @@ public class CodebaseQueryFacade {
         if (rootPath != null && relativePath != null && relativePath.startsWith(rootPath)) {
             try {
                 relativePath = Paths.get(rootPath).relativize(Paths.get(relativePath)).toString();
-            } catch (Exception ignored) { /* keep absolute if relativize fails */ }
+            } catch (Exception ignored) {
+                /* keep absolute if relativize fails */ }
         }
         return new SymbolDTO(
                 symbol.getId(), symbol.getName(), symbol.getType(), relativePath,
@@ -419,7 +441,8 @@ public class CodebaseQueryFacade {
      * @return FileMetadataDTO or null
      */
     public FileMetadataDTO toMetadataDTO(FileMetadata metadata) {
-        if (metadata == null) return null;
+        if (metadata == null)
+            return null;
         return new FileMetadataDTO(metadata.getFilePath(), metadata.getFileSize(),
                 metadata.getChecksum(), metadata.getLastScanned());
     }

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import com.mcp.entity.Skill;
 import com.mcp.service.SkillService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -61,7 +63,6 @@ public class SkillController {
 	@Operation(
 		summary = "get-skills",
 		description = "Retrieve available skills for an agent. " +
-			"Query param: projectId (Long, optional). " +
 			"If projectId is omitted, returns only globally registered built-in skills. " +
 			"If projectId is provided, returns global skills plus project-specific learned skills. " +
 			"Each Skill has: {id, name, description, content (markdown instructions), project (null if global), source}.",
@@ -69,15 +70,16 @@ public class SkillController {
 			@ApiResponse(responseCode = "200", description = "Skill list returned")
 		}
 	)
-	public List<Skill> getSkills(@RequestParam(required = false) Long projectId) {
+	public List<Skill> getSkills(
+			@Parameter(description = "Numeric Project ID (optional)") @RequestHeader(value = "projectId", required = false) Long projectId) {
 		return skillService.getSkills(projectId);
 	}
 
 	@PostMapping("/skills/learn-url")
-	@Operation(summary = "learn_skill_from_url", description = "Fetch and learn a skill from a URL or built-in path. Query params: projectId (required), url (required).")
+	@Operation(summary = "learn_skill_from_url", description = "Fetch and learn a skill from a URL or built-in path.")
 	public SkillOperationResponse learnSkillFromUrl(
-			@RequestParam(value = "projectId", required = true) @NotNull Long projectId,
-			@RequestParam(value = "url", required = true) @NotBlank String url) throws IOException {
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
+			@Parameter(description = "URL to fetch skill from", required = true) @RequestParam(value = "url", required = true) @NotBlank String url) throws IOException {
 		if (!url.startsWith("http://") && !url.startsWith("https://")) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL must use http or https");
 		}
@@ -86,10 +88,10 @@ public class SkillController {
 	}
 
 	@PostMapping("/skills/learn-file")
-	@Operation(summary = "learn_skill_from_file", description = "Learn a skill from a local file path. Query params: projectId (required), filePath (required).")
+	@Operation(summary = "learn_skill_from_file", description = "Learn a skill from a local file path.")
 	public SkillOperationResponse learnSkillFromFile(
-			@RequestParam(value = "projectId", required = true) @NotNull Long projectId,
-			@RequestParam(value = "filePath", required = true) @NotBlank String filePath) throws IOException {
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
+			@Parameter(description = "File path", required = true) @RequestParam(value = "filePath", required = true) @NotBlank String filePath) throws IOException {
 		Path path = Paths.get(filePath).normalize();
 		if (path.toString().contains("..") || path.isAbsolute()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file path");
@@ -99,9 +101,9 @@ public class SkillController {
 	}
 
 	@DeleteMapping("/skills")
-	@Operation(summary = "clear_skills", description = "Remove all project-specific learned skills. Query param: projectId (required).")
+	@Operation(summary = "clear_skills", description = "Remove all project-specific learned skills.")
 	public SkillOperationResponse clearSkills(
-			@RequestParam(value = "projectId", required = true) @NotNull Long projectId) {
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId) {
 		Map<String, String> res = skillService.clearSkills(projectId);
 		return new SkillOperationResponse(res.get("status"), res.get("message"));
 	}

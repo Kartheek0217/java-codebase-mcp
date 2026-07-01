@@ -66,10 +66,7 @@ public class ProjectController {
 	 * @throws IOException If the root path is invalid or inaccessible
 	 */
 	@PostMapping
-	@Operation(summary = "crt-project", description = "Create a new project and start background indexing of its root directory. "
-			+
-			"Required params: name (string), rootPath (absolute path). " +
-			"Returns the created Project object with status=INDEXING.", responses = {
+	@Operation(summary = "crt-project", description = "Create a new project and start background indexing of its root directory. Returns the created Project object with status=INDEXING.", responses = {
 					@ApiResponse(responseCode = "200", description = "Project created and indexing started"),
 					@ApiResponse(responseCode = "400", description = "rootPath missing, not a directory, or not readable")
 			})
@@ -122,9 +119,9 @@ public class ProjectController {
 	 * @return Project detail, stats map, or git-status map
 	 */
 	@GetMapping("/{id}")
-	@Operation(summary = "get_project_details", description = "Read project data. Optional view parameter can be 'detail', 'stats', or 'git-status'.")
+	@Operation(summary = "get_project_details", description = "Read project data.")
 	public Object getProject(
-			@PathVariable @NotNull Long id,
+			@Parameter(description = "Numeric Project ID", required = true) @PathVariable @NotNull Long id,
 			@Parameter(description = "View variant: 'detail' (default) | 'stats' | 'git-status'", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {
 					"detail", "stats",
 					"git-status" })) @RequestParam(required = false, defaultValue = "detail") @NotBlank String view) {
@@ -142,7 +139,7 @@ public class ProjectController {
 	 */
 	@PostMapping("/{id}/reindex")
 	@Operation(summary = "reindex_project", description = "Trigger a full re-index of all project files.")
-	public ProjectOperationResponse reindexProject(@PathVariable @NotNull Long id) {
+	public ProjectOperationResponse reindexProject(@Parameter(description = "Numeric Project ID", required = true) @PathVariable @NotNull Long id) {
 		projectService.reindexProject(id);
 		Map<String, Object> res = projectService.buildProjectOpResponse(id, "reindex", null);
 		@SuppressWarnings("unchecked")
@@ -157,11 +154,11 @@ public class ProjectController {
 	@PostMapping("/{id}/vcs")
 	@Operation(summary = "manage_project_vcs", description = "Execute a VCS operation (stage, discard, commit) on a project.")
 	public VcsOperationResponse manageProjectVcs(
-			@PathVariable @NotNull Long id,
+			@Parameter(description = "Numeric Project ID", required = true) @PathVariable @NotNull Long id,
 			@Parameter(description = "Action: 'stage' | 'discard' | 'commit'", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {
 					"stage", "discard", "commit" })) @RequestParam @NotBlank String action,
-			@RequestBody(required = false) Object requestBody,
-			@RequestParam(required = false) String message) {
+			@Parameter(description = "VCS Request Body (e.g. glob patterns for stage/discard)") @RequestBody(required = false) Object requestBody,
+			@Parameter(description = "Commit message") @RequestParam(required = false) String message) {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> res = (Map<String, Object>) projectService.manageProjectVcs(id, action,
 				requestBody, message);
@@ -181,14 +178,12 @@ public class ProjectController {
 	 * @param id Project ID to delete
 	 */
 	@DeleteMapping("/{id}")
-	@Operation(summary = "del-project", description = "Permanently delete a project and remove all its indexed symbols, files, and metadata. "
-			+
-			"Path param: id (Long) — project ID. Returns 204 No Content on success.", responses = {
+	@Operation(summary = "del-project", description = "Permanently delete a project and remove all its indexed symbols, files, and metadata.", responses = {
 					@ApiResponse(responseCode = "204", description = "Project deleted"),
 					@ApiResponse(responseCode = "404", description = "Project not found")
 			})
 	@IgnoreEnvelope(reason = "204 No Content")
-	public ResponseEntity<Void> deleteProject(@PathVariable @NotNull Long id) {
+	public ResponseEntity<Void> deleteProject(@Parameter(description = "Numeric Project ID", required = true) @PathVariable @NotNull Long id) {
 		projectService.deleteProject(id);
 		return ResponseEntity.noContent().build();
 	}

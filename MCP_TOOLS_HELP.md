@@ -8,7 +8,7 @@ Total official tools exposed: **55**
 
 ## 1. Codebase Discovery & Reading (15 Tools)
 
-*Note: All codebase endpoints require a `projectId` path parameter.*
+*Note: All codebase endpoints require a `projectId` HTTP header.*
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |
@@ -67,11 +67,11 @@ Total official tools exposed: **55**
 
 ## 4. Task Management (5 Tools)
 
-*Note: Endpoints generally require `projectId` as a query parameter or inside the request body.*
+*Note: Endpoints generally require `projectId` as an HTTP header or inside the request body.*
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |
-| `get-tasks` | Retrieve all tasks for a project. Query param: `projectId`. |
+| `get-tasks` | Retrieve all tasks for a project. Header param: `projectId`. |
 | `crt-task` | Create a new task. Body: `CreateTaskRequest`. |
 | `upd-task` | Update an existing task. Path param: `id`. Body: `TaskDTO`. |
 | `del-task` | Delete a task by ID. Path param: `id`. |
@@ -81,7 +81,7 @@ Total official tools exposed: **55**
 
 ## 5. Skills & Rules Management (8 Tools)
 
-*Note: All endpoints require `projectId` as a query parameter.*
+*Note: All endpoints require `projectId` as an HTTP header.*
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |

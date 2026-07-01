@@ -13,6 +13,7 @@ import com.mcp.dto.SessionDTO;
 import com.mcp.service.SessionService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -45,13 +46,12 @@ public class SessionController {
 	@Operation(summary = "start-session", description = "Start a new AI agent session bound to a project. Sessions track file access history "
 			+
 			"and provide context continuity across multiple MCP tool calls. " +
-			"Header param: projectId (Long, required). " +
 			"Returns {sessionId: string}. Sessions expire after 1 hour of inactivity.", responses = {
 					@ApiResponse(responseCode = "200", description = "Session created, returns {sessionId}"),
 					@ApiResponse(responseCode = "404", description = "Project not found")
 			})
 	public StartSessionResponse startSession(
-			@RequestHeader(required = true) @NotNull Long projectId) {
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId) {
 		Map<String, String> result = sessionService.startSession(projectId);
 		String sessionId = result.get("sessionId");
 		if (sessionId == null) {
@@ -69,13 +69,12 @@ public class SessionController {
 	@GetMapping("/sessions/{sessionId}")
 	@ResponseEnvelope
 	@Operation(summary = "get-session", description = "Retrieve metadata for an active agent session. " +
-			"Path param: sessionId (string). " +
 			"Returns SessionDTO {sessionId, projectId, createdAt, files: []}. " +
 			"Use this to verify a session is still active before making context-dependent tool calls.", responses = {
 					@ApiResponse(responseCode = "200", description = "Session metadata returned"),
 					@ApiResponse(responseCode = "404", description = "Session not found or expired")
 			})
-	public SessionDTO getSession(@PathVariable @NotBlank String sessionId) {
+	public SessionDTO getSession(@Parameter(description = "Session ID", required = true) @PathVariable @NotBlank String sessionId) {
 		return sessionService.getSession(sessionId);
 	}
 }

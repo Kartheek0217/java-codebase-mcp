@@ -88,11 +88,11 @@ public class CodebaseController {
 
 	// ─── Project-scoped read (GET) ────────────────────────────────────────────
 
-	@GetMapping("/{projectId}/file")
+	@GetMapping("/file")
 	@Operation(summary = "read_file", description = "Read a single file with its symbols and metadata.")
 	@IgnoreEnvelope(reason = "ETag/304 handling")
 	public ResponseEntity<Object> readFile(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Relative path to the file") @RequestParam @NotBlank String filePath,
 			@Parameter(description = "Format (full|structure|summary|numbered|markdown)", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {"full", "structure", "summary", "numbered", "markdown"})) 
 			@RequestParam(required = false, defaultValue = "full") @Pattern(regexp = "^(full|structure|summary|numbered|markdown)$", message = "Invalid format") String format,
@@ -112,29 +112,29 @@ public class CodebaseController {
 				.body(result.body());
 	}
 
-	@GetMapping("/{projectId}/search")
+	@GetMapping("/search")
 	@Operation(summary = "search_content", description = "Full-text Lucene search across all indexed files.")
 	public Object searchContent(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Search query") @RequestParam @NotBlank String query,
 			@Parameter(description = "Result limit (1-100)") @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) Integer limit) throws IOException {
 		return luceneIndexService.searchContent(projectId,
 				SearchOptions.builder().query(query).limit(limit).build());
 	}
 
-	@GetMapping("/{projectId}/search-changed")
+	@GetMapping("/search-changed")
 	@Operation(summary = "search_changed_content", description = "Full-text search restricted to uncommitted (modified/added/staged) files only.")
 	public Object searchChangedContent(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Search query") @RequestParam @NotBlank String query,
 			@Parameter(description = "Result limit (1-100)") @RequestParam(required = false, defaultValue = "10") @Min(1) @Max(100) Integer limit) throws IOException {
 		return codebaseQueryFacade.searchChangedContent(projectId, query, limit);
 	}
 
-	@GetMapping("/{projectId}/symbols")
+	@GetMapping("/symbols")
 	@Operation(summary = "search_symbols", description = "Search for classes, methods, constructors, or fields by name.")
 	public Object searchSymbols(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Search query") @RequestParam @NotBlank String query,
 			@Parameter(description = "Symbol type (CLASS|METHOD|FIELD|CONSTRUCTOR)", schema = @io.swagger.v3.oas.annotations.media.Schema(allowableValues = {"CLASS", "METHOD", "FIELD", "CONSTRUCTOR"})) 
 			@RequestParam(required = false) String type,
@@ -142,50 +142,50 @@ public class CodebaseController {
 		return codebaseQueryFacade.searchSymbols(projectId, query, type, limit);
 	}
 
-	@GetMapping("/{projectId}/files")
+	@GetMapping("/files")
 	@Operation(summary = "find_files", description = "Find indexed files whose paths contain the query string.")
 	public Object findFiles(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Search query") @RequestParam @NotBlank String query,
 			@Parameter(description = "Result limit (1-100)") @RequestParam(required = false, defaultValue = "100") @Min(1) @Max(100) Integer limit) {
 		return codebaseQueryFacade.searchFiles(projectId, query, limit);
 	}
 
-	@GetMapping("/{projectId}/suggest")
+	@GetMapping("/suggest")
 	@Operation(summary = "suggest_context", description = "Combined symbol + content search for relevant code context. Returns top-10 symbols and top-10 content hits.")
 	public Object suggestContext(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Search query") @RequestParam @NotBlank String query) throws IOException {
 		return codebaseQueryFacade.suggest(projectId, query);
 	}
 
-	@GetMapping("/{projectId}/history")
+	@GetMapping("/history")
 	@Operation(summary = "get_session_history", description = "Return file paths accessed in a session.")
 	public Object getSessionHistory(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Session ID") @RequestParam @NotBlank String sessionId) {
 		return codebaseQueryFacade.getSessionHistory(sessionId);
 	}
 
-	@GetMapping("/{projectId}/topology")
+	@GetMapping("/topology")
 	@Operation(summary = "get_project_topology", description = "Return project package structure and dependency graph.")
 	public Object getProjectTopology(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId) {
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId) {
 		return topologyService.getProjectTopology(projectId);
 	}
 
-	@GetMapping("/{projectId}/summarize")
+	@GetMapping("/summarize")
 	@Operation(summary = "summarize_file", description = "Generate an AI summary of a file.")
 	public Object summarizeFile(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Relative file path") @RequestParam @NotBlank String filePath) throws IOException {
 		return codebaseQueryFacade.summarizeFile(projectId, filePath);
 	}
 
-	@GetMapping("/{projectId}/analyze-endpoint")
+	@GetMapping("/analyze-endpoint")
 	@Operation(summary = "analyze_endpoint", description = "Trace a controller endpoint down to entity level.")
 	public Object analyzeEndpoint(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
 			@Parameter(description = "Controller name") @RequestParam @NotBlank String controllerName,
 			@Parameter(description = "Method name") @RequestParam @NotBlank String methodName) throws IOException {
 		return endpointAnalysisService.analyzeEndpoint(projectId, controllerName, methodName);
@@ -193,9 +193,9 @@ public class CodebaseController {
 
 	// ─── Project-scoped mutations (POST) ─────────────────────────────────────
 
-	@PostMapping("/{projectId}/scan")
+	@PostMapping("/scan")
 	@Operation(summary = "scan_project", description = "Trigger a directory scan to detect new/changed/deleted files.")
-	public ProjectOperationResponse scanProject(@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId) {
+	public ProjectOperationResponse scanProject(@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId) {
 		fileScannerService.scanProject(projectId);
 		Map<String, Object> res = projectService.buildProjectOpResponse(projectId, "scan", null);
 		@SuppressWarnings("unchecked")
@@ -208,9 +208,9 @@ public class CodebaseController {
 		);
 	}
 
-	@PostMapping("/{projectId}/reconcile")
+	@PostMapping("/reconcile")
 	@Operation(summary = "reconcile_index", description = "Reconcile the symbol index against the current filesystem state.")
-	public ProjectOperationResponse reconcileIndex(@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId) {
+	public ProjectOperationResponse reconcileIndex(@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId) {
 		reconciliationService.reconcileProject(projectId);
 		Map<String, Object> res = projectService.buildProjectOpResponse(projectId, "reconcile", null);
 		@SuppressWarnings("unchecked")
@@ -223,11 +223,11 @@ public class CodebaseController {
 		);
 	}
 
-	@PostMapping("/{projectId}/batch")
+	@PostMapping("/batch")
 	@Operation(summary = "batch_read_files", description = "Fetch content for multiple files in parallel.")
 	public Object batchReadFiles(
-			@Parameter(description = "Numeric Project ID") @PathVariable @NotNull Long projectId,
-			@RequestBody @NotBlank String rawPayload) throws IOException {
+			@Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) @NotNull Long projectId,
+			@Parameter(description = "Batch Read Payload (Array of paths or object with filePaths)") @RequestBody @NotBlank String rawPayload) throws IOException {
 		return codebaseQueryFacade.getBatchContextParsed(projectId, rawPayload);
 	}
 
@@ -235,13 +235,13 @@ public class CodebaseController {
 
 	@GetMapping("/symbols/{id}")
 	@Operation(summary = "get_symbol_detail", description = "Retrieve full Symbol entity by ID.")
-	public Object getSymbolDetail(@PathVariable @NotNull Long id) {
+	public Object getSymbolDetail(@Parameter(description = "Numeric Symbol ID") @PathVariable @NotNull Long id) {
 		return codebaseQueryFacade.getSymbolById(id);
 	}
 
 	@GetMapping("/symbols/{id}/hierarchy")
 	@Operation(summary = "get_call_hierarchy", description = "Retrieve call hierarchy for the symbol.")
-	public Object getCallHierarchy(@PathVariable @NotNull Long id) {
+	public Object getCallHierarchy(@Parameter(description = "Numeric Symbol ID") @PathVariable @NotNull Long id) {
 		Symbol symbol = codebaseQueryFacade.getSymbolById(id);
 		return codebaseQueryFacade.buildHierarchy(symbol);
 	}
