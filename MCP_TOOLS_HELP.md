@@ -2,11 +2,13 @@
 
 This document outlines all the officially supported MCP tools exposed by the Java Codebase Agent, their corresponding REST endpoints, and usage instructions. These endpoints were recently de-multiplexed to ensure clear, single-purpose paths that perfectly align with OpenAPI generator specifications.
 
-Total official tools exposed: **65**
+Total official tools exposed: **55**
 
 ---
 
 ## 1. Codebase Discovery & Reading (15 Tools)
+
+*Note: All codebase endpoints require a `projectId` path parameter.*
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |
@@ -28,30 +30,22 @@ Total official tools exposed: **65**
 
 ---
 
-## 2. Agent & AI Interactions (23 Tools)
+## 2. Agent & AI Interactions (13 Tools)
+
+*Note: All endpoints below require a `projectId` HTTP header.*
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |
-| `explain-symbol` | Explain a code symbol in plain English. Params: `symbolId` |
-| `explain-symbol-sync` | Make a POST request to /api/agent/explain-symbol/sync |
-| `explain-file` | Explain what a source file does. Params: `filePath` |
-| `explain-file-sync` | Make a POST request to /api/agent/explain-file/sync |
-| `ask-question` | Ask a free-form question about the codebase. Body: `{question}` |
-| `ask-question-sync` | Make a POST request to /api/agent/ask/sync |
-| `code-review` | Generate a code review for a file. Params: `filePath` |
-| `code-review-sync` | Make a POST request to /api/agent/code-review/sync |
-| `code-refactor` | Suggest refactoring improvements for a file. Params: `filePath` |
-| `code-refactor-sync` | Make a POST request to /api/agent/code-refactor/sync |
-| `code-optimise` | Suggest performance optimisations for a file. Params: `filePath` |
-| `code-optimise-sync` | Make a POST request to /api/agent/code-optimise/sync |
-| `web-search` | Search the web and summarise results. Params: `query` or `url` |
-| `web-search-sync` | Make a POST request to /api/agent/web-search/sync |
-| `code-commit` | Generate a Conventional Commits message from a git diff. Params: `diff` |
-| `code-commit-sync` | Make a POST request to /api/agent/code-commit/sync |
-| `java-doc` | Generate Javadoc for all public methods in a file. Params: `filePath` |
-| `java-doc-sync` | Make a POST request to /api/agent/java-doc/sync |
-| `junit-test-cases` | Generate JUnit 5 test class with 100% branch coverage. Params: `filePath` |
-| `junit-test-cases-sync`| Make a POST request to /api/agent/junit-test-cases/sync |
+| `explain-symbol` | Explain a code symbol in plain English. Params: `symbolId` (Required) |
+| `explain-file` | Explain what a source file does. Params: `filePath` (Required) |
+| `ask-question` | Ask a free-form question about the codebase. Body: `{question}` (Required) |
+| `code-review` | Generate a code review for a file. Params: `filePath` (Required) |
+| `code-refactor` | Suggest refactoring improvements for a file. Params: `filePath` (Required) |
+| `code-optimise` | Suggest performance optimisations for a file. Params: `filePath` (Required) |
+| `web-search` | Search the web and summarise results. Params: `query` or `url` (Required) |
+| `code-commit` | Generate a Conventional Commits message from a git diff. Params: `diff` (Required) |
+| `java-doc` | Generate Javadoc for all public methods in a file. Params: `filePath` (Required) |
+| `junit-test-cases` | Generate JUnit 5 test class with 100% branch coverage. Params: `filePath` (Required) |
 | `submit-agent-task` | Submit a background agent task. POST to /api/agent/async-task/submit/{action} |
 | `submit-batch-agent-task` | Submit batch of background agent tasks. POST to /api/agent/async-task/batch-submit |
 | `get-agent-task` | Retrieve the status and result of a background agent task. GET to /api/agent/async-task/{id} |
@@ -73,6 +67,8 @@ Total official tools exposed: **65**
 
 ## 4. Task Management (5 Tools)
 
+*Note: Endpoints generally require `projectId` as a query parameter or inside the request body.*
+
 | Tool Name | Description & Key Params |
 | :--- | :--- |
 | `get-tasks` | Retrieve all tasks for a project. Query param: `projectId`. |
@@ -84,6 +80,8 @@ Total official tools exposed: **65**
 ---
 
 ## 5. Skills & Rules Management (8 Tools)
+
+*Note: All endpoints require `projectId` as a query parameter.*
 
 | Tool Name | Description & Key Params |
 | :--- | :--- |

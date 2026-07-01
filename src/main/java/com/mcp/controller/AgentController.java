@@ -48,9 +48,9 @@ public class AgentController {
     @Operation(summary = "explain_symbol", description = "Explain a code symbol in plain English. Params: symbolId")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter explainSymbol(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -64,9 +64,9 @@ public class AgentController {
     @Operation(summary = "explain_file", description = "Explain what a source file does. Params: filePath")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter explainFile(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -80,9 +80,9 @@ public class AgentController {
     @Operation(summary = "ask_question", description = "Ask a free-form question about the codebase. Body: {question}")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter askQuestion(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -96,9 +96,9 @@ public class AgentController {
     @Operation(summary = "code_review", description = "Generate a code review for a file. Params: filePath")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter codeReview(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -112,9 +112,9 @@ public class AgentController {
     @Operation(summary = "code_refactor", description = "Suggest refactoring improvements for a file. Params: filePath")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter codeRefactor(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -128,9 +128,9 @@ public class AgentController {
     @Operation(summary = "code_optimise", description = "Suggest performance optimisations for a file. Params: filePath")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter codeOptimise(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -144,9 +144,9 @@ public class AgentController {
     @Operation(summary = "web_search", description = "Search the web and summarise results. Params: query or url")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter webSearch(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -160,9 +160,9 @@ public class AgentController {
     @Operation(summary = "code_commit", description = "Generate a Conventional Commits message from a git diff. Params: diff")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter codeCommit(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -176,9 +176,9 @@ public class AgentController {
     @Operation(summary = "java_doc", description = "Generate Javadoc for all public methods in a file. Params: filePath")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter javaDoc(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -192,9 +192,9 @@ public class AgentController {
     @Operation(summary = "junit_test_cases", description = "Generate JUnit 5 test class with 100% branch coverage. Params: filePath")
     @IgnoreEnvelope(reason = "SSE streaming")
     public SseEmitter junitTestCases(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId,
-            @RequestParam(required = false) Long symbolId,
-            @RequestParam(required = false) String filePath,
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId,
+            @Parameter(description = "Symbol ID to analyse. Required if not in body.", required = false) @RequestParam(required = false) Long symbolId,
+            @Parameter(description = "Target file path. Required if not in body.", required = false) @RequestParam(required = false) String filePath,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String diff,
@@ -224,7 +224,7 @@ public class AgentController {
     @Operation(summary = "get-agent-tasks", description = "Retrieve all background tasks associated with a project.")
     @ResponseEnvelope
     public List<AgentTask> getTasks(
-            @Parameter(description = "Numeric Project ID") @RequestHeader(required = true) Long projectId) {
+            @Parameter(description = "Numeric Project ID", required = true) @RequestHeader(value = "projectId", required = true) Long projectId) {
         return agentAsyncService.getTasksByProjectId(projectId);
     }
 }
